@@ -10,6 +10,15 @@ Thumbs.db
 .env.*
 !.env.example
 
-# Logs / temp
+# Runtime state — generated per team by provision-team.sh, never source
+/state/*
+!/state/.gitkeep
+
+# Rendered compose files / logs / temp
+*.rendered.yml
 *.log
 tmp/
+
+# Python
+__pycache__/
+*.pyc

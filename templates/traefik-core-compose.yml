@@ -1,0 +1,55 @@
+# Host-level Traefik. Runs once, before any team is provisioned.
+#
+#   export BASE_DOMAIN=hz.example.com ACME_EMAIL=ops@example.com
+#   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the wildcard cert
+#   docker compose -f templates/traefik-core-compose.yml up -d
+#
+# Owns :80 and :443 on the host and terminates TLS for every
+# https://<team-slug>.${BASE_DOMAIN}/ live app. Per-team Gitea instances do
+# NOT go through here — they each own a dedicated host port (see CLAUDE.md).
+
+name: hackzone-core
+
+networks:
+  # The one shared network Traefik watches. deploy-agent.py attaches each
+  # team's live app container here; nothing else should join it.
+  traefik-public:
+    name: traefik-public
+
+volumes:
+  acme:
+
+services:
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.network=traefik-public
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+      - --entrypoints.websecure.http.tls.certresolver=le
+      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN:?set BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+      - --certificatesresolvers.le.acme.dnschallenge=true
+      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
+      # Uncomment to watch the ACME exchange while getting DNS creds right:
+      # - --log.level=DEBUG
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Cloudflare by default; swap ACME_DNS_PROVIDER + the matching var for
+      # another provider (see https://doc.traefik.io/traefik/https/acme/).
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/acme
+    networks:
+      - traefik-public
