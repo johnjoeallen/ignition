@@ -6,7 +6,7 @@ STATE_DIR="$REPO_ROOT/state"
 
 # The full set of vars the templates reference. envsubst is told exactly these
 # so a literal `$foo` in a compose file is left untouched.
-TEAM_TMPL_VARS='${TEAM_SLUG} ${BASE_DOMAIN} ${TEAM_PORT} ${CPU_FORGEJO} ${MEM_FORGEJO} ${CPU_DIND} ${MEM_DIND} ${CPU_RUNNER} ${MEM_RUNNER}'
+TEAM_TMPL_VARS='${TEAM_SLUG} ${BASE_DOMAIN} ${CPU_FORGEJO} ${MEM_FORGEJO} ${CPU_DIND} ${MEM_DIND} ${CPU_RUNNER} ${MEM_RUNNER}'
 APP_TMPL_VARS='${TEAM_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} ${DEPLOY_ID} ${CPU_APP} ${MEM_APP}'
 
 die() { echo "error: $*" >&2; exit 1; }

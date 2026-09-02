@@ -11,8 +11,8 @@ Infrastructure for a private, short-lived, per-team hackathon environment.
 Up to 80 teams, one core host. Each team gets a fully isolated stack:
 
 - **git hosting + PRs/issues + CI + container registry** — all via a single
-  Forgejo instance per team (Forgejo natively does all four; no separate
-  GitLab/Woodpecker/registry:2 needed)
+  Forgejo instance per team at `git.<team-slug>.<BASE_DOMAIN>` (Forgejo natively
+  does all four; no separate GitLab/Woodpecker/registry:2 needed)
 - **isolated build sandbox** — a per-team `docker:dind` sidecar, so one
   team's CI can never see another team's containers/images/network
 - **a live deployed demo app** — reachable at `https://<team-slug>.<BASE_DOMAIN>/`
@@ -40,13 +40,22 @@ README.md                        # operator-facing overview
 
 ## Decisions and why (don't relitigate these without reading first)
 
-**Forgejo gets a dedicated host port per team, not a subdomain path.**
-Docker always hits `/v2/...` at domain root for registry operations — it
-ignores path prefixes. Putting Forgejo's web UI at `team-x.domain/git` would
+**Forgejo gets its own subdomain per team (`git.<slug>.<BASE_DOMAIN>`), not a
+URL path under the team domain.**
+Docker always hits `/v2/...` at the domain *root* for registry operations — it
+ignores path prefixes. Putting Forgejo's web UI at `<slug>.<domain>/git` would
 silently break `docker push`/`pull` against that same Forgejo's built-in
-registry. Fix: Forgejo owns `team-x.<BASE_DOMAIN>:<port>` entirely (UI, git
-clone, Actions, registry all on one origin), and the clean root domain on
-443 is reserved for the live app via Traefik.
+registry. A dedicated subdomain gives Forgejo a clean origin (UI, git clone,
+Actions, registry all under `git.<slug>.<domain>/`) *and* real TLS via Traefik
+— so no raw host port and no `insecure-registries` entry on the daemon. The
+team's root domain `<slug>.<domain>` on 443 is reserved for the live app.
+
+The cost: `*.<BASE_DOMAIN>` (which covers `<slug>.<domain>`) does **not** cover
+`git.<slug>.<domain>` — DNS wildcards are single-label. So each team's Forgejo
+router asks Traefik for a `*.<slug>.<BASE_DOMAIN>` wildcard cert (one per team,
+via the ACME DNS challenge), and `git.<slug>.<BASE_DOMAIN>` needs a DNS record
+pointing at the host (a `*.<slug>.<BASE_DOMAIN>` record, or one added per team —
+automating this is a known gap).
 
 **The live demo app is deployed from the host, not from inside the team's
 DinD sandbox.** A container built and run inside a nested Docker-in-Docker
@@ -58,11 +67,11 @@ Traefik can see it. This mirrors any CI→orchestrator handoff (e.g. GitLab
 CI calling out to k8s): build sandbox stays isolated, serving layer
 doesn't.
 
-**Ports are allocated as `30000 + team_index`.** Deterministic and
-idempotent — re-running `provision-team.sh` for the same team/index doesn't
-collide or drift. If you change this, `deploy-agent.py`'s assumptions about
-one-token-per-team still hold, but anything that hardcodes the port math
-elsewhere needs updating too.
+**No per-team host ports.** Everything is routed by hostname through the one
+host-level Traefik: `git.<slug>.<domain>` → the team's Forgejo,
+`<slug>.<domain>` → the team's live app. `provision-team.sh` still takes an
+`<index>` argument, but it is now just a stable roster ordinal recorded in
+`state/<slug>/team.env` — it maps to nothing. (It used to be `30000 + index`.)
 
 **Runner registration is a two-phase compose apply.** Forgejo uses a
 40-hex-char *shared secret* we generate ourselves (`openssl rand -hex 20`),
@@ -95,9 +104,10 @@ so we don't need to parse the register command's stdout.
 
 ## Known gaps (see README "rough edges" for full list)
 
-- Forgejo's per-team port currently serves plain HTTP. Fine on a trusted LAN;
-  needs a TLS-terminating layer (per-port proxy or Traefik TCP router)
-  before use on open wifi.
+- Nothing creates the `git.<slug>.<BASE_DOMAIN>` DNS record. `provision-team.sh`
+  assumes it already resolves (via a `*.<slug>.<BASE_DOMAIN>` record, or one
+  added by hand per team). Automating it through the same DNS-provider API
+  Traefik uses for ACME is the natural fix.
 - `deploy-agent.py` needs `docker login` credentials for each team's Forgejo
   registry available on the host to pull images — not yet wired up.
 - No automated repo-seeding step yet: `examples/deploy.yml`
@@ -114,5 +124,5 @@ so we don't need to parse the register command's stdout.
    container (it currently assumes being run bare with docker.sock access).
 3. Add a `provision-all.sh` / `teardown-all.sh` that reads a team roster
    file and loops the per-team scripts, for one-shot event start/end.
-4. Decide on and implement TLS for the per-team Forgejo ports before running
-   this on anything but a trusted network
+4. Create the `git.<slug>.<BASE_DOMAIN>` DNS record from `provision-team.sh`
+   (DNS-provider API), so a team is fully reachable with one command.

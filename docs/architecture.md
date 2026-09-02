@@ -11,7 +11,7 @@ decisions that aren't obvious.
 flowchart LR
     subgraph team["team-&lt;slug&gt;  ·  compose project team-&lt;slug&gt;"]
         direction TB
-        forgejo["Forgejo<br/>web · git · Actions · registry<br/>published on host :30000+index"]
+        forgejo["Forgejo<br/>web · git · Actions · registry"]
         dind["docker:dind<br/>private build engine<br/>(privileged, team network only)"]
         runner["Forgejo runner<br/>DOCKER_HOST → dind"]
         forgejo <--> runner
@@ -19,11 +19,12 @@ flowchart LR
     end
 
     subgraph host["host, shared"]
-        traefik["Traefik"]
+        traefik["Traefik  (:443, wildcard TLS)"]
         agent["deploy-agent (HTTP)"]
         liveapp["team-&lt;slug&gt;-app<br/>on traefik-public"]
     end
 
+    traefik -->|"Host(git.team-&lt;slug&gt;.&lt;domain&gt;)"| forgejo
     runner -->|"push image → forgejo registry<br/>POST /deploy (bearer)"| agent
     agent -->|docker compose up| liveapp
     traefik -->|"Host(team-&lt;slug&gt;.&lt;domain&gt;)"| liveapp
@@ -37,12 +38,18 @@ complete, safe teardown.
 
 | Boundary | Enforced by |
 |---|---|
-| Team ↔ team | Separate compose project, network, volumes; the DinD engine is on the team network only and never bind-mounts the host Docker socket. |
+| Team ↔ team (git, CI, builds) | Separate compose project, network, volumes; the DinD engine and runner are on the team network only, and the DinD engine never bind-mounts the host Docker socket. |
 | CI jobs ↔ host | Jobs run against the team's **nested** Docker engine (`DOCKER_HOST=tcp://dind:2375`), which cannot see host containers or the host daemon. |
-| Live app ↔ team internals | The live app runs on the host's `traefik-public` network, deployed by `deploy-agent` — it has no path back into the team's forge or build engine. |
-| CI ↔ deploy | `deploy-agent` authenticates every call with a per-team bearer token and will only run an image pulled from *that* team's own registry. |
+| Live app ↔ its own team's internals | The live app runs on `traefik-public` (deployed by `deploy-agent`), not on the team network — it has no path back into that team's forge or build engine. |
+| CI ↔ deploy | `deploy-agent` authenticates every call with a per-team bearer token and will only run an image from *that* team's own registry. |
 
-## Decision 1 — Forgejo owns a host port, not a URL path
+The one seam: the live-app containers **and** the Forgejo instances all sit on
+the shared `traefik-public` network, so they can reach each other by IP. The
+untrusted code is the app container, so "team A's app could probe team B's
+Forgejo or app" is a real limitation of this scaffold — a Traefik instance per
+team, or an L3 policy on `traefik-public`, would close it.
+
+## Decision 1 — Forgejo gets its own subdomain, not a URL path
 
 Docker registry clients always talk to `/v2/...` at the **domain root**. They
 ignore path prefixes. If Forgejo's web UI lived at `team-a.<domain>/git`, then
@@ -53,13 +60,21 @@ silently fail.
 flowchart TB
     A["docker push team-a.domain/git/app:1"] -->|"actually requests"| B["GET team-a.domain/v2/"]
     B -->|"path prefix ignored — 404 or wrong service"| C["broken"]
-    D["docker push team-a.domain:30000/app:1"] --> E["GET team-a.domain:30000/v2/"]
+    D["docker push git.team-a.domain/app:1"] --> E["GET git.team-a.domain/v2/"]
     E -->|"Forgejo owns the whole origin"| F["works"]
 ```
 
-So each team's Forgejo owns `team-<slug>.<domain>:<port>` **entirely** — web UI,
-git-over-HTTP, the Actions API, and the container registry, all on one origin.
-The clean root domain on `:443` is reserved for the live app via Traefik.
+So each team's Forgejo owns `git.<slug>.<domain>` **entirely** — web UI,
+git-over-HTTPS, the Actions API, and the container registry, all on one origin.
+Traefik terminates TLS for it with a real certificate, so there is no raw host
+port and the Docker daemon needs no `insecure-registries` entry. The team's
+root domain `<slug>.<domain>` is reserved for the live app.
+
+The trade-off is DNS/TLS scope. A `*.<domain>` wildcard covers `<slug>.<domain>`
+but **not** `git.<slug>.<domain>` — DNS wildcards match a single label. So each
+team's Forgejo router asks Traefik for a `*.<slug>.<domain>` cert (one per team,
+via the ACME DNS challenge), and `git.<slug>.<domain>` needs a DNS record
+pointing at the host — a `*.<slug>.<domain>` record, or one added per team.
 
 ## Decision 2 — the live app is deployed from the host
 
@@ -90,13 +105,14 @@ This is the same shape as any CI-to-orchestrator handoff (GitLab CI calling
 Kubernetes, for example): the build sandbox stays isolated, the serving layer
 does not.
 
-## Decision 3 — ports are `30000 + team_index`
+## Decision 3 — no per-team host ports
 
-Port allocation is pure arithmetic. Re-running `provision-team.sh <slug>
-<index>` for the same team is idempotent — same port, no drift, no allocation
-table to keep in sync. `deploy-agent` derives everything it needs about a team
-from `state/<slug>/team.env`, so the port math only lives in one place plus the
-provisioning script.
+Everything is routed by hostname through the one host-level Traefik:
+`git.<slug>.<domain>` → the team's Forgejo, `<slug>.<domain>` → the team's live
+app. Nothing binds a host port per team, so there is no allocation table to keep
+in sync and no port-range to exhaust. `provision-team.sh` still accepts an
+`<index>` argument, but it is only a stable roster ordinal recorded in
+`state/<slug>/team.env` — it maps to nothing. (Earlier it was `30000 + index`.)
 
 ## Runner registration is two-phase
 
@@ -118,5 +134,7 @@ it into a single `up -d`.
 
 Before any team: one Traefik instance owns `:80` and `:443`, holds a **wildcard
 certificate** for `*.<event-domain>` (ACME DNS challenge), and watches the
-`traefik-public` network. Per-team Forgejo instances do **not** go through
-Traefik — they each own a dedicated host port.
+`traefik-public` network. Every per-team hostname goes through it — the live app
+at `<slug>.<domain>` on the base wildcard, and the Forgejo at
+`git.<slug>.<domain>` on a `*.<slug>.<domain>` cert the team's own router
+requests.

@@ -4,13 +4,18 @@
 
 - A host with Docker + Docker Compose v2, `envsubst` (gettext), `openssl`,
   Python 3.11+.
-- Wildcard DNS: `*.<event-domain>` → the host.
-- A DNS-provider API token for the Traefik wildcard certificate (Cloudflare by
-  default; swap the provider in `templates/traefik-core-compose.yml`).
-- The host Docker daemon must trust the per-team registries. They serve plain
-  HTTP, so add `<slug>.<event-domain>:<port>` entries to
-  `/etc/docker/daemon.json` `"insecure-registries"` and restart Docker — or put
-  TLS in front (see [rough edges](#rough-edges)).
+- DNS: `*.<event-domain>` → the host (covers every team's live app). Each
+  team's Forgejo is at `git.<slug>.<event-domain>` — two labels deep, so
+  `*.<event-domain>` misses it; add a `*.<slug>.<event-domain>` record per team
+  (or one broad record if your DNS allows it).
+- A DNS-provider API token for Traefik's ACME DNS challenge (Cloudflare by
+  default; swap the provider in `templates/traefik-core-compose.yml`). Traefik
+  fetches the `*.<event-domain>` cert plus a `*.<slug>.<event-domain>` cert per
+  team.
+
+Traefik terminates TLS for both the apps and the Forgejo instances with real
+certificates, so the host Docker daemon needs **no `insecure-registries`
+entry**.
 
 ## Standing up the event
 
@@ -23,8 +28,9 @@ docker compose -f templates/traefik-core-compose.yml up -d
 ./scripts/deploy-agent.py &
 
 # 3. A team.
-BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh team-a 0
-#   → Forgejo at http://team-a.hz.example.com:30000/
+BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh team-a
+#   → Forgejo at https://git.team-a.hz.example.com/
+#   → live app  at https://team-a.hz.example.com/  (once CI deploys)
 #   → deploy token at state/team-a/deploy-token
 ```
 
@@ -64,8 +70,12 @@ DinD quota first if you need to fit more.
 
 ## Rough edges
 
-- **Per-team Forgejo ports are plain HTTP.** Fine on a trusted LAN; on open wifi
-  put a TLS layer in front (a per-port proxy, or a Traefik TCP router per port).
+- **`git.<slug>.<event-domain>` DNS isn't created for you.** Provisioning
+  assumes it already resolves (a `*.<slug>.<event-domain>` record, or one per
+  team). Wiring it to the DNS-provider API is the top item in `CLAUDE.md`.
+- **`traefik-public` is one flat network.** The live-app containers and the
+  Forgejo instances can reach each other by IP; a Traefik-per-team network or an
+  L3 policy would close that seam.
 - **The deploy agent has no registry credentials.** It pulls as whatever the
   host daemon can reach — anonymous pulls of public packages work; private ones
   need `docker login` / a per-team `DOCKER_CONFIG` wired in.

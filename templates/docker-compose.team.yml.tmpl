@@ -3,18 +3,21 @@
 #
 # Rendered by scripts/provision-team.sh with envsubst. Do not run directly.
 # Substituted vars:
-#   TEAM_SLUG BASE_DOMAIN TEAM_PORT
+#   TEAM_SLUG BASE_DOMAIN
 #   CPU_FORGEJO MEM_FORGEJO CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
 #
-# One origin per team: http://${TEAM_SLUG}.${BASE_DOMAIN}:${TEAM_PORT}/ serves
-# the web UI, git-over-http, the Actions API and the container registry — all
-# of it, so `docker push` to that same host works. See CLAUDE.md.
+# Forgejo has its own subdomain: https://git.${TEAM_SLUG}.${BASE_DOMAIN}/ serves
+# the web UI, git-over-https, the Actions API and the container registry — all
+# on one origin, so `docker push git.${TEAM_SLUG}.${BASE_DOMAIN}/...` works.
+# Traefik on traefik-public terminates TLS for it. See CLAUDE.md.
 
 name: team-${TEAM_SLUG}
 
 networks:
   team-${TEAM_SLUG}:
     name: team-${TEAM_SLUG}
+  traefik-public:
+    external: true
 
 volumes:
   forgejo-data:
@@ -29,16 +32,13 @@ services:
     image: codeberg.org/forgejo/forgejo:11
     container_name: team-${TEAM_SLUG}-forgejo
     restart: unless-stopped
-    networks: [team-${TEAM_SLUG}]
-    ports:
-      # Dedicated host port. Plain HTTP for now (see CLAUDE.md known gaps).
-      - "${TEAM_PORT}:3000"
+    networks: [team-${TEAM_SLUG}, traefik-public]
     environment:
       USER_UID: "1000"
       USER_GID: "1000"
-      FORGEJO__server__DOMAIN: ${TEAM_SLUG}.${BASE_DOMAIN}
+      FORGEJO__server__DOMAIN: git.${TEAM_SLUG}.${BASE_DOMAIN}
       FORGEJO__server__HTTP_PORT: "3000"
-      FORGEJO__server__ROOT_URL: http://${TEAM_SLUG}.${BASE_DOMAIN}:${TEAM_PORT}/
+      FORGEJO__server__ROOT_URL: https://git.${TEAM_SLUG}.${BASE_DOMAIN}/
       FORGEJO__server__START_SSH_SERVER: "false"
       FORGEJO__server__DISABLE_SSH: "true"
       FORGEJO__database__DB_TYPE: sqlite3
@@ -50,6 +50,16 @@ services:
       FORGEJO__repository__DEFAULT_PUSH_CREATE_PRIVATE: "false"
       FORGEJO__webhook__ALLOWED_HOST_LIST: "*"
       FORGEJO__migrations__ALLOWED_DOMAINS: "*"
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.team-${TEAM_SLUG}-git.rule: Host(`git.${TEAM_SLUG}.${BASE_DOMAIN}`)
+      traefik.http.routers.team-${TEAM_SLUG}-git.entrypoints: websecure
+      traefik.http.routers.team-${TEAM_SLUG}-git.tls: "true"
+      # One wildcard cert per team covers git.<slug> (and future <x>.<slug>).
+      traefik.http.routers.team-${TEAM_SLUG}-git.tls.domains[0].main: ${TEAM_SLUG}.${BASE_DOMAIN}
+      traefik.http.routers.team-${TEAM_SLUG}-git.tls.domains[0].sans: "*.${TEAM_SLUG}.${BASE_DOMAIN}"
+      traefik.http.services.team-${TEAM_SLUG}-git.loadbalancer.server.port: "3000"
     volumes:
       - forgejo-data:/data
       - /etc/timezone:/etc/timezone:ro
@@ -69,11 +79,9 @@ services:
     restart: unless-stopped
     privileged: true                       # required for a nested engine
     networks: [team-${TEAM_SLUG}]           # only this team can reach it
-    # Plaintext daemon on the team net only; trusts the team's own Forgejo
-    # registry (which also serves plain HTTP on this port).
-    command: ["--host=tcp://0.0.0.0:2375", "--insecure-registry=forgejo:3000"]
+    command: ["--host=tcp://0.0.0.0:2375"]
     environment:
-      DOCKER_TLS_CERTDIR: ""
+      DOCKER_TLS_CERTDIR: ""                # plaintext daemon, team net only
     volumes:
       - dind-data:/var/lib/docker
     deploy:

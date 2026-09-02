@@ -13,8 +13,8 @@ seconds and tears down without residue.
 ## What each team gets
 
 - **A forge** — git hosting, pull requests, issues, CI/CD (Actions), and a
-  container registry, all from one [Forgejo](https://forgejo.org/) instance on
-  a dedicated port.
+  container registry, all from one [Forgejo](https://forgejo.org/) instance at
+  `https://git.<team>.<event-domain>/`.
 - **A private build sandbox** — a per-team Docker-in-Docker engine, so one
   team's CI can never see another team's images, containers, or network.
 - **A live, shareable demo** — reachable at `https://<team>.<event-domain>/`,
@@ -27,26 +27,27 @@ flowchart TB
         agent["deploy-agent<br/>(CI → live app bridge)"]
 
         subgraph teamA["team-a  (fully isolated)"]
-            fa["Forgejo<br/>:30000"]
+            fa["Forgejo"]
             da["DinD build engine"]
             ra["Actions runner"]
             appA["live app"]
         end
 
         subgraph teamB["team-b  (fully isolated)"]
-            fb["Forgejo<br/>:30001"]
+            fb["Forgejo"]
             db["DinD build engine"]
             rb["Actions runner"]
             appB["live app"]
         end
     end
 
-    dev["Team developer"] -->|git push| fa
+    dev["Team developer"] -->|git push| traefik
+    traefik -->|"git.team-a.&lt;domain&gt;"| fa
     ra -->|build| da
     ra -->|"push image + POST /deploy"| agent
     agent -->|run on shared network| appA
-    traefik -->|"team-a.<domain>"| appA
-    traefik -->|"team-b.<domain>"| appB
+    traefik -->|"team-a.&lt;domain&gt;"| appA
+    traefik -->|"team-b.&lt;domain&gt;"| appB
     visitor["Judge / stakeholder"] -->|https| traefik
 ```
 
@@ -65,9 +66,9 @@ flowchart TB
 ## Why it's built this way
 
 The design makes a few choices that look odd until you hit the constraint
-behind them — the forge gets a whole host port rather than a URL path, the live
-app is deployed from the host rather than from inside the sandbox, ports are
-pure arithmetic. See **[Architecture](architecture.md)** for each one, and
+behind them — the forge gets its own subdomain rather than a URL path, the live
+app is deployed from the host rather than from inside the sandbox, and there are
+no per-team host ports at all. See **[Architecture](architecture.md)** for each one, and
 **[Executive Overview](executive-overview.md)** for why infrastructure like this
 is the thing that decides whether an innovation event produces working software
 or just slides.

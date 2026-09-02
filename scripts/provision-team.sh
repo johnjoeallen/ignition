@@ -2,9 +2,12 @@
 # Stand up one team's full stack: Forgejo + private DinD + Actions runner, and
 # register a deploy token so the team's CI can push a live app.
 #
-#   BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh <slug> <index>
+#   BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh <slug> [index]
 #
-# Idempotent: re-running with the same slug/index re-renders and re-applies.
+# <index> is a stable roster ordinal recorded in state/<slug>/team.env; it no
+# longer maps to a port now that Traefik routes Forgejo by hostname.
+#
+# Idempotent: re-running with the same slug re-renders and re-applies.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/lib.sh
@@ -14,24 +17,23 @@ cd "$(dirname "$0")/.."
 : "${CPU_DIND:=2.0}"    "${MEM_DIND:=4g}"
 : "${CPU_RUNNER:=1.0}"  "${MEM_RUNNER:=2g}"
 : "${CPU_APP:=1.0}"     "${MEM_APP:=1g}"
-: "${PORT_BASE:=30000}"
 : "${APP_PORT:=8080}"        # the port the team's app is expected to listen on
 : "${RUNNER_CAPACITY:=4}"
 
 need docker; need envsubst; need openssl; need od
-[ $# -eq 2 ] || die "usage: $0 <slug> <index>"
-SLUG="$1"; INDEX="$2"
+[ $# -ge 1 ] || die "usage: $0 <slug> [index]"
+SLUG="$1"; INDEX="${2:-0}"
 valid_slug "$SLUG" || die "slug must be [a-z0-9-], <=40 chars, no leading/trailing dash"
 [ "$INDEX" -ge 0 ] 2>/dev/null || die "index must be a non-negative integer"
 : "${BASE_DOMAIN:?set BASE_DOMAIN (e.g. hz.example.com)}"
 
 export TEAM_SLUG="$SLUG"
-export TEAM_PORT=$(( PORT_BASE + INDEX ))
 export BASE_DOMAIN CPU_FORGEJO MEM_FORGEJO CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
 
+GIT_HOST="git.$SLUG.$BASE_DOMAIN"
 S="$STATE_DIR/$SLUG"
 mkdir -p "$S"
-echo "==> team=$SLUG index=$INDEX  forgejo=http://$SLUG.$BASE_DOMAIN:$TEAM_PORT/  app=https://$SLUG.$BASE_DOMAIN/"
+echo "==> team=$SLUG  forgejo=https://$GIT_HOST/  app=https://$SLUG.$BASE_DOMAIN/"
 
 render "$TEMPLATES/docker-compose.team.yml.tmpl" "$TEAM_TMPL_VARS" "$S/docker-compose.yml"
 # The runner service bind-mounts ./runner-config.yml; give compose a placeholder
@@ -92,10 +94,11 @@ dc "$SLUG" restart runner   # re-read the config if it was already running
 cat > "$S/team.env" <<EOF
 TEAM_SLUG=$SLUG
 TEAM_INDEX=$INDEX
-TEAM_PORT=$TEAM_PORT
 BASE_DOMAIN=$BASE_DOMAIN
 APP_PORT=$APP_PORT
-FORGEJO_URL=http://$SLUG.$BASE_DOMAIN:$TEAM_PORT/
+GIT_HOST=$GIT_HOST
+REGISTRY=$GIT_HOST
+FORGEJO_URL=https://$GIT_HOST/
 APP_URL=https://$SLUG.$BASE_DOMAIN/
 EOF
 date +%s > "$S/last-activity"
@@ -103,11 +106,14 @@ date +%s > "$S/last-activity"
 cat <<EOF
 
   provisioned: $SLUG
-    Forgejo          http://$SLUG.$BASE_DOMAIN:$TEAM_PORT/
+    Forgejo          https://$GIT_HOST/
     Live app (once deployed)  https://$SLUG.$BASE_DOMAIN/
-    Registry host    $SLUG.$BASE_DOMAIN:$TEAM_PORT
+    Registry         $GIT_HOST
     Deploy token     $S/deploy-token   (give to CI as DEPLOY_TOKEN secret)
     Runner secret    $S/runner-secret
+
+  DNS: git.$SLUG.$BASE_DOMAIN must resolve to this host (a *.$SLUG.$BASE_DOMAIN
+  record, or add it per team — see CLAUDE.md).
 
   Next: create an admin user in the Forgejo UI, seed the starter repo with
   examples/deploy.yml, and set repo vars/secrets (REGISTRY, DEPLOY_URL,

@@ -8,7 +8,7 @@ runs the container where Traefik can route to it. See CLAUDE.md for why this
 split exists.
 
     POST /deploy   Authorization: Bearer <team deploy-token>
-                   {"image": "<slug>.<domain>:<port>/team/app:<sha>", "port": 8080}
+                   {"image": "git.<slug>.<domain>/team/app:<sha>", "port": 8080}
     GET  /healthz
 
 No third-party dependencies — stdlib only. Bind loopback and front it with
@@ -78,7 +78,7 @@ def _deploy(slug: str, image: str, port: int) -> dict:
 
     # The image must live in *this* team's own registry — the agent will not run
     # an arbitrary image on the shared network.
-    expected_prefix = f"{slug}.{base_domain}:{team_env['TEAM_PORT']}/"
+    expected_prefix = team_env.get("REGISTRY", f"git.{slug}.{base_domain}") + "/"
     if not image.startswith(expected_prefix):
         raise ValueError(f"image must be from {expected_prefix}")
 

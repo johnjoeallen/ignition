@@ -4,9 +4,12 @@
 #   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the wildcard cert
 #   docker compose -f templates/traefik-core-compose.yml up -d
 #
-# Owns :80 and :443 on the host and terminates TLS for every
-# https://<team-slug>.${BASE_DOMAIN}/ live app. Per-team Forgejo instances do
-# NOT go through here — they each own a dedicated host port (see CLAUDE.md).
+# Owns :80 and :443 on the host and terminates TLS for everything:
+#   <team-slug>.${BASE_DOMAIN}        -> the team's live app
+#   git.<team-slug>.${BASE_DOMAIN}    -> the team's Forgejo
+# The entrypoint holds a *.${BASE_DOMAIN} wildcard for the app hosts; each
+# team's Forgejo router additionally asks for a *.<team-slug>.${BASE_DOMAIN}
+# wildcard (git.<slug> is two labels deep, so *.${BASE_DOMAIN} misses it).
 
 name: hackzone-core
 

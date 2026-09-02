@@ -4,11 +4,11 @@ Per-team hackathon infrastructure. Up to ~80 teams on one host, each with a
 fully isolated stack:
 
 - **Forgejo** — git hosting, PRs/issues, Actions CI, and a container registry,
-  all from one instance on a dedicated port: `http://<slug>.<BASE_DOMAIN>:<port>/`
+  all from one instance at `https://git.<slug>.<BASE_DOMAIN>/`
 - **private DinD** — a per-team Docker-in-Docker engine so one team's CI can
   never touch another's images, containers or network
 - **a live demo app** — `https://<slug>.<BASE_DOMAIN>/`, deployed by CI and
-  routed by a single host-level Traefik
+  routed by a single host-level Traefik (which also fronts the Forgejo above)
 
 Teams are provisioned and torn down independently.
 
@@ -28,13 +28,15 @@ Server image `codeberg.org/forgejo/forgejo:11` (the LTS line), runner
 
 - A host with Docker + Docker Compose v2, `envsubst` (gettext), `openssl`,
   Python 3.11+.
-- Wildcard DNS: `*.<BASE_DOMAIN>` → the host.
-- A DNS-provider API token for the Traefik wildcard cert (Cloudflare by
-  default).
-- The Docker daemon must trust the per-team registries. They serve plain
-  HTTP for now, so add them to `/etc/docker/daemon.json`
-  `"insecure-registries"` (or put TLS in front — see rough edges) and
-  `systemctl restart docker`.
+- DNS: `*.<BASE_DOMAIN>` → the host (covers the live apps). Each team's Forgejo
+  is at `git.<slug>.<BASE_DOMAIN>` — two labels deep, so `*.<BASE_DOMAIN>`
+  doesn't cover it. Add a `*.<slug>.<BASE_DOMAIN>` record per team, or one
+  wildcard if your DNS allows it.
+- A DNS-provider API token for Traefik's ACME DNS challenge — it fetches the
+  `*.<BASE_DOMAIN>` cert and a `*.<slug>.<BASE_DOMAIN>` cert per team.
+
+Traefik terminates TLS for both the apps and the Forgejo instances, so the
+Docker daemon needs no `insecure-registries` entry.
 
 ## Quickstart
 
@@ -47,8 +49,9 @@ docker compose -f templates/traefik-core-compose.yml up -d
 ./scripts/deploy-agent.py &
 
 # 3. a team
-BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh team-a 0
-#   -> Forgejo at http://team-a.hz.example.com:30000/
+BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh team-a
+#   -> Forgejo at https://git.team-a.hz.example.com/
+#   -> live app  at https://team-a.hz.example.com/  (once CI deploys)
 #   -> deploy token in state/team-a/deploy-token
 
 # 4. tear it down
@@ -76,9 +79,9 @@ the team registry, and calls the deploy agent.
 
 ## Rough edges
 
-- **Per-team Forgejo ports are plain HTTP.** Fine on a trusted LAN; on open
-  wifi put a TLS layer in front (per-port proxy, or a Traefik TCP router per
-  port).
+- **Nothing creates the `git.<slug>.<BASE_DOMAIN>` DNS record.** Provisioning
+  assumes it resolves already (a `*.<slug>.<BASE_DOMAIN>` record, or one per
+  team). Wiring it to the DNS-provider API is the top next task.
 - **The deploy agent has no registry credentials.** It runs `docker pull`
   against the team registry as whatever the host daemon can reach — anonymous
   pulls of public packages work, private ones need `docker login` / a
