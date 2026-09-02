@@ -1,0 +1,38 @@
+# Seed this into each team's starter repo as .forgejo/workflows/deploy.yml
+#
+# Repo variables (Settings -> Actions -> Variables):
+#   REGISTRY     <slug>.<BASE_DOMAIN>:<port>     e.g. team-a.hz.example.com:30000
+#   DEPLOY_URL   https://deploy.<BASE_DOMAIN>    where deploy-agent.py answers
+#   APP_PORT     8080                             the port your app listens on
+# Repo secrets (Settings -> Actions -> Secrets):
+#   FORGEJO_TOKEN  a token with package:write, for pushing to the registry
+#   DEPLOY_TOKEN   the team's deploy token (state/<slug>/deploy-token on the host)
+
+name: build and deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: docker-cli
+    steps:
+      - uses: actions/checkout@v4
+
+      # Jobs share the team's network, so the registry is reachable both as the
+      # internal name (for push) and its public host:port (the deploy ref).
+      - name: Log in and build
+        run: |
+          PUSH_REF="forgejo:3000/${{ github.repository }}:${{ github.sha }}"
+          echo "${{ secrets.FORGEJO_TOKEN }}" | docker login forgejo:3000 -u "${{ github.actor }}" --password-stdin
+          docker build -t "$PUSH_REF" .
+          docker push "$PUSH_REF"
+          echo "DEPLOY_REF=${{ vars.REGISTRY }}/${{ github.repository }}:${{ github.sha }}" >> "$GITHUB_ENV"
+
+      - name: Deploy the live app
+        run: |
+          curl -fsS --retry 3 -X POST "${{ vars.DEPLOY_URL }}/deploy" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H 'content-type: application/json' \
+            -d "{\"image\": \"$DEPLOY_REF\", \"port\": ${{ vars.APP_PORT || 8080 }}}"

@@ -1,11 +1,10 @@
-# Per-team stack: Gitea (git + PRs + Actions + registry) + a private
-# Docker-in-Docker build engine + a Gitea Actions runner wired to it.
+# Per-team stack: Forgejo (git + PRs + Actions + registry) + a private
+# Docker-in-Docker build engine + a Forgejo Actions runner wired to it.
 #
 # Rendered by scripts/provision-team.sh with envsubst. Do not run directly.
 # Substituted vars:
 #   TEAM_SLUG BASE_DOMAIN TEAM_PORT
-#   CPU_GITEA MEM_GITEA CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
-#   RUNNER_TOKEN   (empty on the phase-1 apply, real on phase 2)
+#   CPU_FORGEJO MEM_FORGEJO CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
 #
 # One origin per team: http://${TEAM_SLUG}.${BASE_DOMAIN}:${TEAM_PORT}/ serves
 # the web UI, git-over-http, the Actions API and the container registry — all
@@ -18,17 +17,17 @@ networks:
     name: team-${TEAM_SLUG}
 
 volumes:
-  gitea-data:
-    name: team-${TEAM_SLUG}-gitea-data
+  forgejo-data:
+    name: team-${TEAM_SLUG}-forgejo-data
   dind-data:
     name: team-${TEAM_SLUG}-dind-data
   runner-data:
     name: team-${TEAM_SLUG}-runner-data
 
 services:
-  gitea:
-    image: gitea/gitea:1.23
-    container_name: team-${TEAM_SLUG}-gitea
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:11
+    container_name: team-${TEAM_SLUG}-forgejo
     restart: unless-stopped
     networks: [team-${TEAM_SLUG}]
     ports:
@@ -37,22 +36,22 @@ services:
     environment:
       USER_UID: "1000"
       USER_GID: "1000"
-      GITEA__server__DOMAIN: ${TEAM_SLUG}.${BASE_DOMAIN}
-      GITEA__server__HTTP_PORT: "3000"
-      GITEA__server__ROOT_URL: http://${TEAM_SLUG}.${BASE_DOMAIN}:${TEAM_PORT}/
-      GITEA__server__SSH_DOMAIN: ${TEAM_SLUG}.${BASE_DOMAIN}
-      GITEA__server__START_SSH_SERVER: "false"
-      GITEA__server__DISABLE_SSH: "true"
-      GITEA__database__DB_TYPE: sqlite3
-      GITEA__actions__ENABLED: "true"
-      GITEA__packages__ENABLED: "true"
-      GITEA__service__DISABLE_REGISTRATION: "true"
-      GITEA__security__INSTALL_LOCK: "true"
-      GITEA__webhook__ALLOWED_HOST_LIST: "*"
-      GITEA__migrations__ALLOWED_DOMAINS: "*"
-      GITEA_WORK_DIR: /data/gitea
+      FORGEJO__server__DOMAIN: ${TEAM_SLUG}.${BASE_DOMAIN}
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__ROOT_URL: http://${TEAM_SLUG}.${BASE_DOMAIN}:${TEAM_PORT}/
+      FORGEJO__server__START_SSH_SERVER: "false"
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__actions__ENABLED: "true"
+      FORGEJO__packages__ENABLED: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__repository__ENABLE_PUSH_CREATE_USER: "true"
+      FORGEJO__repository__DEFAULT_PUSH_CREATE_PRIVATE: "false"
+      FORGEJO__webhook__ALLOWED_HOST_LIST: "*"
+      FORGEJO__migrations__ALLOWED_DOMAINS: "*"
     volumes:
-      - gitea-data:/data
+      - forgejo-data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
@@ -62,7 +61,7 @@ services:
       retries: 30
     deploy:
       resources:
-        limits: { cpus: "${CPU_GITEA}", memory: "${MEM_GITEA}" }
+        limits: { cpus: "${CPU_FORGEJO}", memory: "${MEM_FORGEJO}" }
 
   dind:
     image: docker:27-dind
@@ -70,7 +69,9 @@ services:
     restart: unless-stopped
     privileged: true                       # required for a nested engine
     networks: [team-${TEAM_SLUG}]           # only this team can reach it
-    command: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+    # Plaintext daemon on the team net only; trusts the team's own Forgejo
+    # registry (which also serves plain HTTP on this port).
+    command: ["--host=tcp://0.0.0.0:2375", "--insecure-registry=forgejo:3000"]
     environment:
       DOCKER_TLS_CERTDIR: ""
     volumes:
@@ -79,25 +80,23 @@ services:
       resources:
         limits: { cpus: "${CPU_DIND}", memory: "${MEM_DIND}" }
 
-  act_runner:
-    image: gitea/act_runner:0.2.11
+  runner:
+    image: code.forgejo.org/forgejo/runner:13
     container_name: team-${TEAM_SLUG}-runner
     restart: unless-stopped
     networks: [team-${TEAM_SLUG}]
     depends_on:
-      gitea: { condition: service_healthy }
-      dind:  { condition: service_started }
+      forgejo: { condition: service_healthy }
+      dind:    { condition: service_started }
+    # runner-config.yml is generated next to this file by provision-team.sh
+    # (url + uuid + token from the shared secret) — templating a sed-mangled
+    # runner config here would get ugly.
+    command: ["forgejo-runner", "--config", "/config.yml", "daemon"]
     environment:
-      GITEA_INSTANCE_URL: http://gitea:3000
-      GITEA_RUNNER_REGISTRATION_TOKEN: "${RUNNER_TOKEN}"
-      GITEA_RUNNER_NAME: team-${TEAM_SLUG}
-      # `ubuntu-latest` jobs run in a docker-CLI-equipped image; `dind` jobs run
-      # straight on the runner. Either way DOCKER_HOST points at the team's own
-      # nested engine, never the host.
-      GITEA_RUNNER_LABELS: "ubuntu-latest:docker://catthehacker/ubuntu:act-22.04,dind:host"
-      DOCKER_HOST: tcp://dind:2375
+      DOCKER_HOST: tcp://dind:2375           # jobs build against the team's own engine
     volumes:
       - runner-data:/data
+      - ./runner-config.yml:/config.yml:ro
     deploy:
       resources:
         limits: { cpus: "${CPU_RUNNER}", memory: "${MEM_RUNNER}" }

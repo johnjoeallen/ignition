@@ -2,7 +2,7 @@
 """CI -> live-app bridge, run on the host.
 
 A team's CI builds an image inside its private DinD sandbox and pushes it to
-its own Gitea registry, then POSTs here. This service (which *is* on the host,
+its own Forgejo registry, then POSTs here. This service (which *is* on the host,
 with access to the real Docker socket and the traefik-public network) actually
 runs the container where Traefik can route to it. See CLAUDE.md for why this
 split exists.

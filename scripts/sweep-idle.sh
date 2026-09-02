@@ -5,7 +5,7 @@
 #
 # "Idle" = state/<slug>/last-activity older than IDLE_TTL seconds. That file is
 # bumped by provision-team.sh and by deploy-agent.py on every deploy. Add other
-# signals (Gitea last-commit via API, etc.) here if a heartbeat isn't enough.
+# signals (Forgejo last-commit via API, etc.) here if a heartbeat isn't enough.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/lib.sh

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tear down one team's full stack — Gitea/DinD/runner AND the live app — and
+# Tear down one team's full stack — Forgejo/DinD/runner AND the live app — and
 # remove its state. Everything is prefixed team-<slug>, so this is complete.
 #
 #   ./scripts/teardown-team.sh <slug> [--keep-state]

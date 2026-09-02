@@ -5,7 +5,7 @@
 #   docker compose -f templates/traefik-core-compose.yml up -d
 #
 # Owns :80 and :443 on the host and terminates TLS for every
-# https://<team-slug>.${BASE_DOMAIN}/ live app. Per-team Gitea instances do
+# https://<team-slug>.${BASE_DOMAIN}/ live app. Per-team Forgejo instances do
 # NOT go through here — they each own a dedicated host port (see CLAUDE.md).
 
 name: hackzone-core
