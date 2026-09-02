@@ -10,8 +10,12 @@ fully isolated stack:
 - **a live demo app** — `https://<slug>.<BASE_DOMAIN>/`, deployed by CI and
   routed by a single host-level Traefik
 
-Teams are provisioned and torn down independently. Read **[CLAUDE.md](CLAUDE.md)**
-for the design decisions before changing anything.
+Teams are provisioned and torn down independently.
+
+📖 **[Concept, executive overview, and architecture →
+johnjoeallen.github.io/hackzone-one](https://johnjoeallen.github.io/hackzone-one/)**
+
+Read **[CLAUDE.md](CLAUDE.md)** for the design decisions before changing anything.
 
 **Forgejo, not Gitea.** Same feature set for our purposes (git, PRs, issues,
 Actions, package/container registry), but Forgejo is under the non-profit
