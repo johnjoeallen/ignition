@@ -28,10 +28,12 @@ scripts to run by hand.
     reconciliation.
   - **`RestClient`** for the Forgejo API.
 - Build: **Gradle** (Kotlin DSL). Output is a **container image**
-  (`ignition-control:<version>`) — buildpacks (`bootBuildImage`) or a Dockerfile
-  on a slim JRE base that also carries the `docker` CLI and an SSH client (see
-  "Docker engine access").
-- Group id / package: `TODO` (org name) — e.g. `com.example.ignition`.
+  (`ignition-control:<version>`) built from a Dockerfile on a **slim JRE base**
+  (`eclipse-temurin:21-jre` or similar) that also installs the **`docker` CLI**
+  (incl. the compose plugin) and **`openssh-client`** — required for compose
+  operations against local and `ssh://` nodes (see "Docker engine access").
+  Not distroless.
+- Group / package: **`net.dublinux.ignition`**.
 
 ## The control plane is itself a container
 
@@ -63,8 +65,8 @@ host's core stack.
 ```
 ignition-control/
   build.gradle.kts
-  Dockerfile                       # slim JRE + docker CLI + ssh client
-  src/main/java/.../ignition/
+  Dockerfile                       # eclipse-temurin:21-jre + docker CLI + openssh-client
+  src/main/java/net/dublinux/ignition/
     IgnitionControlApplication.java
     config/        SecurityConfig, DockerConfig, SchedulingConfig, IgnitionProperties
     security/      token auth (platform / zone / deploy) -> IgnitionPrincipal
@@ -137,13 +139,15 @@ the REST API could exist for scripting — optional, out of scope.)
 
 ## Docker engine access
 
-`DockerEngine` picks a transport from the node record. For compose operations
-(`up`, `down -v`, `cp`, `exec`, `ps`) the service **invokes the `docker` CLI**
-via `ProcessBuilder` with `-H <endpoint>` — the same commands the shell scripts
-run today, so the two-phase provision and the SSH-safe `compose cp` trick carry
-over unchanged. This is why the image bundles the `docker` CLI + an SSH client.
-A structured client (docker-java, over the local socket) can be added later for
-cheap status/inspect calls, but is not required for v1.
+`DockerEngine` picks a transport from the node record. For all compose
+operations (`up`, `down -v`, `cp`, `exec`, `ps`) the service **invokes the
+`docker` CLI** via `ProcessBuilder` with `-H <endpoint>` (`unix://`,
+`ssh://user@host`, or `tcp://host:2376` + `DOCKER_CERT_PATH`) — the same
+commands the shell scripts run today, so the two-phase provision and the
+SSH-safe `compose cp` trick carry over unchanged. This is why the image is a
+JRE base with the `docker` CLI + `openssh-client` on it, not distroless. A
+structured client (docker-java, over the local socket) can be added later for
+cheap status / inspect calls, but is not required for v1.
 
 ## State
 
@@ -207,12 +211,21 @@ conditionals — the reason it isn't a template today).
    `CLAUDE.md` conventions.
 10. `examples/deploy.yml` is untouched — the contract is preserved.
 
-## Open questions
+## Decisions
 
-- Base image: distroless JRE (smaller, no shell) vs a slim JRE that bundles the
-  `docker` CLI + SSH client. The compose/SSH story points to the latter.
-- Java group id / package (org name).
-- Registry for the `ignition-control` image (GHCR under
-  `johnjoeallen/ignition`, or an org registry).
-- Confirm the file-tree state store for v1 (vs SQLite from the start).
-- A thin read-only `ign` REST wrapper for scripting — keep or drop.
+- **Language / framework:** Java 21 + Spring Boot 3, Gradle (Kotlin DSL).
+- **Package:** `net.dublinux.ignition`.
+- **Image:** `eclipse-temurin:21-jre` + `docker` CLI (with compose plugin) +
+  `openssh-client`. Not distroless.
+- **State:** the `state/` file tree for v1 (repository interfaces + an audit
+  log); revisit SQLite only if the UI outgrows it.
+- **CLI:** none. The old `ign` and `scripts/` are removed at cutover; no
+  read-only wrapper is kept — "no CLI magic" is the whole point.
+
+## Still to settle
+
+- Registry + name for the published image. Default assumption:
+  `ghcr.io/johnjoeallen/ignition-control:<version>`.
+- Whether `traefik-core-compose.yml` gains the `ignition-control` service on the
+  control host or it ships as a separate `ignition-control-compose.yml`.
+  Default assumption: separate file (worker nodes never run it).
