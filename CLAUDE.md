@@ -5,6 +5,11 @@ changes — several design decisions here look "wrong" in isolation but were
 made deliberately to work around real constraints. See the "Decisions and
 why" section before refactoring any of them.
 
+> **Direction:** the shell CLI + Python control plane are being replaced by one
+> Java (Spring Boot) service, deployed as a container, with all management in
+> the web UI. Design in **[DESIGN.md](DESIGN.md)** (proposed; no code yet). The
+> decisions below still describe the running system.
+
 ## What this is
 
 Infrastructure for a private, short-lived, per-team hackathon environment.
@@ -174,7 +179,11 @@ as bytes, hex, `8-4-4-4-12` — so we don't parse the register command's stdout.
   templated).
 - Per-zone resource limits are env vars with defaults at the top of
   `provision-zone.sh` (`CPU_FORGEJO`, `MEM_DIND`, …) — change quotas there.
-- `ign-control` and the scripts are stdlib / shell only. No frameworks.
+- `ign-control` and the scripts are stdlib / shell only, no frameworks — **for
+  the current implementation**. This is being replaced by a single Java
+  (Spring Boot) service, deployed as a container, with every platform-admin and
+  zone-admin operation in the web UI (no CLI). See **[DESIGN.md](DESIGN.md)**.
+  Until that lands, the rules below still hold for the shell + Python code.
 - `state/` is generated — never hand-edit; re-run `provision-zone.sh`.
 
 ## Known gaps (see README "rough edges" for the full list)

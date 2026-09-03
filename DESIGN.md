@@ -1,0 +1,218 @@
+# Ignition control plane — design for the Java rewrite
+
+Status: **proposed** (design only, no code yet). Supersedes the "stdlib / shell
+only" convention in `CLAUDE.md` once accepted.
+
+## Why
+
+Today Ignition is a bash dispatcher (`ign`), a set of shell scripts
+(`scripts/*.sh`), and a stdlib Python HTTP server (`control/ign-control.py`).
+The zone-admin console is already a web UI, but every **platform-admin** write
+operation — register a node, create / place / move / destroy a zone, drain a
+node, run a roster, sweep idle zones — is CLI-only. Operating an event means
+SSHing to the control host and running shell.
+
+Goal: **one application, in Java, deployed as a Docker container, where every
+platform-admin and zone-admin operation is done through the web UI.** No shell
+scripts to run by hand.
+
+## Language and framework
+
+- **Java 21** (LTS; virtual threads suit the many blocking calls out to
+  Docker, Forgejo, and SSH), **Spring Boot 3.x**.
+  - **Spring MVC + Thymeleaf** for server-rendered console pages — a plain
+    multi-page app, no SPA build step, same spirit as `ign-control.py` today.
+    Optionally **htmx** for live status and inline form posts (no build step).
+  - **Spring Security** for the three principals (below).
+  - **Spring Scheduling** (`@Scheduled`) for the idle sweep and periodic
+    reconciliation.
+  - **`RestClient`** for the Forgejo API.
+- Build: **Gradle** (Kotlin DSL). Output is a **container image**
+  (`ignition-control:<version>`) — buildpacks (`bootBuildImage`) or a Dockerfile
+  on a slim JRE base that also carries the `docker` CLI and an SSH client (see
+  "Docker engine access").
+- Group id / package: `TODO` (org name) — e.g. `com.example.ignition`.
+
+## The control plane is itself a container
+
+Runs on the **control host** as the `ignition-control` service, next to that
+host's core stack.
+
+- **Docker access.** Mounts `/var/run/docker.sock` to manage the local node.
+  For remote nodes it uses the node record's endpoint — `unix://…`,
+  `ssh://user@host`, or `tcp://host:2376` (+ mounted TLS client certs) — via a
+  mounted SSH key where needed.
+- **Networking.** Joins `traefik-public`; Traefik routes to it by Docker
+  labels — no more `host.docker.internal` loopback hop. The platform router
+  `admin.<BASE_DOMAIN>` is a label on this container. Per-zone
+  `admin.<slug>.<BASE_DOMAIN>` routers still need their own `tls.domains`
+  entries, so the app keeps writing `state/control/dynamic/<slug>.yml` for
+  Traefik's file provider (same as today — the writer is now the Java app).
+- **State volume.** Mounts `state/` (see "State").
+- **Secrets.** `IGN_ADMIN_TOKEN` from env / a Docker secret; per-zone tokens
+  live in `state/`.
+- **Config.** `application.yml` + env overrides: `BASE_DOMAIN`, `ACME_*`, the
+  per-zone quota defaults, the idle TTL, Docker / SSH settings.
+- **Self-exclusion.** The container that manages containers must never manage
+  or restart itself — exclude by name / label everywhere it enumerates
+  containers. Control-plane updates are deliberate (not Watchtower-driven)
+  unless we explicitly opt in.
+
+## Package layout
+
+```
+ignition-control/
+  build.gradle.kts
+  Dockerfile                       # slim JRE + docker CLI + ssh client
+  src/main/java/.../ignition/
+    IgnitionControlApplication.java
+    config/        SecurityConfig, DockerConfig, SchedulingConfig, IgnitionProperties
+    security/      token auth (platform / zone / deploy) -> IgnitionPrincipal
+    node/          Node, NodeService, NodeRepository
+    zone/          Zone, ZoneService, ZoneRepository
+    provisioning/  ProvisioningService   — two-phase Forgejo+DinD+runner,
+                   runner registration + UUID derivation, `compose cp` push
+    scheduler/     Scheduler            — CPU-headroom placement, capacity accounting
+    app/           DeployedApp, AppService, the CI deploy/undeploy bridge
+    release/       ReleaseService       — Conventional-Commits bump, tag via Forgejo
+    forgejo/       ForgejoClient        — per-zone REST wrapper
+    docker/        DockerEngine (transport per node), ComposeRunner
+    traefik/       TraefikDynamicConfigService  — writes state/control/dynamic/*
+    templates/     compose rendering (explicit var lists, envsubst-style)
+    sweep/         IdleSweeper (@Scheduled)
+    web/           PlatformConsoleController, ZoneConsoleController, DeployController
+  src/main/resources/
+    templates/*.html                 # Thymeleaf
+    compose/zone-compose.yml.tmpl     # moved from repo templates/
+    compose/app-compose.tmpl
+    application.yml
+```
+
+## What each shell script becomes
+
+| today | in the service |
+|---|---|
+| `ign node add/list/show/drain/undrain/rm` | `NodeService` + **Platform → Nodes** (register form; drain / undrain / remove) |
+| `ign zone create` → `provision-zone.sh` | `ZoneService.create()` → `ProvisioningService.provision()` + **Platform → Zones → New zone**; progress streamed |
+| `scheduler.sh` `pick_node()` | `Scheduler.place(cpu, memGb, label)` |
+| `ign zone move` | `ZoneService.move()` (keep-state teardown on the old node, re-provision on the new) |
+| `ign zone destroy` → `teardown-zone.sh` | `ZoneService.destroy()` — compose `down -v` for the zone + every app, remove state + dynamic snippet |
+| `sweep-idle.sh` (cron) | `IdleSweeper` `@Scheduled`; **Platform** shows idle zones + "sweep now" |
+| `ign app list/show/rm` | `AppService` + **Platform → Apps** |
+| `ign control` | *is* the application |
+| `control/ign-control.py` zone console | `ZoneConsoleController` + Thymeleaf — same surfaces |
+| `runner-config.yml` written by `provision-zone.sh` | `ProvisioningService` builds it in code, `compose cp`s it in |
+| `forgejo_uuid()` in `lib.sh` | `ProvisioningService.deriveRunnerUuid()` |
+| `state/control/dynamic/*.yml` writer | `TraefikDynamicConfigService` |
+
+## The UI
+
+Two authenticated consoles served by the one app.
+
+**Platform console** — `admin.<BASE_DOMAIN>`, platform token:
+
+- **Nodes** — table (endpoint, cpu/mem, allocated vs capacity, state); *Register
+  node* form; *Drain / Undrain / Remove*.
+- **Zones** — table (zone, node, footprint, app count, links); *New zone* form
+  (slug, optional node pin / label) → runs provisioning and streams progress,
+  then shows the zone-admin sign-in link and tokens; per-zone *Move / Destroy /
+  Open console*.
+- **Apps** — every deployed app across all zones; *Stop*.
+- **Roster** — paste / upload a list of zone slugs → bulk create or bulk
+  destroy (closes the "no roster loop" gap).
+- **Idle** — zones past the TTL; *Sweep now*.
+- **Health** — `BASE_DOMAIN`, quota defaults, ACME status, per-node Docker
+  connectivity, control-plane version.
+
+**Zone console** — `admin.<slug>.<BASE_DOMAIN>`, zone token: unchanged from
+today — Users, Repositories (create + per-repo **Release** with
+auto / patch / minor / major), Apps (status / remove), Restart runner, status
+card.
+
+**CI bridge** — bearer = deploy token: `POST /deploy`, `POST /undeploy`. The
+JSON contract is **unchanged**, so `examples/deploy.yml` does not change.
+
+No CLI is part of the management path. (A thin read-only `ign` that just calls
+the REST API could exist for scripting — optional, out of scope.)
+
+## Docker engine access
+
+`DockerEngine` picks a transport from the node record. For compose operations
+(`up`, `down -v`, `cp`, `exec`, `ps`) the service **invokes the `docker` CLI**
+via `ProcessBuilder` with `-H <endpoint>` — the same commands the shell scripts
+run today, so the two-phase provision and the SSH-safe `compose cp` trick carry
+over unchanged. This is why the image bundles the `docker` CLI + an SSH client.
+A structured client (docker-java, over the local socket) can be added later for
+cheap status/inspect calls, but is not required for v1.
+
+## State
+
+Keep the current **`state/` file tree**, wrapped in repository interfaces
+(`NodeRepository`, `ZoneRepository`, `AppRepository`). Same layout as today:
+`state/nodes/<name>.env`, `state/zones/<slug>/…`, `state/control/dynamic/…`,
+rendered compose and `runner-config.yml` as real files (compose and `compose
+cp` need real files anyway). Add an append-only `state/audit.log`.
+
+Rationale: zero migration, human-auditable, `git`-diffable, teardown stays
+`rm -rf`, and the port stays reviewable. Move metadata to SQLite/H2 + Flyway
+only if the UI later needs richer history than the audit log gives.
+
+## Auth model (principals unchanged)
+
+- **Platform admin** — `IGN_ADMIN_TOKEN`. Form login at `admin.<BASE_DOMAIN>` →
+  session cookie; or `Authorization: Bearer`.
+- **Zone admin** — per-zone `zone-token` (in state). Form login at
+  `admin.<slug>.<BASE_DOMAIN>` → session scoped to that zone.
+- **CI** — per-zone `deploy-token`, bearer only, only `POST /deploy|/undeploy`.
+- A Spring Security filter resolves the token → `IgnitionPrincipal(kind, slug)`;
+  URL / method rules enforce the split. The `zoneadmin` Forgejo account + API
+  token stay a server-held service credential.
+
+## Templates
+
+`zone-compose.yml.tmpl` and `app-compose.tmpl` move into
+`src/main/resources/compose/`. Rendering stays **explicit-variable
+substitution** — a small `${VAR}` replacer given the exact allowed key set
+(mirrors the `*_TMPL_VARS` discipline) — not a template engine, so a stray `$x`
+in a compose file is left alone. `runner-config.yml` is built in code (it has
+conditionals — the reason it isn't a template today).
+
+## Packaging and the core stack
+
+- New `templates/ignition-control-compose.yml` (control host only): the
+  `ignition-control` image, `/var/run/docker.sock` mount, SSH-key / TLS-cert
+  mounts, the `state` volume, `traefik-public`, and Traefik labels for
+  `admin.<BASE_DOMAIN>` plus the dynamic-config volume for per-zone
+  `admin.<slug>` routers.
+- `traefik-core-compose.yml` is unchanged for worker nodes. The control host
+  runs core **and** control.
+- `ignition-control:<version>` published to a registry.
+- Health via `/actuator/health` + a Docker healthcheck.
+- At cutover, `ign`, `scripts/`, and `control/ign-control.py` are removed.
+
+## Migration / cutover
+
+1. Land this doc.
+2. Scaffold `ignition-control/` (Gradle, app, Security, health, empty consoles).
+3. Port read paths: Node / Zone / App repositories over the existing `state/`
+   tree; platform console read views; zone console 1:1 from `ign-control.py`.
+4. Port the CI bridge; verify against a real zone.
+5. Port provisioning (the two-phase flow); verify a zone-create end to end.
+6. Port scheduler + move + destroy + sweep.
+7. Add the platform-console write operations (register node, zone
+   create / move / destroy, roster, sweep-now).
+8. Package as a container; add `ignition-control-compose.yml`; run it against a
+   test node.
+9. Cut over: remove the scripts + `ign-control.py`; rewrite the docs and the
+   `CLAUDE.md` conventions.
+10. `examples/deploy.yml` is untouched — the contract is preserved.
+
+## Open questions
+
+- Base image: distroless JRE (smaller, no shell) vs a slim JRE that bundles the
+  `docker` CLI + SSH client. The compose/SSH story points to the latter.
+- Java group id / package (org name).
+- Registry for the `ignition-control` image (GHCR under
+  `johnjoeallen/ignition`, or an org registry).
+- Confirm the file-tree state store for v1 (vs SQLite from the start).
+- A thin read-only `ign` REST wrapper for scripting — keep or drop.
