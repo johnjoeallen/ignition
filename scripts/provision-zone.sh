@@ -177,12 +177,12 @@ date +%s > "$S/last-activity"
 cat <<EOF
 
   provisioned zone: $SLUG   (node $NODE)
-    Forgejo             https://$GIT_HOST/
+    Git remote          https://$GIT_HOST/                        (developers: git, PRs, CI)
     Apps               https://<name>.apps.$SLUG.$BASE_DOMAIN/   (per app the zone deploys)
-    Zone-admin view     https://$ZADMIN_HOST/                     (sign in with zone-token)
-    Zone-admin login    state/zones/$SLUG/zone-admin.txt          (Forgejo admin: users, repos, ...)
-    Zone control token  state/zones/$SLUG/zone-token              ($ZADMIN_HOST sign-in)
-    CI deploy token     state/zones/$SLUG/deploy-token            (DEPLOY_TOKEN secret)
+    Zone console        https://$ZADMIN_HOST/                     (the team lead's whole surface)
+    -> hand the lead    state/zones/$SLUG/zone-token              (their console sign-in - the only credential they get)
+    CI deploy token     state/zones/$SLUG/deploy-token            (DEPLOY_TOKEN repo secret)
+    Forgejo service     state/zones/$SLUG/zone-admin.txt          (hz-control's - keep on the control host, do NOT hand out)
 
   DNS:
     $GIT_HOST  and  *.apps.$SLUG.$BASE_DOMAIN   -> node $NODE's host

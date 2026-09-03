@@ -180,10 +180,12 @@ sequenceDiagram
 
 The workflow triggers on a push to `main` and on a git tag. Teams don't tag
 locally and don't use Forgejo's Releases form — the **Release** button in the
-zone console has hz-control read the repo's highest `vX.Y.Z` tag, compute the
-next one, and create it on `main` through the Forgejo API, so the tag is always
-made from reviewed, pushed history. Each run pushes an immutable `:<sha>` **and** a `:<ref>` tag (the
-branch or the git tag) and deploys the `:<ref>` one. `POST /deploy` is the
+zone console has hz-control diff the last tag against `main`, pick the semver
+bump from those commit messages (Conventional Commits; the admin can override),
+and create the next `vX.Y.Z` tag on `main` through the Forgejo API, so the tag
+is always made from reviewed, pushed history. Each run pushes an immutable
+`:<sha>` **and** a `:<ref>` tag (the branch or the git tag) and deploys the
+`:<ref>` one. `POST /deploy` is the
 immediate rollout; after that the per-node **Watchtower** (see below) polls
 that tag and pulls a new digest on its own — so a re-push or a base-image
 rebuild redeploys without another workflow run. `hz-control` stamps

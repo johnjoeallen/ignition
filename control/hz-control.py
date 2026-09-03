@@ -187,24 +187,59 @@ def bump_semver(v: tuple[int, int, int], kind: str) -> str:
     return f"v{maj}.{mnr}.{pat}"
 
 
-def cut_release(slug: str, owner: str, repo: str, kind: str) -> tuple[int, object, str]:
+_CONV_MAJOR_RE = re.compile(r"^[a-zA-Z]+(\([^)]*\))?!:")
+_CONV_FEAT_RE = re.compile(r"^feat(\([^)]*\))?:", re.IGNORECASE)
+
+
+def classify_bump(messages: list[str]) -> str:
+    """Conventional-Commits → semver bump. BREAKING CHANGE / `type!:` => major,
+    any `feat:` => minor, otherwise patch."""
+    bump = "patch"
+    for msg in messages:
+        head = (msg.splitlines() or [""])[0].strip()
+        if "BREAKING CHANGE" in msg or _CONV_MAJOR_RE.match(head):
+            return "major"
+        if _CONV_FEAT_RE.match(head):
+            bump = "minor"
+    return bump
+
+
+def _commits_since(slug: str, owner: str, repo: str, base_tag: str) -> list[str]:
+    if base_tag:
+        code, body = forgejo(slug, "GET", f"/repos/{owner}/{repo}/compare/{base_tag}...main")
+        if code == 200 and isinstance(body, dict):
+            return [c.get("commit", {}).get("message", "") for c in body.get("commits", [])]
+    code, body = forgejo(slug, "GET", f"/repos/{owner}/{repo}/commits?sha=main&limit=50")
+    if code == 200 and isinstance(body, list):
+        return [c.get("commit", {}).get("message", "") for c in body]
+    return []
+
+
+def cut_release(slug: str, owner: str, repo: str, kind: str = "auto") -> tuple[int, object, str, str]:
     """Tag the next version on `main` via the Forgejo API — no local git, no
-    Forgejo Releases UI. Creating the release creates the tag ref, which fires
-    the repo's `on: push` (tags) workflow."""
+    Forgejo Releases UI. `kind` is patch/minor/major, or "auto" (default) to
+    derive the bump from Conventional-Commits messages since the last tag.
+    Creating the release creates the tag ref, which fires the repo's
+    `on: push` (tags) workflow."""
     if not (_REPO_RE.match(owner) and _REPO_RE.match(repo)):
         raise ValueError("bad owner/repo")
-    if kind not in ("patch", "minor", "major"):
-        kind = "patch"
     _, tags = forgejo(slug, "GET", f"/repos/{owner}/{repo}/tags?limit=50")
     cur = latest_semver(tags)
+    base = "v{}.{}.{}".format(*cur) if cur != (0, 0, 0) else ""
+
+    auto = kind not in ("patch", "minor", "major")
+    if auto:
+        kind = classify_bump(_commits_since(slug, owner, repo, base))
+
     # first release: v1.0.0 for a major bump, else v0.1.0
     tag = bump_semver(cur, kind) if cur != (0, 0, 0) else (
         "v1.0.0" if kind == "major" else "v0.1.0")
+    label = f"{kind}, from commits" if auto else f"{kind}, manual"
     code, body = forgejo(slug, "POST", f"/repos/{owner}/{repo}/releases", {
         "tag_name": tag, "target_commitish": "main", "name": tag,
-        "body": "Released from the zone admin console.",
+        "body": f"Released from the zone console ({label}).",
     })
-    return code, body, tag
+    return code, body, tag, kind
 
 
 # --------------------------------------------------------------------- docker
@@ -397,8 +432,10 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
             f"<form method=post action=/ui/repo/release style=display:inline>"
             f"<input type=hidden name=owner value='{html.escape(owner)}'>"
             f"<input type=hidden name=repo value='{html.escape(name)}'>"
-            f"<select name=bump><option>patch</option><option>minor</option>"
-            f"<option>major</option></select>"
+            f"<select name=bump>"
+            f"<option value=auto>auto (from commits)</option>"
+            f"<option>patch</option><option>minor</option><option>major</option>"
+            f"</select>"
             f"<button>Release</button></form></li>"
         )
 
@@ -427,10 +464,11 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
       <h2>Apps <span style=font-weight:normal>· <code>&lt;name&gt;.{html.escape(st['apps_base'])}</code></span></h2>
       <table><tr><th>app<th>state<th>image<th></tr>{applist}</table>
       <p style=font-size:.85rem;color:#555>Deploys are automatic: hit
-      <b>Release</b> on a repo (Repositories, below) — that tags the next
-      version on <code>main</code> and CI builds + ships it. Every app also gets
-      a Watchtower agent wired in automatically, so a re-pushed image rolls out
-      on its own within ~a minute — no config in your repo.</p>
+      <b>Release</b> on a repo (Repositories, below) — the next version is read
+      from the commit messages since the last release, tagged on
+      <code>main</code>, and CI builds + ships it. Every app also gets a
+      Watchtower agent wired in automatically, so a re-pushed image rolls out on
+      its own within ~a minute — no config in your repo.</p>
 
       <h2>Users</h2>
       <form method=post action=/ui/user/create>
@@ -441,9 +479,10 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
       </form>
       <table><tr><th>login<th>email<th>role<th></tr>{ulist}</table>
 
-      <h2>Repositories <span style=font-weight:normal>· <b>Release</b> tags the
-        next version on <code>main</code> and ships it; a push to
-        <code>main</code> ships the tip</span></h2>
+      <h2>Repositories <span style=font-weight:normal>· <b>Release</b> picks the
+        next version from the commit messages since the last release
+        (override with patch/minor/major), tags <code>main</code> and ships it;
+        a plain push to <code>main</code> ships the tip</span></h2>
       <form method=post action=/ui/repo/create>
         <label>name<input name=name required></label>
         <label>&nbsp;<span><input type=checkbox name=private> private</span></label>
@@ -575,10 +614,10 @@ class H(BaseHTTPRequestHandler):
                     })
                     return self._redirect_zone(slug, code, b, f"repo {f['name']} created")
                 if path == "/ui/repo/release":
-                    code, b, tag = cut_release(
-                        slug, f["owner"], f["repo"], f.get("bump", "patch"))
+                    code, b, tag, kind = cut_release(
+                        slug, f["owner"], f["repo"], f.get("bump", "auto"))
                     return self._redirect_zone(
-                        slug, code, b, f"released {f['repo']} {tag} - CI is building")
+                        slug, code, b, f"released {f['repo']} {tag} ({kind}) - CI is building")
                 if path == "/ui/runner/restart":
                     r = zc(slug, "restart", "runner")
                     ok = r.returncode == 0

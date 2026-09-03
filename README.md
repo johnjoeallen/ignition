@@ -90,9 +90,11 @@ A zone lead then adds `.forgejo/workflows/deploy.yml`
 optional `FORGEJO_TOKEN`).
 
 Builds **start from a release** — in the zone console under Repositories the
-zone admin picks `patch` / `minor` / `major` and clicks **Release**; hz-control
-reads the repo's current `vX.Y.Z`, computes the next one, and tags it on `main`
-(no tag names typed, no `git push --tags`). That builds, pushes to
+zone admin clicks **Release**; hz-control reads the commit messages since the
+last release, picks the bump from them (Conventional Commits: `fix:` → patch,
+`feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major; a dropdown overrides),
+and tags the next `vX.Y.Z` on `main` — no one bumps a version, no
+`git push --tags`. That builds, pushes to
 `git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`. A
 push to `main` works too. Several repos → several apps. After that, rollout is
 automatic two ways:

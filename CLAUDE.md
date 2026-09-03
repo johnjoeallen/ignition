@@ -42,9 +42,10 @@ Two admin roles:
   platform view.
 - **Zone admin** — one per zone (the team lead). Manages *their* zone only —
   add/remove users, create repos, **cut releases** (the zone view's *Release*
-  button auto-tags the next `vX.Y.Z` on `main` via the Forgejo API), restart
-  the runner, watch build/deploy status — through the control-plane's zone
-  view, which proxies that zone's own Forgejo admin API.
+  button derives the bump from the commits since the last release and tags the
+  next `vX.Y.Z` on `main` — a dropdown overrides), restart the runner, watch
+  build/deploy status — through the control-plane's zone view, which proxies
+  that zone's own Forgejo admin API.
 
 ## Repo layout
 
@@ -127,10 +128,11 @@ and runs it on the zone's node's real daemon, on `traefik-public`.
 **New builds redeploy automatically, two ways.** The CI workflow
 (`examples/deploy.yml`) triggers on a push to `main` **and** on a git tag. Tags
 are created by the zone console's **Release** button: `cut_release()` in
-`hz-control.py` reads the repo's highest `vMAJOR.MINOR.PATCH` tag over the
-Forgejo API, bumps it (patch/minor/major; first release `v0.1.0` or `v1.0.0`),
-and creates the tag on `main` — the zone admin never types a version or opens
-Forgejo. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch or tag) and
+`hz-control.py` diffs the last tag against `main`, runs `classify_bump()` over
+those commit messages (Conventional Commits: `feat!:`/`BREAKING CHANGE:` →
+major, `feat:` → minor, else patch; a `bump=` override skips this), and creates
+the next `vMAJOR.MINOR.PATCH` tag on `main` (first release `v0.1.0` or
+`v1.0.0`). The zone admin never types a version. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch or tag) and
 `POST /deploy`s the `:<ref>` one, rolling the app forward immediately.
 Independently, a **per-node Watchtower** (in `traefik-core-compose.yml`,
 `--label-enable`, 60s poll) pulls a new digest for any container labelled

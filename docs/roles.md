@@ -59,7 +59,7 @@ and stays on the control host. Everything below is a console action:
 |---|---|
 | Add / remove team members | **Users** — creates the Forgejo account for them |
 | Create repositories | **Repositories → Create repo** |
-| Ship a build | **Repositories →** pick `patch` / `minor` / `major` **→ Release** — see below |
+| Ship a build | **Repositories → Release** — version is picked from commits since the last release (override available); see below |
 | Manage the zone's apps | **Apps** — list, live status, remove. Deploys come from CI; every app is wired with a Watchtower agent automatically, so a re-pushed image redeploys on its own (~60s). |
 | Restart a stuck Actions runner | **Restart runner** button |
 | See build / deploy status, the live-app URL | status card |
@@ -75,17 +75,22 @@ like any forge — that's the *developer* surface, separate from this one.
 
 ### Shipping a release
 
-Release versioning is automated — **no tag names to type**, no Releases form.
-In the console under **Repositories**, each repo shows its current version
-(e.g. `· v1.2.3`). Pick the bump and click **Release**:
+Release versioning is automated — **no one bumps the version**. In the console
+under **Repositories**, each repo shows its current version (e.g. `· v1.2.3`).
+Click **Release** and hz-control:
 
-- **patch** — a bug fix (`v1.2.3 → v1.2.4`)
-- **minor** — a backwards-compatible feature (`v1.2.3 → v1.3.0`)
-- **major** — a breaking change (`v1.2.3 → v2.0.0`)
+1. reads the commit messages **since the last release** (it compares the last
+   tag to `main`),
+2. picks the bump from them by [Conventional Commits](https://www.conventionalcommits.org/):
+   a `fix:` → **patch**, a `feat:` → **minor**, a `feat!:` or `BREAKING CHANGE:`
+   → **major** (nothing conventional → patch),
+3. tags the next `vX.Y.Z` on `main` (first release `v0.1.0`, or `v1.0.0` for a
+   major).
 
-hz-control reads the repo's highest `vMAJOR.MINOR.PATCH` tag, computes the next
-one (first release is `v0.1.0`, or `v1.0.0` for a major), and creates it on
-`main`. That fires the `build and deploy` workflow; on success the app is live
+The dropdown next to **Release** defaults to *auto (from commits)*; switch it to
+`patch` / `minor` / `major` to override for that one release.
+
+The new tag fires the `build and deploy` workflow; on success the app is live
 at `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
 A plain push to `main` also deploys (handy mid-hack), but a release is what
 gives every deployed image a version to redeploy or roll back to.
