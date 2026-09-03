@@ -3,7 +3,7 @@
 #
 #   hz node   add|list|show|drain|undrain|rm
 #   hz zone   create|list|show|status|move|destroy
-#   hz app    list|show|rm       # deployed apps (<name>.apps.<BASE_DOMAIN>)
+#   hz app    list|show <zone> <name>|rm <zone> <name>   # deployed apps
 #   hz sweep  [--dry-run]        # reclaim idle zones now
 #   hz control                   # run the control-plane service (admin.<BASE_DOMAIN>)
 #

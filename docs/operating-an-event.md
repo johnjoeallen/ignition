@@ -7,15 +7,16 @@
   daemon (local socket, `ssh://`, or `tcp://`+TLS).
 - **Nodes** — hosts with Docker, each with the shared network created:
   `docker network create traefik-public`.
-- **DNS** (`BASE_DOMAIN` is the apex, e.g. `x.com`):
-  `admin.<BASE_DOMAIN>` → the control host, and `<zone>.git.<BASE_DOMAIN>` /
-  `<app>.apps.<BASE_DOMAIN>` → whichever node runs them. On a single node,
-  `*.git.<BASE_DOMAIN>` and `*.apps.<BASE_DOMAIN>` A-records cover it; across
+- **DNS** (`BASE_DOMAIN` is the apex, e.g. `hackzone.com`):
+  `admin.<BASE_DOMAIN>` → the control host, and `git.<slug>.<BASE_DOMAIN>` /
+  `admin.<slug>.<BASE_DOMAIN>` / `<app>.apps.<slug>.<BASE_DOMAIN>` → whichever
+  node runs that zone. On a single node, `*.<slug>.<BASE_DOMAIN>` A-records cover it; across
   nodes, a record per zone/app.
 - A DNS-provider API token for Traefik's ACME DNS challenge (Cloudflare by
   default; swap the provider in `templates/traefik-core-compose.yml`). Each
-  node's Traefik fetches `admin.<BASE_DOMAIN>`, `*.git.<BASE_DOMAIN>`, and
-  `*.apps.<BASE_DOMAIN>` certs.
+  the control host's Traefik fetches the apex cert (`<BASE_DOMAIN>` +
+  `*.<BASE_DOMAIN>`); each zone's Forgejo router fetches `*.<slug>.<BASE_DOMAIN>`
+  + `*.apps.<slug>.<BASE_DOMAIN>`.
 
 Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
@@ -23,11 +24,11 @@ Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
 ```sh
 # 1. Traefik — once per node.
-export BASE_DOMAIN=x.com ACME_EMAIL=ops@x.com CF_DNS_API_TOKEN=...
+export BASE_DOMAIN=hackzone.com ACME_EMAIL=ops@hackzone.com CF_DNS_API_TOKEN=...
 docker compose -f templates/traefik-core-compose.yml up -d
 
 # 2. The control plane — once, on the control host. Front it with Traefik at
-#    admin.x.com / a tunnel; do not expose it raw.
+#    admin.hackzone.com / a tunnel; do not expose it raw.
 export HZ_ADMIN_TOKEN=$(openssl rand -hex 32)      # keep this — it's the platform key
 ./hz control &
 
@@ -37,19 +38,20 @@ export HZ_ADMIN_TOKEN=$(openssl rand -hex 32)      # keep this — it's the plat
 ./hz node list
 
 # 4. Create zones (scheduler picks a node; --node to pin, --label to constrain).
-BASE_DOMAIN=x.com ./hz zone create alpha
-BASE_DOMAIN=x.com ./hz zone create bravo --node node-2
-#   → Forgejo  https://alpha.git.x.com/
-#   → apps     https://<name>.apps.x.com/   (per app CI deploys)
+BASE_DOMAIN=hackzone.com ./hz zone create alpha
+BASE_DOMAIN=hackzone.com ./hz zone create bravo --node node-2
+#   → Forgejo   https://git.alpha.hackzone.com/
+#   → zone admin https://admin.alpha.hackzone.com/
+#   → apps      https://<name>.apps.alpha.hackzone.com/   (per app CI deploys)
 #   → state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 ```
 
 Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
-**`zone-token`** (sign in at `admin.x.com`). They seed each repo they want
+**`zone-token`** (sign in at `admin.<slug>.hackzone.com`). They seed each repo they want
 deployed with `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and
 its repo variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
 `FORGEJO_TOKEN`, `DEPLOY_TOKEN`. A push to `main` builds, pushes, and deploys
-`APP_NAME.apps.x.com`; more repos → more apps.
+`APP_NAME.apps.<slug>.hackzone.com`; more repos → more apps.
 
 ## During the event
 

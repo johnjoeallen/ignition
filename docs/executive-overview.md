@@ -57,7 +57,7 @@ through a scoped surface, without coming back to the platform team. The
 marginal cost of one more team is close to zero.
 
 **3. Real deployments, not screenshots.**
-Every app a team ships is live at `https://<app>.apps.<event-domain>/` and
+Every app a team ships is live at `https://<app>.apps.<team>.<event-domain>/` and
 redeploys on every push — one team can run several. Stakeholders engage with
 **working software** during judging. The best ideas leave the event as a
 running URL and a git repo — already deployed, already shareable — instead of a

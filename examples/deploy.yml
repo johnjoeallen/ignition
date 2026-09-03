@@ -1,14 +1,13 @@
 # Seed this into a zone's repo as .forgejo/workflows/deploy.yml
 #
 # A zone can run this from several repos — each deploys its own app at
-# <APP_NAME>.apps.<BASE_DOMAIN>. App names are global; the first zone to use a
-# name owns it.
+# <APP_NAME>.apps.<slug>.<BASE_DOMAIN>. App names are unique within the zone.
 #
 # Repo variables (Settings -> Actions -> Variables):
-#   REGISTRY     <slug>.git.<BASE_DOMAIN>       e.g. alpha.git.x.com
-#   CONTROL_URL  https://admin.<BASE_DOMAIN>    the control plane
-#   APP_NAME     my-app                          -> https://my-app.apps.<BASE_DOMAIN>/
-#   APP_PORT     8080                            the port your app listens on
+#   REGISTRY     git.<slug>.<BASE_DOMAIN>          e.g. git.alpha.hackzone.com
+#   CONTROL_URL  https://admin.<slug>.<BASE_DOMAIN>  the zone's control endpoint
+#   APP_NAME     my-app                            -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
+#   APP_PORT     8080                              the port your app listens on
 # Repo secrets (Settings -> Actions -> Secrets):
 #   FORGEJO_TOKEN  a token with package:write, for pushing to the registry
 #   DEPLOY_TOKEN   the zone's CI token (state/zones/<slug>/deploy-token)

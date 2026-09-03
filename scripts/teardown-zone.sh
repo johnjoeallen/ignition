@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tear down one zone's stack — Forgejo/DinD/runner AND every app it deployed —
-# on its assigned node, and remove its state. Prefixes: zone-<slug>, app-<name>.
+# on its assigned node, and remove its state. Prefixes: zone-<slug>, app-<slug>-<name>.
 #
 #   ./scripts/teardown-zone.sh <slug> [--keep-state]
 set -euo pipefail
@@ -19,9 +19,12 @@ echo "==> tearing down zone-$SLUG  (node $(zone_get "$SLUG" NODE || echo '?'))"
 # every app this zone deployed
 for app in $(zone_apps "$SLUG"); do
     echo "    app $app"
-    DOCKER_HOST="${DH:-}" docker compose -p "app-$app" down -v --remove-orphans 2>/dev/null || true
-    rm -f "$(app_file "$app")"
+    DOCKER_HOST="${DH:-}" docker compose -p "app-$SLUG-$app" down -v --remove-orphans 2>/dev/null || true
+    [ "${2:-}" = "--keep-state" ] || rm -f "$(app_file "$SLUG" "$app")"
 done
+
+# control-host Traefik router snippet for admin.<slug>.<base>
+[ "${2:-}" = "--keep-state" ] || rm -f "$STATE_DIR/control/dynamic/$SLUG.yml"
 
 if [ -f "$S/docker-compose.yml" ]; then
     zc "$SLUG" down -v --remove-orphans

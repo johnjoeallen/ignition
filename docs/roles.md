@@ -52,7 +52,7 @@ One per zone — the team lead. Gets, at provisioning time:
 - a **Forgejo admin login** (`state/zones/<slug>/zone-admin.txt`) for that
   zone's Forgejo, and
 - a **zone control token** (`state/zones/<slug>/zone-token`) — they sign in
-  with it at `https://admin.<event-domain>/` to get the zone view.
+  with it at `https://admin.<slug>.<event-domain>/` to get the zone view.
 
 Through the zone view (or Forgejo directly) they manage **their zone only**:
 
@@ -67,7 +67,7 @@ Through the zone view (or Forgejo directly) they manage **their zone only**:
 
 Every zone-view action is either a **proxied call to that zone's own Forgejo
 admin API** (with the token minted at provisioning) or a `docker compose`
-command **scoped to a `zone-<slug>` or `app-<name>` project the zone owns**. A
+command **scoped to a `zone-<slug>` or `app-<slug>-<name>` project the zone owns**. A
 zone admin has no node access, no Docker access, and no visibility into any
 other zone.
 

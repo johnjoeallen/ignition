@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parent.parent
 STATE = REPO / "state"
 NODES = STATE / "nodes"
 ZONES = STATE / "zones"
-APPS = STATE / "apps"
+CONTROL_DYNAMIC = STATE / "control" / "dynamic"
 APP_TMPL = REPO / "templates" / "app-compose.tmpl"
 
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
@@ -82,16 +82,21 @@ def node_env(name: str) -> dict[str, str]:
     return _envfile(NODES / f"{name}.env")
 
 
-def apps() -> list[str]:
-    return sorted(f.stem for f in APPS.glob("*.env")) if APPS.is_dir() else []
+def app_dir(slug: str) -> Path:
+    return ZONES / slug / "apps"
 
 
-def app_env(name: str) -> dict[str, str]:
-    return _envfile(APPS / f"{name}.env")
+def app_env(slug: str, name: str) -> dict[str, str]:
+    return _envfile(app_dir(slug) / f"{name}.env")
 
 
 def zone_apps(slug: str) -> list[str]:
-    return [a for a in apps() if app_env(a).get("ZONE") == slug]
+    d = app_dir(slug)
+    return sorted(f.stem for f in d.glob("*.env")) if d.is_dir() else []
+
+
+def all_apps() -> list[tuple[str, str]]:
+    return [(s, a) for s in zones() for a in zone_apps(s)]
 
 
 def _read(slug: str, name: str) -> str:
@@ -178,21 +183,21 @@ def zc(slug: str, *args: str) -> subprocess.CompletedProcess:
 
 
 def _app_dc(slug: str, name: str, *args: str) -> subprocess.CompletedProcess:
+    proj = f"app-{slug}-{name}"
+    compose = app_dir(slug) / f"{name}-compose.yml"
     return subprocess.run(
-        ["docker", "compose", "-p", f"app-{name}",
-         "-f", str(APPS / f"{name}-compose.yml"), *args] if (APPS / f"{name}-compose.yml").is_file()
-        else ["docker", "compose", "-p", f"app-{name}", *args],
+        ["docker", "compose", "-p", proj, "-f", str(compose), *args] if compose.is_file()
+        else ["docker", "compose", "-p", proj, *args],
         env=_dc_env(slug), capture_output=True, text=True, check=False,
     )
 
 
-def app_status(name: str) -> dict:
-    a = app_env(name)
-    slug = a.get("ZONE", "")
+def app_status(slug: str, name: str) -> dict:
+    a = app_env(slug, name)
     state = _app_dc(slug, name, "ps", "--format", "{{.State}}").stdout.strip() or "not running"
     base = zone_env(slug).get("BASE_DOMAIN", "")
     return {"name": name, "zone": slug, "node": a.get("NODE"), "image": a.get("IMAGE"),
-            "url": f"https://{name}.apps.{base}/", "state": state,
+            "url": f"https://{name}.apps.{slug}.{base}/", "state": state,
             "deploy_id": a.get("DEPLOY_ID")}
 
 
@@ -202,8 +207,8 @@ def zone_status(slug: str) -> dict:
     z = zone_env(slug)
     return {
         "slug": slug, "node": z.get("NODE"), "forgejo_url": z.get("FORGEJO_URL"),
-        "apps_base": f"apps.{z.get('BASE_DOMAIN','')}", "stack": stack,
-        "apps": [app_status(a) for a in zone_apps(slug)],
+        "apps_base": f"apps.{slug}.{z.get('BASE_DOMAIN','')}", "stack": stack,
+        "apps": [app_status(slug, a) for a in zone_apps(slug)],
         "last_activity": _read(slug, "last-activity"),
     }
 
@@ -212,14 +217,13 @@ def deploy(slug: str, name: str, image: str, port: int) -> dict:
     z = zone_env(slug)
     if not _NAME_RE.match(name):
         raise ValueError("app name must be [a-z0-9-], 1–40 chars, no leading/trailing dash")
-    registry = z.get("REGISTRY", f"{slug}.git.{z.get('BASE_DOMAIN','')}")
+    registry = z.get("REGISTRY", f"git.{slug}.{z.get('BASE_DOMAIN','')}")
     if not image.startswith(registry + "/"):
         raise ValueError(f"image must be from {registry}/")
 
-    APPS.mkdir(parents=True, exist_ok=True)
-    owner = app_env(name).get("ZONE")
-    if owner and owner != slug:
-        raise ValueError(f"app name '{name}' is already owned by zone '{owner}'")
+    apps = app_dir(slug)
+    apps.mkdir(parents=True, exist_ok=True)
+    proj = f"app-{slug}-{name}"
 
     deploy_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     env = {
@@ -227,31 +231,31 @@ def deploy(slug: str, name: str, image: str, port: int) -> dict:
         "APP_IMAGE": image, "APP_PORT": str(port), "DEPLOY_ID": deploy_id,
         "CPU_APP": os.environ.get("CPU_APP", "1.0"), "MEM_APP": os.environ.get("MEM_APP", "1g"),
     }
-    rendered = APPS / f"{name}-compose.yml"
+    rendered = apps / f"{name}-compose.yml"
     vlist = ("${APP_NAME} ${ZONE_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} "
              "${DEPLOY_ID} ${CPU_APP} ${MEM_APP}")
     with rendered.open("w") as fh:
         subprocess.run(["envsubst", vlist], stdin=APP_TMPL.open(), stdout=fh, env=env, check=True)
     subprocess.run(
-        ["docker", "compose", "-p", f"app-{name}", "-f", str(rendered),
+        ["docker", "compose", "-p", proj, "-f", str(rendered),
          "up", "-d", "--pull", "always", "--remove-orphans"],
         env=env, check=True, capture_output=True, text=True,
     )
-    (APPS / f"{name}.env").write_text(
+    (apps / f"{name}.env").write_text(
         f"APP_NAME={name}\nZONE={slug}\nNODE={z.get('NODE','')}\n"
         f"IMAGE={image}\nPORT={port}\nDEPLOY_ID={deploy_id}\n"
     )
     (ZONES / slug / "last-activity").write_text(str(int(time.time())))
     return {"ok": True, "zone": slug, "app": name, "deploy_id": deploy_id,
-            "url": f"https://{name}.apps.{z['BASE_DOMAIN']}/"}
+            "url": f"https://{name}.apps.{slug}.{z['BASE_DOMAIN']}/"}
 
 
 def undeploy(slug: str, name: str) -> dict:
-    if app_env(name).get("ZONE") != slug:
-        raise ValueError(f"zone {slug} does not own app '{name}'")
+    if name not in zone_apps(slug):
+        raise ValueError(f"zone {slug} has no app '{name}'")
     _app_dc(slug, name, "down", "-v", "--remove-orphans")
-    (APPS / f"{name}.env").unlink(missing_ok=True)
-    (APPS / f"{name}-compose.yml").unlink(missing_ok=True)
+    (app_dir(slug) / f"{name}.env").unlink(missing_ok=True)
+    (app_dir(slug) / f"{name}-compose.yml").unlink(missing_ok=True)
     return {"ok": True, "removed": name}
 
 
@@ -308,7 +312,7 @@ def platform_page(msg: str) -> bytes:
         f"<tr><td><a href='{html.escape(a['url'])}'>{html.escape(a['name'])}</a></td>"
         f"<td>{html.escape(a['zone'] or '')}</td><td>{html.escape(a['node'] or '')}</td>"
         f"<td>{html.escape(a['state'])}</td></tr>"
-        for a in (app_status(n) for n in apps())
+        for a in (app_status(s, n) for s, n in all_apps())
     ) or "<tr><td colspan=4>none deployed</td></tr>"
     return page("platform", (f"<div class='msg'>{html.escape(msg)}</div>" if msg else "") + f"""
       <h2>Nodes</h2>
@@ -318,7 +322,7 @@ def platform_page(msg: str) -> bytes:
       <h2>Zones</h2>
       <table><tr><th>zone<th>node<th>footprint<th>apps<th>forge</tr>{zrows}</table>
       <h2>Apps</h2>
-      <table><tr><th>app (*.apps.&lt;base&gt;)<th>zone<th>node<th>state</tr>{arows}</table>
+      <table><tr><th>app (&lt;name&gt;.apps.&lt;zone&gt;.&lt;base&gt;)<th>zone<th>node<th>state</tr>{arows}</table>
       <form method=post action=/ui/logout><button>Sign out</button></form>""")
 
 
@@ -446,7 +450,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/zones" and role == "platform":
             return self._json(200, {s: zone_status(s) for s in zones()})
         if path == "/api/apps" and role == "platform":
-            return self._json(200, {a: app_status(a) for a in apps()})
+            return self._json(200, {f"{s}/{n}": app_status(s, n) for s, n in all_apps()})
         if path == "/api/zone" and role == "zone":
             return self._json(200, zone_status(slug))
         if path == "/api/zone/users" and role == "zone":
@@ -521,9 +525,48 @@ class H(BaseHTTPRequestHandler):
             self._html(zone_page(slug, "", f"Forgejo said ({code}): {err}"), 400)
 
 
+def _base_domain() -> str:
+    b = os.environ.get("BASE_DOMAIN", "")
+    if b:
+        return b
+    for s in zones():
+        b = zone_env(s).get("BASE_DOMAIN", "")
+        if b:
+            return b
+    return ""
+
+
+def write_platform_router() -> None:
+    """Drop the Traefik file-provider snippet that fronts hz-control at
+    admin.<BASE_DOMAIN>. provision-zone.sh writes the per-zone
+    admin.<slug>.<BASE_DOMAIN> snippets alongside it."""
+    base = _base_domain()
+    if not base:
+        print("note: BASE_DOMAIN unknown — skipping platform Traefik router", flush=True)
+        return
+    CONTROL_DYNAMIC.mkdir(parents=True, exist_ok=True)
+    (CONTROL_DYNAMIC / "_platform.yml").write_text(
+        f"""# generated by hz-control — routes admin.{base} to hz-control
+http:
+  routers:
+    hz-platform:
+      rule: "Host(`admin.{base}`)"
+      entryPoints: ["websecure"]
+      service: hz-control
+      tls: {{certResolver: le}}
+  services:
+    hz-control:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:{PORT}"
+"""
+    )
+
+
 def main() -> None:
     if not ADMIN_TOKEN:
         print("warning: HZ_ADMIN_TOKEN not set — the platform view is disabled", flush=True)
+    write_platform_router()
     print(f"hz-control on {ADDR}:{PORT}  ({len(nodes())} nodes, {len(zones())} zones)", flush=True)
     ThreadingHTTPServer((ADDR, PORT), H).serve_forever()
 

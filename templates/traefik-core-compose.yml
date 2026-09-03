@@ -1,19 +1,30 @@
 # Per-node Traefik. Runs once on every node, before any zone is placed there.
 #
-#   export BASE_DOMAIN=x.com ACME_EMAIL=ops@x.com
-#   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the wildcard certs
+#   export BASE_DOMAIN=example.com ACME_EMAIL=ops@example.com
+#   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the certs
 #   docker compose -f templates/traefik-core-compose.yml up -d
 #
-# BASE_DOMAIN is the apex. Owns :80 / :443 on the node and holds three
-# certificates, so any zone or app on this node is covered with no per-name
-# cert request:
-#   admin.${BASE_DOMAIN}          the control plane
-#   *.git.${BASE_DOMAIN}          every zone's Forgejo   (<slug>.git.<base>)
-#   *.apps.${BASE_DOMAIN}         every deployed app     (<name>.apps.<base>)
+# BASE_DOMAIN is the apex of the whole hackzone install (e.g. example.com).
+# Traefik owns :80 / :443 on the node.
 #
-# DNS still routes per zone / per app: <slug>.git.<base> and <name>.apps.<base>
-# A-records point at whichever node runs that zone/app (single-node: just make
-# *.git.<base> and *.apps.<base> A-records).
+# Domain scheme:
+#   admin.${BASE_DOMAIN}                 the platform admin control plane
+#   <slug>.${BASE_DOMAIN}                a zone owns this whole subtree:
+#     git.<slug>.${BASE_DOMAIN}            the zone's Forgejo
+#     admin.<slug>.${BASE_DOMAIN}          the zone admin's control-plane view
+#     <app>.apps.<slug>.${BASE_DOMAIN}     a deployed app (name unique per zone)
+#
+# The control host's Traefik holds the apex cert (${BASE_DOMAIN} + a
+# *.${BASE_DOMAIN} SAN, which covers admin.${BASE_DOMAIN}) and fronts hz-control
+# on the loopback. Each zone's own Forgejo router (see zone-compose.yml.tmpl)
+# additionally requests *.<slug>.${BASE_DOMAIN} + *.apps.<slug>.${BASE_DOMAIN},
+# since those are two labels deep. provision-zone.sh drops a dynamic router
+# snippet in state/control/dynamic/<slug>.yml so admin.<slug>.${BASE_DOMAIN}
+# reaches hz-control with its own cert.
+#
+# DNS: admin.${BASE_DOMAIN} -> the control host. Per zone, git.<slug> /
+# admin.<slug> / *.apps.<slug> -> whichever node runs that zone (single node:
+# one *.<slug>.${BASE_DOMAIN} record covers all three).
 
 name: hackzone-core
 
@@ -34,17 +45,16 @@ services:
       - --providers.docker=true
       - --providers.docker.network=traefik-public
       - --providers.docker.exposedbydefault=false
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
       - --entrypoints.websecure.http.tls=true
       - --entrypoints.websecure.http.tls.certresolver=le
-      - --entrypoints.websecure.http.tls.domains[0].main=admin.${BASE_DOMAIN:?set BASE_DOMAIN}
-      - --entrypoints.websecure.http.tls.domains[1].main=git.${BASE_DOMAIN}
-      - --entrypoints.websecure.http.tls.domains[1].sans=*.git.${BASE_DOMAIN}
-      - --entrypoints.websecure.http.tls.domains[2].main=apps.${BASE_DOMAIN}
-      - --entrypoints.websecure.http.tls.domains[2].sans=*.apps.${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN:?set BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/acme/acme.json
       - --certificatesresolvers.le.acme.dnschallenge=true
@@ -54,6 +64,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    extra_hosts:
+      # so a file-provider router can reach hz-control on the control host's loopback
+      - "host.docker.internal:host-gateway"
     environment:
       # Cloudflare by default; swap ACME_DNS_PROVIDER + the matching var for
       # another provider (see https://doc.traefik.io/traefik/https/acme/).
@@ -61,5 +74,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - acme:/acme
+      - ../state/control/dynamic:/etc/traefik/dynamic:ro
     networks:
       - traefik-public

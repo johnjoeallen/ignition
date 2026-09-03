@@ -13,30 +13,36 @@ stack — a **zone** — that stands up in seconds and tears down without residu
 
 ## The domain scheme
 
-`x.com` is the apex where hackzone is hosted. Everything else is a segregated
+`hackzone.com` is the apex where hackzone is hosted. Everything else is a segregated
 subdomain:
+
+!!! note
+    `hackzone.com` is a placeholder. `BASE_DOMAIN` can be any apex your
+    organisation controls — the only requirement is DNS that can serve names
+    two labels deep and wildcard certificates for `*.<slug>.<apex>`.
 
 | host | what |
 |---|---|
-| `admin.x.com` | the control plane |
-| `<zone>.git.x.com` | that zone's Forgejo — git, PRs, Actions, registry |
-| `<app>.apps.x.com` | a deployed app (a zone can run many; names are global) |
+| `admin.hackzone.com` | the platform control plane |
+| `admin.<zone>.hackzone.com` | that zone's admin view |
+| `git.<zone>.hackzone.com` | that zone's Forgejo — git, PRs, Actions, registry |
+| `<app>.apps.<zone>.hackzone.com` | a deployed app (a zone can run many; names unique within the zone) |
 
 ## What each team gets
 
 - **A forge** — git, PRs, issues, CI/CD, and a container registry, all from one
-  [Forgejo](https://forgejo.org/) at `https://<team>.git.x.com/`.
+  [Forgejo](https://forgejo.org/) at `https://git.<team>.hackzone.com/`.
 - **A private build sandbox** — a per-zone Docker-in-Docker engine, so one
   zone's CI can never see another zone's images, containers, or network.
 - **Live, shareable apps** — each repo with the deploy workflow puts an app at
-  `https://<app-name>.apps.x.com/`, redeployed on every push to `main`.
+  `https://<app-name>.apps.<team>.hackzone.com/`, redeployed on every push to `main`.
 - **A zone admin** — the team lead adds members, creates repos, manages the
   zone's apps, and restarts the runner, without a platform ticket.
 
 ```mermaid
 flowchart TB
     pa["Platform admin"] --> cp
-    cp["Control plane<br/>admin.x.com"]
+    cp["Control plane<br/>admin.hackzone.com"]
 
     subgraph node1["node-1"]
         traefik1["Traefik"]
@@ -60,9 +66,9 @@ flowchart TB
     cp -->|deploy| appA2
     za["Zone admin (alpha)"] -->|"users · repos · apps · runner"| cp
     dev["Team developer"] -->|git push| traefik1
-    traefik1 -->|"alpha.git.x.com"| fa
-    traefik1 -->|"shop.apps.x.com · api.apps.x.com"| appA1
-    traefik2 -->|"demo.apps.x.com"| appB
+    traefik1 -->|"git.alpha.hackzone.com"| fa
+    traefik1 -->|"shop.apps.alpha.hackzone.com · api.apps.alpha.hackzone.com"| appA1
+    traefik2 -->|"demo.apps.beta.hackzone.com"| appB
     visitor["Judge / stakeholder"] -->|https| traefik1
 ```
 
@@ -71,12 +77,12 @@ flowchart TB
 1. A developer pushes to a Forgejo repo that has the deploy workflow.
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.
-3. It pushes the image to the zone's own registry (`<zone>.git.x.com/…`), then
+3. It pushes the image to the zone's own registry (`git.<zone>.hackzone.com/…`), then
    POSTs the **control plane** `{app, image, port}` with the zone's deploy
    token.
 4. The control plane checks the app name (global; first zone to use it owns
    it) and runs the image on the zone's node, on the Traefik-watched network.
-   Within seconds `https://<app>.apps.x.com/` serves the new build.
+   Within seconds `https://<app>.apps.<zone>.hackzone.com/` serves the new build.
 
 ## Why it's built this way
 

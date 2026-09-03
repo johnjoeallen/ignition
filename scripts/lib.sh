@@ -5,7 +5,6 @@ TEMPLATES="$REPO_ROOT/templates"
 STATE_DIR="$REPO_ROOT/state"
 NODES_DIR="$STATE_DIR/nodes"
 ZONES_DIR="$STATE_DIR/zones"
-APPS_DIR="$STATE_DIR/apps"
 
 # The full set of vars the templates reference. envsubst is told exactly these
 # so a literal `$foo` in a compose file is left untouched.
@@ -13,14 +12,16 @@ ZONE_TMPL_VARS='${ZONE_SLUG} ${BASE_DOMAIN} ${CPU_FORGEJO} ${MEM_FORGEJO} ${CPU_
 APP_TMPL_VARS='${APP_NAME} ${ZONE_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} ${DEPLOY_ID} ${CPU_APP} ${MEM_APP}'
 
 # --- domain scheme -------------------------------------------------------
-# BASE_DOMAIN is the apex where hackzone is hosted (e.g. x.com). Segregated
-# subdomains sit under it:
-#   admin.<BASE_DOMAIN>          the control plane (one, hz-control)
-#   <zone>.git.<BASE_DOMAIN>     a zone's Forgejo (git + PRs + Actions + registry)
-#   <app>.apps.<BASE_DOMAIN>     a deployed app (globally unique name, zone-owned)
-admin_host() { echo "admin.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
-git_host()   { echo "$1.git.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
-app_host()   { echo "$1.apps.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
+# BASE_DOMAIN is the apex (e.g. example.com). Each zone owns the subdomain
+# <slug>.<BASE_DOMAIN>, and every service for that zone hangs off it:
+#   git.<slug>.<BASE_DOMAIN>          the zone's Forgejo (git + PRs + Actions + registry)
+#   admin.<slug>.<BASE_DOMAIN>        the zone admin's control-plane view
+#   <app>.apps.<slug>.<BASE_DOMAIN>   a deployed app (name unique within the zone)
+# The platform admin's view is at admin.<BASE_DOMAIN> (the apex).
+zone_domain()  { echo "$1.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
+git_host()     { echo "git.$(zone_domain "$1")"; }
+zadmin_host()  { echo "admin.$(zone_domain "$1")"; }
+app_host()     { echo "$1.apps.$(zone_domain "$2")"; }   # app_host <app> <slug>
 
 die() { echo "error: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
@@ -88,13 +89,16 @@ zc() {
 }
 
 # --- apps ---------------------------------------------------------------
-# An app is state/apps/<name>.env with: APP_NAME, ZONE, NODE, IMAGE, PORT,
-# DEPLOY_ID. The name is global; the owning ZONE is fixed on first deploy.
-app_file()   { echo "$APPS_DIR/$1.env"; }
-app_exists() { [ -f "$(app_file "$1")" ]; }
-app_get()    { grep -E "^$2=" "$(app_file "$1")" 2>/dev/null | head -1 | cut -d= -f2-; }
-list_apps()  { [ -d "$APPS_DIR" ] || return 0; for f in "$APPS_DIR"/*.env; do [ -e "$f" ] || continue; basename "$f" .env; done; }
-zone_apps()  { local s; for a in $(list_apps); do [ "$(app_get "$a" ZONE)" = "$1" ] && echo "$a"; done; }
+# An app belongs to a zone: state/zones/<slug>/apps/<name>.env with NODE,
+# IMAGE, PORT, DEPLOY_ID. Names are unique within a zone. Compose project /
+# container: app-<slug>-<name>.
+app_dir()      { echo "$(zone_dir "$1")/apps"; }
+app_file()     { echo "$(app_dir "$1")/$2.env"; }              # app_file <slug> <name>
+app_exists()   { [ -f "$(app_file "$1" "$2")" ]; }
+app_get()      { grep -E "^$3=" "$(app_file "$1" "$2")" 2>/dev/null | head -1 | cut -d= -f2-; }
+zone_apps()    { local d; d="$(app_dir "$1")"; [ -d "$d" ] || return 0
+                 for f in "$d"/*.env; do [ -e "$f" ] || continue; basename "$f" .env; done; }
+list_apps()    { local s a; for s in $(list_zones); do for a in $(zone_apps "$s"); do echo "$s $a"; done; done; }
 
 # Forgejo derives a runner's UUID from the first 16 chars of the 40-hex shared
 # secret: those chars, as raw bytes, hex-encoded, formatted 8-4-4-4-12.

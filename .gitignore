@@ -13,10 +13,10 @@ Thumbs.db
 # Runtime state — generated per node/zone, never source
 /state/nodes/*
 /state/zones/*
-/state/apps/*
+/state/control/*
 !/state/nodes/.gitkeep
 !/state/zones/.gitkeep
-!/state/apps/.gitkeep
+!/state/control/.gitkeep
 
 # Rendered compose files / logs / temp
 *.rendered.yml

@@ -6,10 +6,11 @@
 #   ZONE_SLUG BASE_DOMAIN
 #   CPU_FORGEJO MEM_FORGEJO CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
 #
-# Forgejo lives under the git subdomain: https://${ZONE_SLUG}.git.${BASE_DOMAIN}/
-# serves the web UI, git-over-https, the Actions API and the container registry
-# — all on one origin. The node's Traefik holds a *.git.${BASE_DOMAIN} wildcard,
-# so this zone needs no per-name cert. See CLAUDE.md.
+# Forgejo: https://git.${ZONE_SLUG}.${BASE_DOMAIN}/ serves the web UI,
+# git-over-https, the Actions API and the container registry — all on one
+# origin. git.<slug> is two labels deep, so *.${BASE_DOMAIN} misses it; this
+# zone's router asks Traefik for a *.${ZONE_SLUG}.${BASE_DOMAIN} cert.
+# See CLAUDE.md.
 
 name: zone-${ZONE_SLUG}
 
@@ -36,9 +37,9 @@ services:
     environment:
       USER_UID: "1000"
       USER_GID: "1000"
-      FORGEJO__server__DOMAIN: ${ZONE_SLUG}.git.${BASE_DOMAIN}
+      FORGEJO__server__DOMAIN: git.${ZONE_SLUG}.${BASE_DOMAIN}
       FORGEJO__server__HTTP_PORT: "3000"
-      FORGEJO__server__ROOT_URL: https://${ZONE_SLUG}.git.${BASE_DOMAIN}/
+      FORGEJO__server__ROOT_URL: https://git.${ZONE_SLUG}.${BASE_DOMAIN}/
       FORGEJO__server__START_SSH_SERVER: "false"
       FORGEJO__server__DISABLE_SSH: "true"
       FORGEJO__database__DB_TYPE: sqlite3
@@ -53,9 +54,12 @@ services:
     labels:
       traefik.enable: "true"
       traefik.docker.network: traefik-public
-      traefik.http.routers.zone-${ZONE_SLUG}-git.rule: Host(`${ZONE_SLUG}.git.${BASE_DOMAIN}`)
+      traefik.http.routers.zone-${ZONE_SLUG}-git.rule: Host(`git.${ZONE_SLUG}.${BASE_DOMAIN}`)
       traefik.http.routers.zone-${ZONE_SLUG}-git.entrypoints: websecure
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls: "true"
+      # git.<slug> is two labels deep — this zone gets its own *.<slug> cert.
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].main: ${ZONE_SLUG}.${BASE_DOMAIN}
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].sans: "*.${ZONE_SLUG}.${BASE_DOMAIN},*.apps.${ZONE_SLUG}.${BASE_DOMAIN}"
       traefik.http.services.zone-${ZONE_SLUG}-git.loadbalancer.server.port: "3000"
     volumes:
       - forgejo-data:/data

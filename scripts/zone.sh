@@ -41,8 +41,8 @@ cmd_status() {
     zc "$1" ps --format 'table {{.Service}}\t{{.Status}}\t{{.Health}}' || true
     echo "apps:"
     for a in $(zone_apps "$1"); do
-        printf '  %-24s %s\n' "https://$a.apps.$(zone_get "$1" BASE_DOMAIN)/" \
-            "$(DOCKER_HOST="${dh:-}" docker compose -p "app-$a" ps --format '{{.State}}' 2>/dev/null | paste -sd, -)"
+        printf '  %-32s %s\n' "https://$(app_host "$a" "$1")/" \
+            "$(DOCKER_HOST="${dh:-}" docker compose -p "app-$1-$a" ps --format '{{.State}}' 2>/dev/null | paste -sd, -)"
     done
 }
 

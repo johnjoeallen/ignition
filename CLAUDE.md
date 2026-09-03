@@ -11,23 +11,29 @@ Infrastructure for a private, short-lived, per-team hackathon environment.
 Many teams (target ~80), a small pool of hosts ("nodes"). Each team gets a
 fully isolated stack (a "zone").
 
-`BASE_DOMAIN` is the apex where hackzone is hosted (e.g. `x.com`); segregated
-subdomains sit under it:
+`BASE_DOMAIN` is the apex where hackzone is hosted (e.g. `hackzone.com`). Each zone
+owns the whole `<slug>.<BASE_DOMAIN>` subtree; the platform admin sits on the
+apex:
 
 | host | what |
 |---|---|
-| `admin.<BASE_DOMAIN>` | the control plane (one, `hz-control`) |
-| `<zone>.git.<BASE_DOMAIN>` | that zone's Forgejo — git, PRs, Actions, registry |
-| `<app>.apps.<BASE_DOMAIN>` | a deployed app (global name, owned by the deploying zone) |
+| `admin.<BASE_DOMAIN>` | the platform admin control plane (one, `hz-control`) |
+| `git.<slug>.<BASE_DOMAIN>` | that zone's Forgejo — git, PRs, Actions, registry |
+| `admin.<slug>.<BASE_DOMAIN>` | that zone's admin view (same `hz-control`, zone-scoped) |
+| `<app>.apps.<slug>.<BASE_DOMAIN>` | a deployed app (name unique within the zone) |
+
+`hackzone.com` in the docs is a placeholder; `BASE_DOMAIN` is whatever apex the
+deploying org controls, provided its DNS can serve names two labels deep and it
+can obtain `*.<slug>.<apex>` wildcard certs.
 
 Per zone:
 
 - **git hosting + PRs/issues + CI + container registry** — one Forgejo
-  instance at `<zone>.git.<BASE_DOMAIN>` (no separate GitLab/Woodpecker/registry:2)
+  instance at `git.<slug>.<BASE_DOMAIN>` (no separate GitLab/Woodpecker/registry:2)
 - **isolated build sandbox** — a `docker:dind` sidecar, so one zone's CI can
   never see another zone's containers/images/network
 - **any number of live apps** — each `docker build` + `docker push` + a POST
-  to the control plane puts an app at `<app>.apps.<BASE_DOMAIN>`
+  to the control plane puts an app at `<app>.apps.<slug>.<BASE_DOMAIN>`
 
 Two admin roles:
 
@@ -47,7 +53,7 @@ scripts/
   lib.sh                       # shared: node/zone/app lookups, `zc`, domain helpers
   node.sh                      # hz node add|list|show|drain|undrain|rm
   zone.sh                      # hz zone create|list|show|status|move|destroy
-  app.sh                       # hz app list|show|rm
+  app.sh                       # hz app list|show <zone> <name>|rm <zone> <name>
   scheduler.sh                 # pick_node(): least-loaded active node that fits
   provision-zone.sh            # stand up one zone on a node (two-phase; mints tokens + zone-admin)
   teardown-zone.sh             # tear down one zone + all its apps
@@ -57,18 +63,20 @@ control/
 templates/
   zone-compose.yml.tmpl        # per-zone forgejo + dind + runner (envsubst template)
   app-compose.tmpl             # one deployed app (envsubst template)
-  traefik-core-compose.yml     # per-node Traefik, 3 certs, runs once per node
+  traefik-core-compose.yml     # per-node Traefik: apex cert + file provider, runs once per node
 examples/deploy.yml            # sample workflow to seed into a zone's repo
 state/
   nodes/<name>.env             # node registry (DOCKER_HOST, CPUS, MEM_GB, LABELS, STATE)
   zones/<slug>/                # per-zone: zone.env, docker-compose.yml, runner-secret,
                                #   zone-admin.txt, zone-token, deploy-token, last-activity
-  apps/<name>.env              # app registry (APP_NAME, ZONE, NODE, IMAGE, PORT, DEPLOY_ID)
-  apps/<name>-compose.yml      # rendered per-app compose
+  zones/<slug>/apps/<name>.env # app registry (APP_NAME, ZONE, NODE, IMAGE, PORT, DEPLOY_ID)
+  zones/<slug>/apps/<name>-compose.yml   # rendered per-app compose
+  control/dynamic/*.yml        # Traefik file-provider snippets: admin.<BASE_DOMAIN> +
+                               #   admin.<slug>.<BASE_DOMAIN> -> hz-control
 README.md                      # operator-facing overview
 ```
 
-`state/` is generated, never source; `nodes/`, `zones/`, `apps/` are gitignored.
+`state/` is generated, never source; `nodes/`, `zones/`, `control/` are gitignored.
 
 ## Decisions and why (don't relitigate these without reading first)
 
@@ -79,29 +87,33 @@ safe teardown. A node is a host that runs zone stacks; the control host runs
 `hz` and `hz-control` and reaches each node's Docker daemon (local socket,
 `ssh://`, or `tcp://`+TLS).
 
-**Segregated subdomains — a namespace each for admin, git, and apps — not a
-flat `*.<BASE_DOMAIN>`.** Docker hits `/v2/...` at the domain *root* for
-registry operations and ignores path prefixes, so a forge at
-`<slug>.<domain>/git` would break `docker push` against its own registry. Each
-Forgejo therefore owns a whole origin: `<slug>.git.<BASE_DOMAIN>`. Apps live
-under their own namespace, `<app>.apps.<BASE_DOMAIN>`, so one zone can run many
-of them and each has a clean host. The control plane is one host,
-`admin.<BASE_DOMAIN>`.
+**One subtree per zone — `<slug>.<BASE_DOMAIN>` — not a flat `*.<BASE_DOMAIN>`.**
+Docker hits `/v2/...` at the domain *root* for registry operations and ignores
+path prefixes, so a forge at `<slug>.<domain>/git` would break `docker push`
+against its own registry. Each Forgejo therefore owns a whole origin,
+`git.<slug>.<BASE_DOMAIN>`. Everything else for the zone hangs off the same
+subtree: `admin.<slug>.<BASE_DOMAIN>` (the zone-admin view) and
+`<app>.apps.<slug>.<BASE_DOMAIN>` (one per deployed app). The platform admin is
+one host on the apex, `admin.<BASE_DOMAIN>`.
 
 TLS scope follows from this: a `*.<BASE_DOMAIN>` wildcard is single-label and
-misses `<x>.git.<BASE_DOMAIN>` / `<x>.apps.<BASE_DOMAIN>`. So each node's
-Traefik holds **three** certs — `admin.<BASE_DOMAIN>`, `*.git.<BASE_DOMAIN>`,
-`*.apps.<BASE_DOMAIN>` — and any zone or app on that node is covered with no
-per-name request. DNS still routes per name: `<slug>.git.<BASE_DOMAIN>` and
-`<app>.apps.<BASE_DOMAIN>` A-records point at whichever node runs that
-zone/app (single-node: just wildcard those two). Creating those records is a
-known gap.
+misses anything two labels deep. So the control host's Traefik holds the apex
+cert (`<BASE_DOMAIN>` + `*.<BASE_DOMAIN>`, which covers `admin.<BASE_DOMAIN>`),
+and **each zone's own Forgejo router** additionally requests
+`*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` — covering that zone's
+git, admin, and every app with no per-name request. `admin.<slug>.<BASE_DOMAIN>`
+is served by `hz-control` behind the control host's Traefik via a file-provider
+snippet (`state/control/dynamic/<slug>.yml`, written by `provision-zone.sh`)
+that carries its own `*.<slug>.<BASE_DOMAIN>` cert request. DNS routes per name:
+`git.<slug>` / `*.apps.<slug>` A-records point at the node running that zone,
+`admin.<slug>` and `admin.<BASE_DOMAIN>` at the control host (single-host:
+wildcard `*.<slug>.<BASE_DOMAIN>`). Creating those records is a known gap.
 
-**App names are global; the first zone to deploy a name owns it.** An app is
-`state/apps/<name>.env` recording its zone, node, and image. `hz-control`
-rejects a deploy of a name another zone owns, and only runs an image from the
-requesting zone's own registry (`<slug>.git.<domain>/…`). Each app is its own
-compose project `app-<name>` on the owning zone's node.
+**App names are unique within a zone, not globally.** An app is
+`state/zones/<slug>/apps/<name>.env` recording its zone, node, and image.
+`hz-control` only runs an image from the requesting zone's own registry
+(`git.<slug>.<domain>/…`). Each app is its own compose project
+`app-<slug>-<name>` on the zone's node.
 
 **Apps are deployed from the control host onto the zone's node, not from inside
 the zone's DinD sandbox.** A container built and run inside a nested Docker
@@ -115,9 +127,9 @@ and runs it on the zone's node's real daemon, on `traefik-public`.
 across nodes: it holds `HZ_ADMIN_TOKEN` (platform), each zone's `zone-token`
 (zone admin) and `deploy-token` (CI), reaches every node's Docker daemon the
 same way `hz` does, and reaches every zone's Forgejo over the public
-`<slug>.git.<domain>` API with the admin token minted at provisioning. Zone
+`git.<slug>.<domain>` API with the admin token minted at provisioning. Zone
 admins never get node or Docker access — every action is a proxied Forgejo API
-call or a `docker compose` command scoped to a `zone-<slug>` / `app-<name>`
+call or a `docker compose` command scoped to a `zone-<slug>` / `app-<slug>-<name>`
 project.
 
 **Node placement is CPU-headroom first.** `scheduler.sh` picks the active node
@@ -150,10 +162,9 @@ as bytes, hex, `8-4-4-4-12` — so we don't parse the register command's stdout.
 
 ## Known gaps (see README "rough edges" for the full list)
 
-- **Nothing creates the `<slug>.git.<BASE_DOMAIN>` / `<app>.apps.<BASE_DOMAIN>`
+- **Nothing creates the `git.<slug>.<BASE_DOMAIN>` / `<app>.apps.<slug>.<BASE_DOMAIN>` / `admin.<slug>.<BASE_DOMAIN>`
   DNS records.** Provisioning and deploy assume they resolve (wildcard those
-  two namespaces for a single node; per-record across nodes). Wiring it to the
-  DNS-provider API Traefik already uses is the top task.
+  two namespaces for a single node; per-record across nodes). Wiring it to the DNS-provider API Traefik already uses is the top task.
 - **`traefik-public` is one flat network.** The app containers and the Forgejo
   instances on a node can reach each other by IP; the untrusted code is the
   app container. A Traefik-per-zone network or an L3 policy would close it.
@@ -165,12 +176,12 @@ as bytes, hex, `8-4-4-4-12` — so we don't parse the register command's stdout.
 
 ## Likely next tasks
 
-1. `hz zone create` and `/deploy` create the `<slug>.git` / `<app>.apps` DNS
+1. `hz zone create` and `/deploy` create the `git.<slug>` / `<app>.apps.<slug>` DNS
    records via the DNS-provider API, and `hz zone create` seeds the starter
    repo (`deploy.yml` + repo vars/secrets) through the zone's Forgejo API — so
    a zone, and then an app, is usable end to end from one command.
 2. `hz roster apply <file>` / `hz roster teardown` — one-shot event start/end.
-3. Package `hz-control` as a systemd unit or container behind the node Traefik
+3. Package `hz-control` as a systemd unit or container behind the control-host Traefik
    at `admin.<BASE_DOMAIN>`, with the CI-only `/deploy` path separated from the
    cookie-authed UI.
 4. Zone-level quota requests (zone admin asks, platform admin approves) and
