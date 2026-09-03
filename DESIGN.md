@@ -215,7 +215,13 @@ conditionals — the reason it isn't a template today).
    `docker compose -p app-<slug>-<name> up -d --pull always` on the zone's
    node, write the app record, bump `last-activity`). `DeployController` maps
    bad input to 400 and a failed compose to 502; contract unchanged.
-5. Port provisioning (the two-phase flow); verify a zone-create end to end.
+5. **mostly done** — `Scheduler` (CPU-headroom, unit-tested), `ProvisioningService`
+   (full port of `provision-zone.sh`: footprint + placement, `zone.env`,
+   `TraefikDynamicConfig` snippets, render `zone-compose.yml.tmpl`, two-phase
+   apply, `forgejoUuid` derivation unit-tested, runner-config, zoneadmin +
+   tokens) running off-request with a status the console polls; platform
+   console gains a **Provision a zone** form. The container-orchestration steps
+   are faithful command translations — full end-to-end needs a real daemon.
 6. Port scheduler + move + destroy + sweep.
 7. Add the platform-console write operations (register node, zone
    create / move / destroy, roster, sweep-now).

@@ -46,16 +46,21 @@
 
   <h2>Zones</h2>
   <table>
-    <tr><th>zone</th><th>node</th><th>footprint</th><th>apps</th><th>forge</th></tr>
+    <tr><th>zone</th><th>node</th><th>footprint</th><th>status</th><th>forge</th></tr>
     <tr th:each="z : ${zones}">
       <td th:text="${z.slug}">quantum-badgers</td>
       <td th:text="${z.node}">node-1</td>
       <td th:text="|${z.zoneCpus}cpu / ${z.zoneMemGb}g|">5cpu/8g</td>
-      <td>—</td>
+      <td th:with="p=${provisioning.get(z.slug)}">
+        <span th:if="${p == null}">—</span>
+        <span th:if="${p != null}" th:text="${p.state() + ': ' + p.message()}"
+              th:classappend="${p.state().name() == 'FAILED'} ? 'err' : ''">provisioning</span>
+      </td>
       <td><a th:href="${z.forgejoUrl}" th:text="${z.forgejoUrl}">git…</a></td>
     </tr>
-    <tr th:if="${zones.isEmpty()}"><td colspan="5" class="muted">no zones yet — provisioning UI lands next</td></tr>
+    <tr th:if="${zones.isEmpty()}"><td colspan="5" class="muted">no zones yet</td></tr>
   </table>
+  <p><a href="/zones/new">Provision a zone →</a></p>
 
   <h2>Apps</h2>
   <table>

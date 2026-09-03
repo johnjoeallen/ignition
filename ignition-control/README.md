@@ -4,13 +4,14 @@ The Ignition control plane — one Spring Boot service that replaces the `ign`
 bash CLI, the `scripts/*.sh`, and `control/ign-control.py`. See
 [`../DESIGN.md`](../DESIGN.md).
 
-Status: **scaffold** (DESIGN.md step 2–3). Working now:
+Status: **in progress** (DESIGN.md through step 5). Working now:
 
 - health at `/actuator/health`
 - token auth: platform (`ignition.admin-token`), zone (`state/zones/<slug>/zone-token`),
   CI deploy (`state/zones/<slug>/deploy-token`) → session cookie or `Authorization: Bearer`
-- **platform console** (`/`) — live read views of nodes / zones / apps from the
-  existing `state/` tree; **register / drain / remove a node** (first write slice)
+- **platform console** (`/`) — live views of nodes / zones / apps from the
+  existing `state/` tree; **register / drain / remove a node**; **Provision a
+  zone** (`Scheduler` + `ProvisioningService`, off-request with a polled status)
 - **zone console** (`/z`) — ported 1:1 from `ign-control.py`: status + apps,
   Users (create / delete), Repositories (create), per-repo **Release**
   (auto / patch / minor / major, via `ForgejoClient` + `ReleaseService`),
@@ -48,14 +49,22 @@ docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
 | `node` / `zone` / `app` | records + file-tree repositories + services |
 | `forgejo` | `ForgejoClient` — per-zone REST wrapper (Jackson 3 / `java.net.http`) |
 | `release` | `ReleaseService` — Conventional-Commits bump + `cut` via Forgejo |
+| `scheduler` | `Scheduler` — CPU-headroom node placement |
+| `provisioning` | `ProvisioningService` — port of `provision-zone.sh` |
+| `traefik` | `TraefikDynamicConfig` — the `state/control/dynamic/*` snippets |
 | `docker` | `DockerCli` — `docker -H <endpoint> compose …` |
 | `templates` | `ComposeTemplate` — explicit `${VAR}` render of the compose files |
 | `web` | `PlatformConsoleController`, `ZoneConsoleController`, `LoginController`, `DeployController` |
 | `sweep` | `IdleSweeper` (`@Scheduled`) |
 | `resources/compose` | `zone-compose.yml.tmpl`, `app-compose.tmpl` (moved from repo `templates/`) |
 
-## Not yet ported (DESIGN.md steps 5–7)
+## Not yet ported (DESIGN.md steps 6–7)
 
-`ProvisioningService` (two-phase Forgejo + DinD + runner), `Scheduler`,
-`TraefikDynamicConfigService`, zone create / move / destroy, and the
-platform-console roster + sweep-now.
+Zone **move / destroy**, the platform-console **roster** (bulk create/destroy)
+and **sweep-now** button, and packaging the service as a container with its own
+`ignition-control-compose.yml`.
+
+`ProvisioningService` and `Scheduler` are in place (step 5) — the two-phase
+apply runs off-request and the console polls its status; the parts that need a
+live Docker daemon (Forgejo health wait, runner registration, `compose cp`) are
+translated but only exercised against a real node.

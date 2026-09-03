@@ -23,14 +23,24 @@ public class ComposeTemplate {
     private static final Pattern VAR = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)}");
 
     private final String appTemplate = load("/compose/app-compose.tmpl");
+    private final String zoneTemplate = load("/compose/zone-compose.yml.tmpl");
 
     /** Vars {@code app-compose.tmpl} references — the allow-list. */
     public static final java.util.Set<String> APP_VARS = java.util.Set.of(
             "APP_NAME", "ZONE_SLUG", "BASE_DOMAIN", "APP_IMAGE", "APP_PORT",
             "DEPLOY_ID", "CPU_APP", "MEM_APP");
 
+    /** Vars {@code zone-compose.yml.tmpl} references. */
+    public static final java.util.Set<String> ZONE_VARS = java.util.Set.of(
+            "ZONE_SLUG", "BASE_DOMAIN", "CPU_FORGEJO", "MEM_FORGEJO",
+            "CPU_DIND", "MEM_DIND", "CPU_RUNNER", "MEM_RUNNER");
+
     public String renderApp(Map<String, String> vars) {
         return substitute(appTemplate, vars);
+    }
+
+    public String renderZone(Map<String, String> vars) {
+        return substitute(zoneTemplate, vars);
     }
 
     static String substitute(String template, Map<String, String> vars) {

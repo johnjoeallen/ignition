@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <title>Ignition · new zone</title>
+  <link rel="stylesheet" href="/css/ignition.css">
+</head>
+<body>
+  <nav class="top"><a href="/">← platform</a></nav>
+  <h1>New zone</h1>
+  <div class="msg err" th:if="${error != null}" th:text="${error}">bad input</div>
+  <p class="muted">Stands up Forgejo + a private DinD build engine + an Actions
+    runner on a node, mints the zone-admin account and the console / CI tokens.
+    Runs in the background — watch it on the platform page.</p>
+  <form method="post" th:action="@{/zones}" class="stack">
+    <label>slug<input name="slug" required placeholder="quantum-badgers"></label>
+    <label>node<input name="node" placeholder="(blank = scheduler picks one)"></label>
+    <label>label<input name="label" placeholder="(blank = any node)"></label>
+    <button>Provision</button>
+  </form>
+</body>
+</html>

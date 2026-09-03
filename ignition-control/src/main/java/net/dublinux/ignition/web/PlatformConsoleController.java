@@ -1,21 +1,27 @@
 package net.dublinux.ignition.web;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.node.Node;
 import net.dublinux.ignition.node.NodeService;
+import net.dublinux.ignition.provisioning.ProvisioningService;
 import net.dublinux.ignition.zone.ZoneService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The platform-admin console at {@code admin.<BASE_DOMAIN>}. Read views are
- * live; node registration is the first write vertical slice. Zone
- * create / move / destroy and roster land with {@code ProvisioningService}.
+ * The platform-admin console at {@code admin.<BASE_DOMAIN>}. Read views + node
+ * register / drain / remove + zone provisioning. Move / destroy and roster
+ * land next (DESIGN.md step 6–7).
  */
 @Controller
 public class PlatformConsoleController {
@@ -23,11 +29,14 @@ public class PlatformConsoleController {
     private final NodeService nodes;
     private final ZoneService zones;
     private final AppService apps;
+    private final ProvisioningService provisioning;
 
-    public PlatformConsoleController(NodeService nodes, ZoneService zones, AppService apps) {
+    public PlatformConsoleController(NodeService nodes, ZoneService zones, AppService apps,
+                                     ProvisioningService provisioning) {
         this.nodes = nodes;
         this.zones = zones;
         this.apps = apps;
+        this.provisioning = provisioning;
     }
 
     @GetMapping("/")
@@ -36,10 +45,44 @@ public class PlatformConsoleController {
             var a = nodes.allocation(n.name());
             return new NodeRow(n, a.cpus(), a.memGb(), a.zones());
         }).toList();
+        Map<String, ProvisioningService.Status> provisioningRows = zones.list().stream()
+                .map(z -> z.slug())
+                .collect(Collectors.toMap(s -> s,
+                        s -> provisioning.status(s).orElse(null),
+                        (a, b) -> a));
+        provisioningRows.values().removeIf(v -> v == null);
         model.addAttribute("nodes", nodeRows);
         model.addAttribute("zones", zones.list());
         model.addAttribute("apps", apps.list());
+        model.addAttribute("provisioning", provisioningRows);
         return "platform";
+    }
+
+    @GetMapping("/zones/new")
+    public String newZone() {
+        return "zone-form";
+    }
+
+    @PostMapping("/zones")
+    public String createZone(@RequestParam String slug,
+                             @RequestParam(required = false, defaultValue = "") String node,
+                             @RequestParam(required = false, defaultValue = "") String label,
+                             Model model) {
+        try {
+            provisioning.submit(slug.strip(), node.strip(), label.strip());
+            return "redirect:/?m=provisioning+" + slug.strip();
+        } catch (RuntimeException e) {
+            model.addAttribute("error", e.getMessage());
+            return "zone-form";
+        }
+    }
+
+    @GetMapping("/zones/{slug}/status")
+    @ResponseBody
+    public ResponseEntity<Map<String, String>> zoneStatus(@PathVariable String slug) {
+        return provisioning.status(slug)
+                .map(s -> ResponseEntity.ok(Map.of("state", s.state().name(), "message", s.message())))
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/nodes/new")
@@ -65,19 +108,19 @@ public class PlatformConsoleController {
     }
 
     @PostMapping("/nodes/{name}/drain")
-    public String drain(@org.springframework.web.bind.annotation.PathVariable String name) {
+    public String drain(@PathVariable String name) {
         nodes.setState(name, Node.State.DRAINING);
         return "redirect:/?m=" + name + "+draining";
     }
 
     @PostMapping("/nodes/{name}/undrain")
-    public String undrain(@org.springframework.web.bind.annotation.PathVariable String name) {
+    public String undrain(@PathVariable String name) {
         nodes.setState(name, Node.State.ACTIVE);
         return "redirect:/?m=" + name + "+active";
     }
 
     @PostMapping("/nodes/{name}/delete")
-    public String delete(@org.springframework.web.bind.annotation.PathVariable String name, Model model) {
+    public String delete(@PathVariable String name, Model model) {
         try {
             nodes.remove(name);
             return "redirect:/?m=" + name + "+removed";
