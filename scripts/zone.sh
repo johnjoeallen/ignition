@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# `hz zone ...` — the platform admin manages zones and their node placement.
+# `ign zone ...` — the platform admin manages zones and their node placement.
 #
-#   hz zone create <slug> [--node <name>] [--label <l>]
-#   hz zone list
-#   hz zone show <slug>
-#   hz zone status <slug>            # live container health on the zone's node
-#   hz zone move <slug> --node <n>   # recreate the stack on a different node
-#   hz zone destroy <slug>
+#   ign zone create <slug> [--node <name>] [--label <l>]
+#   ign zone list
+#   ign zone show <slug>
+#   ign zone status <slug>            # live container health on the zone's node
+#   ign zone move <slug> --node <n>   # recreate the stack on a different node
+#   ign zone destroy <slug>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/lib.sh
 
 cmd_create() {
-    [ $# -ge 1 ] || die "usage: hz zone create <slug> [--node <name>] [--label <l>]"
+    [ $# -ge 1 ] || die "usage: ign zone create <slug> [--node <name>] [--label <l>]"
     exec ./scripts/provision-zone.sh "$@"
 }
 
@@ -28,13 +28,13 @@ cmd_list() {
 }
 
 cmd_show() {
-    [ $# -eq 1 ] || die "usage: hz zone show <slug>"
+    [ $# -eq 1 ] || die "usage: ign zone show <slug>"
     zone_exists "$1" || die "no such zone: $1"
     cat "$(zone_dir "$1")/zone.env"
 }
 
 cmd_status() {
-    [ $# -eq 1 ] || die "usage: hz zone status <slug>"
+    [ $# -eq 1 ] || die "usage: ign zone status <slug>"
     zone_exists "$1" || die "no such zone: $1"
     local dh; dh="$(zone_docker_host "$1")"
     echo "zone $1  on node $(zone_get "$1" NODE)   forgejo $(zone_get "$1" FORGEJO_URL)"
@@ -47,7 +47,7 @@ cmd_status() {
 }
 
 cmd_move() {
-    [ $# -ge 3 ] || die "usage: hz zone move <slug> --node <name>"
+    [ $# -ge 3 ] || die "usage: ign zone move <slug> --node <name>"
     local slug="$1"; shift
     [ "$1" = "--node" ] || die "expected --node"
     local target="$2"
@@ -66,7 +66,7 @@ cmd_move() {
 }
 
 cmd_destroy() {
-    [ $# -eq 1 ] || die "usage: hz zone destroy <slug>"
+    [ $# -eq 1 ] || die "usage: ign zone destroy <slug>"
     exec ./scripts/teardown-zone.sh "$1"
 }
 
@@ -78,5 +78,5 @@ case "$sub" in
     status)   cmd_status "$@" ;;
     move)     cmd_move "$@" ;;
     destroy|rm) cmd_destroy "$@" ;;
-    *) die "unknown: hz zone $sub" ;;
+    *) die "unknown: ign zone $sub" ;;
 esac

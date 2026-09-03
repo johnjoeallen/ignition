@@ -1,6 +1,6 @@
 # One deployed app. A zone can deploy many; each app name is unique within its
 # zone and the app lives at https://${APP_NAME}.apps.${ZONE_SLUG}.${BASE_DOMAIN}/.
-# Rendered and applied by the control plane (control/hz-control.py) on the owning
+# Rendered and applied by the control plane (control/ign-control.py) on the owning
 # zone's node — NOT inside the zone's DinD sandbox (see CLAUDE.md) — so that
 # node's Traefik can route to it. The zone's Forgejo router holds a
 # *.apps.${ZONE_SLUG}.${BASE_DOMAIN} cert, so no per-name cert is needed.
@@ -20,10 +20,10 @@ services:
     restart: unless-stopped
     networks: [traefik-public]
     labels:
-      hackzone.app: ${APP_NAME}
-      hackzone.zone: ${ZONE_SLUG}
-      hackzone.deploy-id: "${DEPLOY_ID}"
-      # hz-control adds this to EVERY deployed app automatically — teams never
+      ignition.app: ${APP_NAME}
+      ignition.zone: ${ZONE_SLUG}
+      ignition.deploy-id: "${DEPLOY_ID}"
+      # ign-control adds this to EVERY deployed app automatically — teams never
       # opt in. The per-node Watchtower (traefik-core-compose.yml) then rolls
       # the container forward whenever its image tag gets a new digest.
       com.centurylinklabs.watchtower.enable: "true"

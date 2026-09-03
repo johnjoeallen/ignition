@@ -1,4 +1,4 @@
-# Shared helpers for the hackzone scripts. Sourced, not executed.
+# Shared helpers for the Ignition scripts. Sourced, not executed.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMPLATES="$REPO_ROOT/templates"

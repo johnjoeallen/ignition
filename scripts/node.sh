@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# `hz node ...` — the platform admin manages the hosts that run zone stacks.
+# `ign node ...` — the platform admin manages the hosts that run zone stacks.
 #
-#   hz node add <name> <docker-host> [--cpus N] [--mem NNg] [--labels a,b]
-#   hz node list
-#   hz node show <name>
-#   hz node drain <name>      # stop scheduling new zones here
-#   hz node undrain <name>
-#   hz node rm <name>         # only when no zone is assigned
+#   ign node add <name> <docker-host> [--cpus N] [--mem NNg] [--labels a,b]
+#   ign node list
+#   ign node show <name>
+#   ign node drain <name>      # stop scheduling new zones here
+#   ign node undrain <name>
+#   ign node rm <name>         # only when no zone is assigned
 #
 # <docker-host>: "local" for this host's daemon, or ssh://user@host, or
 # tcp://host:2376 (with client certs configured out of band).
@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 mkdir -p "$NODES_DIR"
 
 cmd_add() {
-    [ $# -ge 2 ] || die "usage: hz node add <name> <docker-host> [--cpus N] [--mem NNg] [--labels a,b]"
+    [ $# -ge 2 ] || die "usage: ign node add <name> <docker-host> [--cpus N] [--mem NNg] [--labels a,b]"
     local name="$1" host="$2"; shift 2
     valid_slug "$name" || die "node name must be [a-z0-9-]"
     node_exists "$name" && die "node $name already exists"
@@ -54,7 +54,7 @@ cmd_list() {
 }
 
 cmd_show() {
-    [ $# -eq 1 ] || die "usage: hz node show <name>"
+    [ $# -eq 1 ] || die "usage: ign node show <name>"
     node_exists "$1" || die "no such node: $1"
     cat "$(node_env "$1")"
     read -r ucpu umem zn <<<"$(node_alloc "$1")"
@@ -70,7 +70,7 @@ cmd_state() {   # cmd_state <name> <active|draining>
 }
 
 cmd_rm() {
-    [ $# -eq 1 ] || die "usage: hz node rm <name>"
+    [ $# -eq 1 ] || die "usage: ign node rm <name>"
     node_exists "$1" || die "no such node: $1"
     for s in $(list_zones); do
         [ "$(zone_get "$s" NODE)" = "$1" ] && die "zone $s is still assigned to $1 — move or destroy it first"
@@ -87,5 +87,5 @@ case "$sub" in
     drain)   cmd_state "${1:?node name}" draining ;;
     undrain) cmd_state "${1:?node name}" active ;;
     rm)      cmd_rm "$@" ;;
-    *)       die "unknown: hz node $sub" ;;
+    *)       die "unknown: ign node $sub" ;;
 esac

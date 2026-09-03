@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# hz — the hackzone platform-admin CLI.
+# ign — the Ignition platform-admin CLI.
 #
-#   hz node   add|list|show|drain|undrain|rm
-#   hz zone   create|list|show|status|move|destroy
-#   hz app    list|show <zone> <name>|rm <zone> <name>   # deployed apps
-#   hz sweep  [--dry-run]        # reclaim idle zones now
-#   hz control                   # run the control-plane service (admin.<BASE_DOMAIN>)
+#   ign node   add|list|show|drain|undrain|rm
+#   ign zone   create|list|show|status|move|destroy
+#   ign app    list|show <zone> <name>|rm <zone> <name>   # deployed apps
+#   ign sweep  [--dry-run]        # reclaim idle zones now
+#   ign control                   # run the control-plane service (admin.<BASE_DOMAIN>)
 #
 # Everything reads/writes state/ under this repo. Run it from a host that can
 # reach every node's Docker daemon (local socket, ssh://, or tcp://+TLS).
@@ -18,7 +18,7 @@ case "$cmd" in
     zone)    exec "$HERE/scripts/zone.sh" "$@" ;;
     app)     exec "$HERE/scripts/app.sh" "$@" ;;
     sweep)   [ "${1:-}" = "--dry-run" ] && export DRY_RUN=1; exec "$HERE/scripts/sweep-idle.sh" ;;
-    control) exec "$HERE/control/hz-control.py" "$@" ;;
+    control) exec "$HERE/control/ign-control.py" "$@" ;;
     ""|-h|--help) sed -n '2,11p' "$0" | sed 's/^# \?//' ;;
-    *) echo "unknown command: hz $cmd" >&2; exit 2 ;;
+    *) echo "unknown command: ign $cmd" >&2; exit 2 ;;
 esac

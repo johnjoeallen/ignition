@@ -5,7 +5,7 @@
 Large organisations run hackathons, innovation days, and internal build sprints
 to surface new ideas. Most of that investment leaks away — not because the ideas
 are bad, but because the **infrastructure to try them doesn't scale to the
-number of teams**. HackZone is the missing layer: it gives every team, at the
+number of teams**. Ignition is the missing layer: it gives every team, at the
 push of a button, a real, isolated, internet-reachable environment, and reclaims
 it cleanly when the event ends.
 
@@ -40,7 +40,7 @@ still work the following week.
 
 ## What scale actually requires
 
-HackZone is built around four properties that only matter once the team count is
+Ignition is built around four properties that only matter once the team count is
 large:
 
 **1. Hard isolation, not politeness.**
@@ -50,7 +50,7 @@ construction. This is what lets a security team say *yes* to eighty untrusted
 teams without writing eighty exceptions.
 
 **2. Self-service, and delegated.**
-Standing up a zone is one command (`hz zone create <slug>`) and takes seconds,
+Standing up a zone is one command (`ign zone create <slug>`) and takes seconds,
 not a ticket — a scheduler places it on whichever host has room. And the team
 lead is their zone's admin: they add teammates and create repos themselves,
 through a scoped surface, without coming back to the platform team. The
@@ -77,7 +77,7 @@ from?" six months later.
   zones are scheduled across them by free capacity. No Kubernetes to stand up
   and staff — shell scripts, compose templates, and one small control service.
 - **Predictable footprint.** Per-zone CPU and memory quotas are set in one
-  place; `hz node list` shows allocation vs. capacity. Adding a node is one
+  place; `ign node list` shows allocation vs. capacity. Adding a node is one
   command.
 - **No new vendor.** Forgejo (community-governed, FOSS), Docker, and Traefik —
   all things a platform team can already reason about and audit.
@@ -93,7 +93,7 @@ and reclaimed on demand.
 **It is not** a permanent internal developer platform, a replacement for
 production CI/CD, or a general-purpose orchestrator. It schedules zones across
 a handful of nodes for the length of an event and no more. Ideas that graduate
-move onto the organisation's real platform — HackZone's job is to get them to
+move onto the organisation's real platform — Ignition's job is to get them to
 the point of being worth graduating.
 
 ## The bottom line
@@ -101,5 +101,5 @@ the point of being worth graduating.
 Organisations don't lack ideas from their engineers; they lack a cheap, safe,
 repeatable way to let many people try many ideas at once and come away with
 something real. That capability is infrastructure, and it is the constraint that
-actually binds. HackZone removes it for the price of a few hosts and a handful of
+actually binds. Ignition removes it for the price of a few hosts and a handful of
 scripts.

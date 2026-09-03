@@ -1,19 +1,19 @@
-# hackzone-one
+# Ignition
 
 Per-team hackathon infrastructure. Many teams (target ~80), a pool of hosts
 ("nodes"). Each team gets a fully isolated stack (a "zone").
 
-`BASE_DOMAIN` is the apex where hackzone is hosted (e.g. `hackzone.com`). Each zone
-owns the whole `<slug>.hackzone.com` subtree; the platform admin sits on the apex:
+`BASE_DOMAIN` is the apex where ignition is hosted (e.g. `ignition.example`). Each zone
+owns the whole `<slug>.ignition.example` subtree; the platform admin sits on the apex:
 
 | host | what |
 |---|---|
-| `admin.hackzone.com` | the platform admin control plane (`hz-control`) |
-| `git.<slug>.hackzone.com` | that zone's Forgejo — git, PRs, Actions, container registry |
-| `admin.<slug>.hackzone.com` | that zone's admin view (same `hz-control`, zone-scoped) |
-| `<app>.apps.<slug>.hackzone.com` | a deployed app — a zone can run many; names are unique within the zone |
+| `admin.ignition.example` | the platform admin control plane (`ign-control`) |
+| `git.<slug>.ignition.example` | that zone's Forgejo — git, PRs, Actions, container registry |
+| `admin.<slug>.ignition.example` | that zone's admin view (same `ign-control`, zone-scoped) |
+| `<app>.apps.<slug>.ignition.example` | a deployed app — a zone can run many; names are unique within the zone |
 
-`hackzone.com` is a placeholder — set `BASE_DOMAIN` to any apex your
+`ignition.example` is a placeholder — set `BASE_DOMAIN` to any apex your
 organisation controls, as long as its DNS can serve records two labels deep
 (`git.<slug>.<apex>`) and you can get wildcard certs for `*.<slug>.<apex>`.
 
@@ -22,17 +22,17 @@ can never touch another's, and any number of live apps that its CI deploys on
 every push.
 
 📖 **[Concept, executive overview, and architecture →
-johnjoeallen.github.io/hackzone-one](https://johnjoeallen.github.io/hackzone-one/)**
+johnjoeallen.github.io/ignition](https://johnjoeallen.github.io/ignition/)**
 
 Read **[CLAUDE.md](CLAUDE.md)** for the design decisions before changing anything.
 
 ## Roles
 
 - **Platform admin** — registers nodes, creates/places/moves/destroys zones,
-  sees every zone and app. Uses the `hz` CLI and `admin.hackzone.com`.
+  sees every zone and app. Uses the `ign` CLI and `admin.ignition.example`.
 - **Zone admin** — one per zone (the team lead). Adds users, creates repos,
   cuts releases (automated semver bumps), manages the zone's apps, restarts the
-  runner — all from the **zone console** at `admin.<slug>.hackzone.com`, for
+  runner — all from the **zone console** at `admin.<slug>.ignition.example`, for
   *their* zone only. They never touch a Forgejo admin screen.
 
 **Forgejo, not Gitea:** community-governed (Codeberg e.V.), FOSS-first, no
@@ -45,13 +45,13 @@ open-core drift. Server `codeberg.org/forgejo/forgejo:11` (LTS), runner
   `openssl`, `bash`, Python 3.11+, and a way to reach each node's Docker
   daemon (local socket, `ssh://`, or `tcp://`+TLS).
 - Nodes: hosts with Docker; `docker network create traefik-public` on each.
-- DNS: `git.<slug>.hackzone.com` and `*.apps.<slug>.hackzone.com` must resolve to the node
-  running that zone; `admin.<slug>.hackzone.com` to the control host. A single
-  `*.<slug>.hackzone.com` A-record covers all three when the zone shares the control
-  host; otherwise split it. `admin.hackzone.com` → the control host.
+- DNS: `git.<slug>.ignition.example` and `*.apps.<slug>.ignition.example` must resolve to the node
+  running that zone; `admin.<slug>.ignition.example` to the control host. A single
+  `*.<slug>.ignition.example` A-record covers all three when the zone shares the control
+  host; otherwise split it. `admin.ignition.example` → the control host.
 - A DNS-provider API token for Traefik's ACME DNS challenge. The control host's
-  Traefik fetches the apex cert (`hackzone.com` + `*.hackzone.com`); each zone's Forgejo
-  router fetches `*.<slug>.hackzone.com` + `*.apps.<slug>.hackzone.com` (two labels deep, so
+  Traefik fetches the apex cert (`ignition.example` + `*.ignition.example`); each zone's Forgejo
+  router fetches `*.<slug>.ignition.example` + `*.apps.<slug>.ignition.example` (two labels deep, so
   the apex wildcard misses them).
 
 Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
@@ -60,28 +60,28 @@ Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
 ```sh
 # 1. Core services (Traefik + Watchtower) — once per node.
-export BASE_DOMAIN=hackzone.com ACME_EMAIL=ops@hackzone.com CF_DNS_API_TOKEN=...
+export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example CF_DNS_API_TOKEN=...
 docker compose -f templates/traefik-core-compose.yml up -d
 
 # 2. The control plane, once, on the control host — its Traefik fronts it at
-#    admin.hackzone.com and admin.<slug>.hackzone.com via state/control/dynamic/.
-HZ_ADMIN_TOKEN=$(openssl rand -hex 32) BASE_DOMAIN=hackzone.com ./hz control &
+#    admin.ignition.example and admin.<slug>.ignition.example via state/control/dynamic/.
+IGN_ADMIN_TOKEN=$(openssl rand -hex 32) BASE_DOMAIN=ignition.example ./ign control &
 
 # 3. Register nodes.
-./hz node add node-1 local              --cpus 32 --mem 128g
-./hz node add node-2 ssh://ops@10.0.0.2 --cpus 32 --mem 128g
+./ign node add node-1 local              --cpus 32 --mem 128g
+./ign node add node-2 ssh://ops@10.0.0.2 --cpus 32 --mem 128g
 
 # 4. Create a zone (scheduler picks a node; --node to pin, --label to constrain).
-BASE_DOMAIN=hackzone.com ./hz zone create alpha
-#   -> Forgejo     https://git.alpha.hackzone.com/
-#   -> zone admin  https://admin.alpha.hackzone.com/
-#   -> apps        https://<name>.apps.alpha.hackzone.com/   (CI deploys on a release or push to main)
-#   -> state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
+BASE_DOMAIN=ignition.example ./ign zone create quantum-badgers
+#   -> Forgejo     https://git.quantum-badgers.ignition.example/
+#   -> zone admin  https://admin.quantum-badgers.ignition.example/
+#   -> apps        https://<name>.apps.quantum-badgers.ignition.example/   (CI deploys each app on a release)
+#   -> state/zones/quantum-badgers/{zone-admin.txt, zone-token, deploy-token}
 
-./hz zone list
-./hz zone status alpha
-./hz app list                 # every deployed app across all zones
-./hz zone destroy alpha       # zone + all its apps
+./ign zone list
+./ign zone status quantum-badgers
+./ign app list                 # every deployed app across all zones
+./ign zone destroy quantum-badgers       # zone + all its apps
 ```
 
 A zone lead then adds `.forgejo/workflows/deploy.yml`
@@ -90,16 +90,16 @@ A zone lead then adds `.forgejo/workflows/deploy.yml`
 optional `FORGEJO_TOKEN`).
 
 Builds **start from a release** — in the zone console under Repositories the
-zone admin clicks **Release**; hz-control reads the commit messages since the
+zone admin clicks **Release**; ign-control reads the commit messages since the
 last release, picks the bump from them (Conventional Commits: `fix:` → patch,
 `feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major; a dropdown overrides),
 and tags the next `vX.Y.Z` on `main` — no one bumps a version, no
-`git push --tags`. The tag builds, pushes to `git.alpha.hackzone.com`, and
-deploys `APP_NAME.apps.alpha.hackzone.com`. **A plain push to `main` does not
+`git push --tags`. The tag builds, pushes to `git.quantum-badgers.ignition.example`, and
+deploys `APP_NAME.apps.quantum-badgers.ignition.example`. **A plain push to `main` does not
 deploy** — only a release does. Several repos → several apps. After a release,
 rollout is automatic two ways: the workflow's `POST /deploy` rolls the app
 forward immediately, and
-**hz-control wires a Watchtower agent into every deployed app** (the
+**ign-control wires a Watchtower agent into every deployed app** (the
 `app-compose.tmpl` label is added for you) so the per-node Watchtower pulls a
 new digest for that tag on its own (~60s poll) — a re-push or a base-image
 rebuild goes live without another workflow run.
@@ -108,8 +108,8 @@ rebuild goes live without another workflow run.
 
 | path | what |
 |---|---|
-| `hz` | platform CLI: `hz node \| zone \| app \| sweep \| control` |
-| `control/hz-control.py` | control plane — platform view, zone-admin surface, CI `/deploy` + `/undeploy` |
+| `ign` | platform CLI: `ign node \| zone \| app \| sweep \| control` |
+| `control/ign-control.py` | control plane — platform view, zone-admin surface, CI `/deploy` + `/undeploy` |
 | `templates/traefik-core-compose.yml` | per-node core: Traefik (apex cert + file provider for `admin.*`) + Watchtower (auto-rolls deployed apps) |
 | `templates/zone-compose.yml.tmpl` | per-zone Forgejo + DinD + runner |
 | `templates/app-compose.tmpl` | one deployed app |
@@ -120,13 +120,13 @@ rebuild goes live without another workflow run.
 ## Rough edges
 
 - **DNS records for `git.<slug>` / `admin.<slug>` / `*.apps.<slug>` aren't
-  created for you** — wildcard `*.<slug>.hackzone.com` for one node; automate
+  created for you** — wildcard `*.<slug>.ignition.example` for one node; automate
   per-record across nodes.
 - **`traefik-public` is one flat network** on a node — app and Forgejo
   containers can reach each other by IP.
-- **`hz-control` runs bare** with Docker access and every token on disk — it
-  needs a systemd unit / locked-down container behind `admin.hackzone.com`.
+- **`ign-control` runs bare** with Docker access and every token on disk — it
+  needs a systemd unit / locked-down container behind `admin.ignition.example`.
 - **The control plane and Watchtower pull images anonymously** — private
-  packages need `docker login git.<slug>.hackzone.com` on the node (Watchtower
+  packages need `docker login git.<slug>.ignition.example` on the node (Watchtower
   reads `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json`).
 - **No repo seeding, no roster loop** — both are top next tasks (`CLAUDE.md`).

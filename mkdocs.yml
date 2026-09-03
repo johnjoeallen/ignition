@@ -1,8 +1,8 @@
-site_name: HackZone
+site_name: Ignition
 site_description: Per-team hackathon infrastructure — isolated Forgejo + build sandbox + a live deployed demo app for every team, on one host.
-site_url: https://johnjoeallen.github.io/hackzone-one/
-repo_url: https://github.com/johnjoeallen/hackzone-one
-repo_name: johnjoeallen/hackzone-one
+site_url: https://johnjoeallen.github.io/ignition/
+repo_url: https://github.com/johnjoeallen/ignition
+repo_name: johnjoeallen/ignition
 edit_uri: edit/main/docs/
 copyright: Apache License 2.0
 

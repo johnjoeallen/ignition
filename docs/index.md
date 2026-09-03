@@ -1,41 +1,41 @@
-# HackZone
+# Ignition
 
 **Per-team infrastructure for hackathons and innovation sprints.** Many teams
 (target ~80) across a small pool of hosts. Each team gets a fully isolated
 stack — a **zone** — that stands up in seconds and tears down without residue.
 
-<div class="hz-actions">
-  <a class="hz-button" href="executive-overview.md">Executive Overview</a>
-  <a class="hz-button hz-button-secondary" href="roles.md">Roles</a>
-  <a class="hz-button hz-button-secondary" href="architecture.md">Architecture</a>
-  <a class="hz-button hz-button-secondary" href="https://github.com/johnjoeallen/hackzone-one">GitHub</a>
+<div class="ign-actions">
+  <a class="ign-button" href="executive-overview.md">Executive Overview</a>
+  <a class="ign-button ign-button-secondary" href="roles.md">Roles</a>
+  <a class="ign-button ign-button-secondary" href="architecture.md">Architecture</a>
+  <a class="ign-button ign-button-secondary" href="https://github.com/johnjoeallen/ignition">GitHub</a>
 </div>
 
 ## The domain scheme
 
-`hackzone.com` is the apex where hackzone is hosted. Everything else is a segregated
+`ignition.example` is the apex where ignition is hosted. Everything else is a segregated
 subdomain:
 
 !!! note
-    `hackzone.com` is a placeholder. `BASE_DOMAIN` can be any apex your
+    `ignition.example` is a placeholder. `BASE_DOMAIN` can be any apex your
     organisation controls — the only requirement is DNS that can serve names
     two labels deep and wildcard certificates for `*.<slug>.<apex>`.
 
 | host | what |
 |---|---|
-| `admin.hackzone.com` | the platform control plane |
-| `admin.<zone>.hackzone.com` | that zone's admin view |
-| `git.<zone>.hackzone.com` | that zone's Forgejo — git, PRs, Actions, registry |
-| `<app>.apps.<zone>.hackzone.com` | a deployed app (a zone can run many; names unique within the zone) |
+| `admin.ignition.example` | the platform control plane |
+| `admin.<zone>.ignition.example` | that zone's admin view |
+| `git.<zone>.ignition.example` | that zone's Forgejo — git, PRs, Actions, registry |
+| `<app>.apps.<zone>.ignition.example` | a deployed app (a zone can run many; names unique within the zone) |
 
 ## What each team gets
 
 - **A forge** — git, PRs, issues, CI/CD, and a container registry, all from one
-  [Forgejo](https://forgejo.org/) at `https://git.<team>.hackzone.com/`.
+  [Forgejo](https://forgejo.org/) at `https://git.<team>.ignition.example/`.
 - **A private build sandbox** — a per-zone Docker-in-Docker engine, so one
   zone's CI can never see another zone's images, containers, or network.
 - **Live, shareable apps** — each repo with the deploy workflow puts an app at
-  `https://<app-name>.apps.<team>.hackzone.com/`. Builds start when the zone
+  `https://<app-name>.apps.<team>.ignition.example/`. Builds start when the zone
   admin hits **Release** in the zone console — a plain push to `main` does not
   deploy. Every deployed app is also wired with a Watchtower agent
   automatically, so if an image is re-pushed to a tag it rolls out on its own
@@ -46,39 +46,39 @@ subdomain:
 ```mermaid
 flowchart TB
     pa["Platform admin"] --> cp
-    cp["Control plane<br/>admin.hackzone.com"]
+    cp["Control plane<br/>admin.ignition.example"]
 
     subgraph node1["node-1"]
         traefik1["Traefik"]
-        subgraph zA["zone alpha  (isolated)"]
+        subgraph zA["zone quantum-badgers  (isolated)"]
             fa["Forgejo"]
         end
-        appA1["app: shop"]
-        appA2["app: api"]
+        appA1["app: paywise"]
+        appA2["app: reco-api"]
     end
     subgraph node2["node-2"]
         traefik2["Traefik"]
-        subgraph zB["zone bravo  (isolated)"]
+        subgraph zB["zone pixel-foxes  (isolated)"]
             fb["Forgejo"]
         end
-        appB["app: demo"]
+        appB["app: paywise"]
     end
 
     cp -->|place / manage| zA
     cp -->|place / manage| zB
     cp -->|deploy| appA1
     cp -->|deploy| appA2
-    za["Zone admin (alpha)"] -->|"users · repos · apps · runner"| cp
+    za["Zone admin (quantum-badgers)"] -->|"users · repos · apps · runner"| cp
     dev["Team developer"] -->|git push| traefik1
-    traefik1 -->|"git.alpha.hackzone.com"| fa
-    traefik1 -->|"shop.apps.alpha.hackzone.com · api.apps.alpha.hackzone.com"| appA1
-    traefik2 -->|"demo.apps.beta.hackzone.com"| appB
+    traefik1 -->|"git.quantum-badgers.ignition.example"| fa
+    traefik1 -->|"paywise.apps.quantum-badgers.ignition.example · reco-api.apps.quantum-badgers.ignition.example"| appA1
+    traefik2 -->|"paywise.apps.pixel-foxes.ignition.example"| appB
     visitor["Judge / stakeholder"] -->|https| traefik1
 ```
 
 ## How a zone's apps get deployed
 
-1. The zone admin hits **Release** in the zone console — hz-control reads the
+1. The zone admin hits **Release** in the zone console — ign-control reads the
    commits since the last release, picks the version bump from them
    (Conventional Commits; override available) and tags the next `vX.Y.Z` on
    `main`. That release tag is the only thing that deploys — a plain push to
@@ -86,13 +86,13 @@ flowchart TB
    [Roles → Shipping a release](roles.md#shipping-a-release).
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.
-3. It pushes the image to the zone's own registry (`git.<zone>.hackzone.com/…`),
+3. It pushes the image to the zone's own registry (`git.<zone>.ignition.example/…`),
    then POSTs the **control plane** `{app, image, port}` with the zone's deploy
    token.
 4. The control plane checks the image came from that zone's registry and runs
    it on the zone's node, on the Traefik-watched network, with a Watchtower
    label added automatically. Within seconds
-   `https://<app>.apps.<zone>.hackzone.com/` serves the new build — and any
+   `https://<app>.apps.<zone>.ignition.example/` serves the new build — and any
    later re-push of that tag rolls out on its own (~60s), no workflow rerun.
    App names are unique within a zone, not global.
 
@@ -109,7 +109,7 @@ this decides whether an innovation event produces working software or slides.
 
 ## Status
 
-A working scaffold: the `hz` CLI (`node`, `zone`, `app`, scheduler), zone
+A working scaffold: the `ign` CLI (`node`, `zone`, `app`, scheduler), zone
 provisioning/teardown (two-phase, mints the zone-admin account and tokens), the
 idle sweeper, and the control plane (platform view, zone-admin surface, CI
 `/deploy` + `/undeploy`) are all in place and validate. Rough edges — the

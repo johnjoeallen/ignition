@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""hackzone control plane — the admin surface above the zones.
+"""Ignition control plane — the admin surface above the zones.
 
 Two roles, one service:
 
-* **Platform admin** (bearer = ``HZ_ADMIN_TOKEN``) sees every node and zone.
+* **Platform admin** (bearer = ``IGN_ADMIN_TOKEN``) sees every node and zone.
 * **Zone admin** (bearer = that zone's ``state/zones/<slug>/zone-token``)
   manages *their* zone only: add/remove Forgejo users, create repos, restart
   the runner, see build/deploy status. Actions proxy the zone's own Forgejo
@@ -15,7 +15,7 @@ assigned node.
 
 Stdlib only. Bind loopback and front it with Traefik / a tunnel.
 
-    HZ_ADMIN_TOKEN=...  HZ_CONTROL_ADDR=127.0.0.1  HZ_CONTROL_PORT=8790  ./control/hz-control.py
+    IGN_ADMIN_TOKEN=...  IGN_CONTROL_ADDR=127.0.0.1  IGN_CONTROL_PORT=8790  ./control/ign-control.py
 """
 
 from __future__ import annotations
@@ -46,14 +46,14 @@ _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
 _REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 _SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 
-ADDR = os.environ.get("HZ_CONTROL_ADDR", "127.0.0.1")
-PORT = int(os.environ.get("HZ_CONTROL_PORT", "8790"))
-ADMIN_TOKEN = os.environ.get("HZ_ADMIN_TOKEN", "")
+ADDR = os.environ.get("IGN_CONTROL_ADDR", "127.0.0.1")
+PORT = int(os.environ.get("IGN_CONTROL_PORT", "8790"))
+ADMIN_TOKEN = os.environ.get("IGN_ADMIN_TOKEN", "")
 MAX_BODY = 64 * 1024
 
 # Forgejo instances use per-zone LE certs; skip verification only if asked to
 # (useful before DNS/certs settle).
-_TLS = ssl._create_unverified_context() if os.environ.get("HZ_INSECURE_TLS") else None
+_TLS = ssl._create_unverified_context() if os.environ.get("IGN_INSECURE_TLS") else None
 
 
 # --------------------------------------------------------------------------- io
@@ -124,7 +124,7 @@ def _bearer(headers) -> str:
 
 
 def _token_of(headers, cookies: SimpleCookie) -> str:
-    return _bearer(headers) or (cookies["hz_token"].value if "hz_token" in cookies else "")
+    return _bearer(headers) or (cookies["ign_token"].value if "ign_token" in cookies else "")
 
 
 def identify(token: str) -> tuple[str, str | None]:
@@ -357,7 +357,7 @@ a{color:#0a7d6b}
 def page(title: str, body: str) -> bytes:
     return (
         f"<!doctype html><meta charset=utf-8><title>{html.escape(title)}</title>"
-        f"<style>{CSS}</style><h1>hackzone · {html.escape(title)}</h1>{body}"
+        f"<style>{CSS}</style><h1>Ignition · {html.escape(title)}</h1>{body}"
     ).encode()
 
 
@@ -368,7 +368,7 @@ def login_page(msg: str = "") -> bytes:
         <label>Token<input name=token type=password autofocus size=44></label>
         <button>Sign in</button>
       </form>
-      <p>Platform admins use <code>HZ_ADMIN_TOKEN</code>; zone admins use their
+      <p>Platform admins use <code>IGN_ADMIN_TOKEN</code>; zone admins use their
       zone token (<code>state/zones/&lt;slug&gt;/zone-token</code>).</p>""")
 
 
@@ -396,8 +396,8 @@ def platform_page(msg: str) -> bytes:
     return page("platform", (f"<div class='msg'>{html.escape(msg)}</div>" if msg else "") + f"""
       <h2>Nodes</h2>
       <table><tr><th>node<th>state<th>docker host<th>allocated<th>zones</tr>{rows}</table>
-      <p><code>hz node add &lt;name&gt; &lt;docker-host&gt;</code> to register a node,
-         <code>hz zone create &lt;slug&gt;</code> to place a zone.</p>
+      <p><code>ign node add &lt;name&gt; &lt;docker-host&gt;</code> to register a node,
+         <code>ign zone create &lt;slug&gt;</code> to place a zone.</p>
       <h2>Zones</h2>
       <table><tr><th>zone<th>node<th>footprint<th>apps<th>forge</tr>{zrows}</table>
       <h2>Apps</h2>
@@ -496,7 +496,7 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
 
 # --------------------------------------------------------------------- server
 class H(BaseHTTPRequestHandler):
-    server_version = "hz-control"
+    server_version = "ign-control"
 
     # -- helpers
     def _cookies(self) -> SimpleCookie:
@@ -592,10 +592,10 @@ class H(BaseHTTPRequestHandler):
             tok = self._form().get("token", "")
             r, _ = identify(tok)
             if r in ("platform", "zone"):
-                return self._redirect("/", f"hz_token={tok}; Path=/; HttpOnly; SameSite=Lax")
+                return self._redirect("/", f"ign_token={tok}; Path=/; HttpOnly; SameSite=Lax")
             return self._html(login_page("that token isn't recognised"), 401)
         if path == "/ui/logout":
-            return self._redirect("/", "hz_token=; Path=/; Max-Age=0")
+            return self._redirect("/", "ign_token=; Path=/; Max-Age=0")
 
         if role == "zone":
             f = self._form()
@@ -651,7 +651,7 @@ def _base_domain() -> str:
 
 
 def write_platform_router() -> None:
-    """Drop the Traefik file-provider snippet that fronts hz-control at
+    """Drop the Traefik file-provider snippet that fronts ign-control at
     admin.<BASE_DOMAIN>. provision-zone.sh writes the per-zone
     admin.<slug>.<BASE_DOMAIN> snippets alongside it."""
     base = _base_domain()
@@ -660,16 +660,16 @@ def write_platform_router() -> None:
         return
     CONTROL_DYNAMIC.mkdir(parents=True, exist_ok=True)
     (CONTROL_DYNAMIC / "_platform.yml").write_text(
-        f"""# generated by hz-control — routes admin.{base} to hz-control
+        f"""# generated by ign-control — routes admin.{base} to ign-control
 http:
   routers:
-    hz-platform:
+    ign-platform:
       rule: "Host(`admin.{base}`)"
       entryPoints: ["websecure"]
-      service: hz-control
+      service: ign-control
       tls: {{certResolver: le}}
   services:
-    hz-control:
+    ign-control:
       loadBalancer:
         servers:
           - url: "http://host.docker.internal:{PORT}"
@@ -679,9 +679,9 @@ http:
 
 def main() -> None:
     if not ADMIN_TOKEN:
-        print("warning: HZ_ADMIN_TOKEN not set — the platform view is disabled", flush=True)
+        print("warning: IGN_ADMIN_TOKEN not set — the platform view is disabled", flush=True)
     write_platform_router()
-    print(f"hz-control on {ADDR}:{PORT}  ({len(nodes())} nodes, {len(zones())} zones)", flush=True)
+    print(f"ign-control on {ADDR}:{PORT}  ({len(nodes())} nodes, {len(zones())} zones)", flush=True)
     ThreadingHTTPServer((ADDR, PORT), H).serve_forever()
 
 

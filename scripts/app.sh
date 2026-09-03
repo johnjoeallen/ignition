@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# `hz app ...` — the platform admin's view of deployed apps.
+# `ign app ...` — the platform admin's view of deployed apps.
 #
-#   hz app list
-#   hz app show <zone> <name>
-#   hz app rm   <zone> <name>     # stop and remove an app
+#   ign app list
+#   ign app show <zone> <name>
+#   ign app rm   <zone> <name>     # stop and remove an app
 #
 # Apps are normally created and removed by a zone's CI (POST /deploy on the
 # control plane). This is the override. App names are unique within a zone.
@@ -20,14 +20,14 @@ cmd_list() {
 }
 
 cmd_show() {
-    [ $# -eq 2 ] || die "usage: hz app show <zone> <name>"
+    [ $# -eq 2 ] || die "usage: ign app show <zone> <name>"
     app_exists "$1" "$2" || die "no such app: $1/$2"
     cat "$(app_file "$1" "$2")"
     echo "URL=https://$(app_host "$2" "$1")/"
 }
 
 cmd_rm() {
-    [ $# -eq 2 ] || die "usage: hz app rm <zone> <name>"
+    [ $# -eq 2 ] || die "usage: ign app rm <zone> <name>"
     app_exists "$1" "$2" || die "no such app: $1/$2"
     local dh; dh="$(zone_docker_host "$1")"
     DOCKER_HOST="${dh:-}" docker compose -p "app-$1-$2" \
@@ -42,5 +42,5 @@ case "$sub" in
     list|ls) cmd_list ;;
     show)    cmd_show "$@" ;;
     rm)      cmd_rm "$@" ;;
-    *) die "unknown: hz app $sub" ;;
+    *) die "unknown: ign app $sub" ;;
 esac

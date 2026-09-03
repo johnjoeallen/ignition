@@ -1,6 +1,6 @@
 # Roles
 
-HackZone has two admin roles and a clean line between them.
+Ignition has two admin roles and a clean line between them.
 
 ```mermaid
 flowchart TB
@@ -8,7 +8,7 @@ flowchart TB
     za["Zone admin<br/>(one per zone / team lead)"]
     dev["Team developers"]
 
-    subgraph cp["Control plane (hz + hz-control)"]
+    subgraph cp["Control plane (ign + ign-control)"]
         nodes["Nodes<br/>register · drain · capacity"]
         zones["Zones<br/>create · place · move · destroy"]
         zoneconsole["Zone console<br/>users · repos · releases · apps · runner · status"]
@@ -26,21 +26,21 @@ flowchart TB
 
 ## Platform admin
 
-The person (or two) running the event. Holds `HZ_ADMIN_TOKEN`. Works through
-the **`hz` CLI** and the control plane's **platform view**.
+The person (or two) running the event. Holds `IGN_ADMIN_TOKEN`. Works through
+the **`ign` CLI** and the control plane's **platform view**.
 
 | Task | How |
 |---|---|
-| Register a host to run zones | `hz node add <name> <docker-host> --cpus N --mem NNg [--labels …]` |
-| See node capacity / allocation | `hz node list`, `hz node show <name>` |
-| Stop placing new zones on a node | `hz node drain <name>` (then `undrain`) |
-| Create a zone (auto-placed) | `hz zone create <slug>` — the scheduler picks the least-loaded node that fits |
-| Create a zone on a specific node | `hz zone create <slug> --node <name>` |
-| See every zone and its live status | `hz zone list`, `hz zone status <slug>`, or the platform view |
-| Move a zone to another node | `hz zone move <slug> --node <name>` (the stack is rebuilt; data volumes don't follow) |
-| Destroy a zone | `hz zone destroy <slug>` — the stack **and every app it deployed**, complete |
-| See / stop any deployed app | `hz app list`, `hz app show <zone> <name>`, `hz app rm <zone> <name>` |
-| Reclaim idle zones | `hz sweep` / a cron on `scripts/sweep-idle.sh` |
+| Register a host to run zones | `ign node add <name> <docker-host> --cpus N --mem NNg [--labels …]` |
+| See node capacity / allocation | `ign node list`, `ign node show <name>` |
+| Stop placing new zones on a node | `ign node drain <name>` (then `undrain`) |
+| Create a zone (auto-placed) | `ign zone create <slug>` — the scheduler picks the least-loaded node that fits |
+| Create a zone on a specific node | `ign zone create <slug> --node <name>` |
+| See every zone and its live status | `ign zone list`, `ign zone status <slug>`, or the platform view |
+| Move a zone to another node | `ign zone move <slug> --node <name>` (the stack is rebuilt; data volumes don't follow) |
+| Destroy a zone | `ign zone destroy <slug>` — the stack **and every app it deployed**, complete |
+| See / stop any deployed app | `ign app list`, `ign app show <zone> <name>`, `ign app rm <zone> <name>` |
+| Reclaim idle zones | `ign sweep` / a cron on `scripts/sweep-idle.sh` |
 
 The platform admin **never logs into a zone's Forgejo**. Their surface is
 nodes and zones.
@@ -52,7 +52,7 @@ a **zone token** (`state/zones/<slug>/zone-token`) which signs them in at
 `https://admin.<slug>.<event-domain>/` — the **zone console**.
 
 That console is their whole surface. They never touch a Forgejo admin screen;
-the `zoneadmin` Forgejo account exists only as hz-control's service credential
+the `zoneadmin` Forgejo account exists only as ign-control's service credential
 and stays on the control host. Everything below is a console action:
 
 | Task | In the console |
@@ -77,7 +77,7 @@ like any forge — that's the *developer* surface, separate from this one.
 
 Release versioning is automated — **no one bumps the version**. In the console
 under **Repositories**, each repo shows its current version (e.g. `· v1.2.3`).
-Click **Release** and hz-control:
+Click **Release** and ign-control:
 
 1. reads the commit messages **since the last release** (it compares the last
    tag to `main`),
@@ -106,6 +106,6 @@ app forward on its own within ~60s.
 - Zone admin: *what happens inside* one zone — people, repos, the runner, and
   shipping releases — all from the zone console, never a Forgejo admin screen.
 
-The control plane (`hz-control`) is the single process that holds both sets of
+The control plane (`ign-control`) is the single process that holds both sets of
 credentials and enforces the split: it authenticates the caller's token,
 decides platform-vs-zone, and only ever acts within that scope.

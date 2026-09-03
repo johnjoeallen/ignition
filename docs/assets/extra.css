@@ -1,11 +1,11 @@
-.hz-actions {
+.ign-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.7rem;
   margin: 1.2rem 0 1.6rem;
 }
 
-.hz-button {
+.ign-button {
   display: inline-block;
   padding: 0.55rem 1rem;
   border: 1px solid var(--md-primary-fg-color);
@@ -17,11 +17,11 @@
   transition: opacity 0.15s ease;
 }
 
-.hz-button:hover {
+.ign-button:hover {
   opacity: 0.82;
 }
 
-.hz-button-secondary {
+.ign-button-secondary {
   background: transparent;
   color: var(--md-primary-fg-color) !important;
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reclaim zones idle longer than IDLE_TTL. Meant for cron:
 #
-#   */15 * * * *  IDLE_TTL=86400 /opt/hackzone/scripts/sweep-idle.sh >> /var/log/hackzone-sweep.log 2>&1
+#   */15 * * * *  IDLE_TTL=86400 /opt/ignition/scripts/sweep-idle.sh >> /var/log/ignition-sweep.log 2>&1
 #
 # "Idle" = state/zones/<slug>/last-activity older than IDLE_TTL seconds. That
 # file is bumped by provision-zone.sh and by the control plane on every deploy.

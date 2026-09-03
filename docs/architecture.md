@@ -1,23 +1,23 @@
 # Architecture
 
-HackZone is compose templates, shell scripts (`hz`), and one small control
+Ignition is compose templates, shell scripts (`ign`), and one small control
 service. State is a directory per node, per zone, and per app under `state/`.
 This page covers the domain scheme, the shape of a zone's stack, node
 placement, the control plane, and the decisions that aren't obvious.
 
 ## The domain scheme
 
-`BASE_DOMAIN` is the apex (`hackzone.com` in these docs — a placeholder; use any
+`BASE_DOMAIN` is the apex (`ignition.example` in these docs — a placeholder; use any
 apex your org controls whose DNS serves names two labels deep). The platform
-admin sits on the apex; each zone owns the whole `<slug>.hackzone.com` subtree
+admin sits on the apex; each zone owns the whole `<slug>.ignition.example` subtree
 under it:
 
 | host | serves |
 |---|---|
-| `admin.hackzone.com` | the platform admin control plane (`hz-control`) |
-| `git.<slug>.hackzone.com` | that zone's Forgejo — one origin for web UI, git, Actions, **and the container registry** |
-| `admin.<slug>.hackzone.com` | that zone's admin view (same `hz-control`, zone-scoped) |
-| `<app>.apps.<slug>.hackzone.com` | one deployed app; a zone can run many, names unique within the zone |
+| `admin.ignition.example` | the platform admin control plane (`ign-control`) |
+| `git.<slug>.ignition.example` | that zone's Forgejo — one origin for web UI, git, Actions, **and the container registry** |
+| `admin.<slug>.ignition.example` | that zone's admin view (same `ign-control`, zone-scoped) |
+| `<app>.apps.<slug>.ignition.example` | one deployed app; a zone can run many, names unique within the zone |
 
 A forge needs a whole origin because Docker registry clients hit `/v2/…` at the
 domain *root* and ignore path prefixes. Giving each zone its own subtree keeps
@@ -29,18 +29,18 @@ labels deep, so a `*.<BASE_DOMAIN>` wildcard misses it — see the TLS note unde
 
 ```mermaid
 flowchart TB
-    ch["Control host<br/>hz CLI · hz-control · state/"]
+    ch["Control host<br/>ign CLI · ign-control · state/"]
     ch -->|"docker over local / ssh:// / tcp://"| n1
     ch -->|"    "| n2
 
     subgraph n1["node-1"]
         t1["Traefik"]
-        za["zone-alpha stack"]
-        zc["zone-charlie stack"]
+        za["zone-quantum-badgers stack"]
+        zc["zone-neon-yaks stack"]
     end
     subgraph n2["node-2"]
         t2["Traefik"]
-        zb["zone-bravo stack"]
+        zb["zone-pixel-foxes stack"]
     end
 ```
 
@@ -49,13 +49,13 @@ flowchart TB
   optional `LABELS`, and a `STATE` (`active` / `draining`).
 - A **zone** is `state/zones/<slug>/`: `zone.env` (node, base domain,
   footprint, URLs), the rendered `docker-compose.yml`, `runner-secret`,
-  `zone-admin.txt` (Forgejo admin login + API token — hz-control's service
+  `zone-admin.txt` (Forgejo admin login + API token — ign-control's service
   credential, never handed to the team lead), `zone-token`,
   `deploy-token`, `last-activity`.
 - An **app** is `state/zones/<slug>/apps/<name>.env`: which node it
   runs on, its image, port, and last deploy id — plus the rendered
   `<name>-compose.yml`.
-- The **control host** runs `hz` and `hz-control` and never runs workloads
+- The **control host** runs `ign` and `ign-control` and never runs workloads
   itself — it drives each node's Docker daemon remotely.
 
 `scheduler.sh` places a new zone on the active node with the most free CPU
@@ -79,31 +79,31 @@ flowchart LR
 
     subgraph shared["node, shared"]
         traefik["Traefik  (:443)"]
-        app1["app-shop<br/>on traefik-public"]
-        app2["app-api<br/>on traefik-public"]
+        app1["app-paywise<br/>on traefik-public"]
+        app2["app-reco-api<br/>on traefik-public"]
     end
 
-    cp["hz-control (control host)"]
+    cp["ign-control (control host)"]
     traefik -->|"Host(git.&lt;slug&gt;.&lt;domain&gt;)"| forgejo
     runner -->|"push image → forgejo registry<br/>POST /deploy {app,image,port}"| cp
     cp -->|"docker compose -p app-&lt;slug&gt;-&lt;name&gt; up"| app1
     cp --> app2
-    traefik -->|"Host(shop.apps.&lt;slug&gt;.&lt;domain&gt;)"| app1
-    traefik -->|"Host(api.apps.&lt;slug&gt;.&lt;domain&gt;)"| app2
+    traefik -->|"Host(paywise.apps.&lt;slug&gt;.&lt;domain&gt;)"| app1
+    traefik -->|"Host(reco-api.apps.&lt;slug&gt;.&lt;domain&gt;)"| app2
 ```
 
 The zone stack is prefixed `zone-<slug>`; each app is its own project
-`app-<slug>-<name>`. `hz zone destroy <slug>` tears down the stack **and every app the
+`app-<slug>-<name>`. `ign zone destroy <slug>` tears down the stack **and every app the
 zone deployed**.
 
 ## The control plane
 
-`hz-control` is one process on the control host. It authenticates the caller's
+`ign-control` is one process on the control host. It authenticates the caller's
 bearer token and acts only within that scope:
 
 | Token | Role | Can do |
 |---|---|---|
-| `HZ_ADMIN_TOKEN` | platform admin | every node, zone, and app (platform view) |
+| `IGN_ADMIN_TOKEN` | platform admin | every node, zone, and app (platform view) |
 | `state/zones/<slug>/zone-token` | zone admin | that zone only: Forgejo users, repos, cut releases, the zone's apps, restart the runner, read status |
 | `state/zones/<slug>/deploy-token` | CI | `POST /deploy` and `POST /undeploy` for that zone's apps |
 
@@ -114,7 +114,7 @@ provisioning) or a `docker compose` command **scoped to a `zone-<slug>` or
 access. See **[Roles](roles.md)**.
 
 **App names are unique within a zone.** An app is
-`state/zones/<slug>/apps/<name>.env`. `hz-control` only runs an image pulled
+`state/zones/<slug>/apps/<name>.env`. `ign-control` only runs an image pulled
 from the requesting zone's own registry (`git.<slug>.<domain>/…`).
 
 ## Isolation boundaries
@@ -124,8 +124,8 @@ from the requesting zone's own registry (`git.<slug>.<domain>/…`).
 | Zone ↔ zone (git, CI, builds) | Separate compose project, network, volumes; the DinD engine and runner are on the zone network only, and the DinD engine never bind-mounts a host Docker socket. |
 | CI jobs ↔ node | Jobs run against the zone's **nested** Docker engine (`DOCKER_HOST=tcp://dind:2375`), which cannot see node containers or the node daemon. |
 | Live app ↔ its own zone's internals | The live app runs on `traefik-public`, not the zone network — no path back into that zone's forge or build engine. |
-| Zone admin ↔ platform | `hz-control` never hands a zone admin a node, a Docker endpoint, or another zone's data — only proxied Forgejo calls and project-scoped `docker compose`. |
-| CI ↔ deploy | `hz-control` verifies the deploy token → zone, and only runs an image from *that* zone's own registry. |
+| Zone admin ↔ platform | `ign-control` never hands a zone admin a node, a Docker endpoint, or another zone's data — only proxied Forgejo calls and project-scoped `docker compose`. |
+| CI ↔ deploy | `ign-control` verifies the deploy token → zone, and only runs an image from *that* zone's own registry. |
 
 The one seam: the app containers **and** the Forgejo instances share
 `traefik-public` on a node, so they can reach each other by IP. The untrusted
@@ -140,9 +140,9 @@ against its own registry:
 
 ```mermaid
 flowchart TB
-    A["docker push alpha.hackzone.com/git/app:1"] -->|"actually requests"| B["GET alpha.hackzone.com/v2/"]
+    A["docker push quantum-badgers.ignition.example/git/app:1"] -->|"actually requests"| B["GET quantum-badgers.ignition.example/v2/"]
     B -->|"path prefix ignored — 404 or wrong service"| C["broken"]
-    D["docker push git.alpha.hackzone.com/app:1"] --> E["GET git.alpha.hackzone.com/v2/"]
+    D["docker push git.quantum-badgers.ignition.example/app:1"] --> E["GET git.quantum-badgers.ignition.example/v2/"]
     E -->|"Forgejo owns the whole origin"| F["works"]
 ```
 
@@ -158,7 +158,7 @@ A container built and run *inside* the zone's nested DinD engine is in that
 engine's own network namespace. Traefik has no route to it.
 
 So the flow splits: CI **builds** in the sandbox and **pushes** an image, then
-POSTs `hz-control`, which **runs** the container on the zone's node, on
+POSTs `ign-control`, which **runs** the container on the zone's node, on
 `traefik-public` where that node's Traefik can see it.
 
 ```mermaid
@@ -166,7 +166,7 @@ sequenceDiagram
     participant CI as runner (in zone net)
     participant DinD as zone DinD engine
     participant Reg as zone Forgejo registry
-    participant Ctl as hz-control (control host)
+    participant Ctl as ign-control (control host)
     participant Node as zone's node daemon
     participant Traefik
 
@@ -180,14 +180,14 @@ sequenceDiagram
 
 The workflow triggers **only on a release tag** — a plain push to `main` does
 not deploy. Teams don't tag locally and don't use Forgejo's Releases form: the
-**Release** button in the zone console has hz-control diff the last tag against
+**Release** button in the zone console has ign-control diff the last tag against
 `main`, pick the semver bump from those commit messages (Conventional Commits;
 the admin can override), and create the next `vX.Y.Z` tag on `main` through the
 Forgejo API — so the tag is always made from reviewed, pushed history. Each run
 pushes an immutable `:<sha>` **and** the `:<tag>` and deploys `:<tag>`.
 `POST /deploy` is the immediate rollout; if CI later re-runs for the same tag
 (a base-image rebuild), the per-node **Watchtower** (see below) picks up the
-new digest without another deploy call. `hz-control` stamps
+new digest without another deploy call. `ign-control` stamps
 `com.centurylinklabs.watchtower.enable=true` onto every app it deploys (the
 label is in `app-compose.tmpl` — teams don't opt in); Watchtower manages only
 those containers and never touches Traefik, Forgejo, DinD or runners.
@@ -202,7 +202,7 @@ Everything is routed by hostname through each node's Traefik:
 `admin.<slug>.<domain>` → the zone view, `admin.<domain>` → the platform plane. Nothing binds a host port per zone — no
 allocation table, no range to exhaust.
 
-And there is **one** `hz-control`, not an agent per node. It already needs to
+And there is **one** `ign-control`, not an agent per node. It already needs to
 orchestrate across nodes (place a zone, move a zone, deploy an app to whichever
 node its zone is on), and it is the natural place to hold the platform token,
 every zone and deploy token, and every zone's Forgejo admin token behind one
@@ -231,7 +231,7 @@ Real chicken-and-egg, not accidental complexity.
 
 **Watchtower** (`--label-enable`, 60s poll, `--cleanup --rolling-restart`)
 rolls any container labelled `com.centurylinklabs.watchtower.enable=true`
-forward when its image tag gets a new digest. `hz-control` stamps that label on
+forward when its image tag gets a new digest. `ign-control` stamps that label on
 every app it deploys (teams don't opt in) and nothing else carries it, so
 Traefik, Forgejo, DinD and runners are never restarted. It reads
 `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json` for registry auth — the same
@@ -243,7 +243,7 @@ holds the apex cert (`<event-domain>` + `*.<event-domain>`, covering
 `admin.<event-domain>`); **each zone's own Forgejo router** additionally
 requests `*.<slug>.<event-domain>` + `*.apps.<slug>.<event-domain>`, covering
 that zone's git, admin, and every app with no per-name request.
-`admin.<slug>.<event-domain>` is served by `hz-control` behind the control
+`admin.<slug>.<event-domain>` is served by `ign-control` behind the control
 host's Traefik via a file-provider snippet
 (`state/control/dynamic/<slug>.yml`).
 

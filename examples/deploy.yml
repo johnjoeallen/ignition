@@ -5,7 +5,7 @@
 #
 # Deploys happen ONLY on a release tag (e.g. `v1.2.0`) — never on a plain push
 # to `main`. The tag is created by the zone console's "Release" button:
-# hz-control diffs the last tag against `main`, picks the semver bump from those
+# ign-control diffs the last tag against `main`, picks the semver bump from those
 # commit messages (Conventional Commits; the admin can override), and creates
 # the next vX.Y.Z tag on `main` via the Forgejo API — always from reviewed,
 # already-pushed history, never `git push --tags`. See docs/roles.md
@@ -20,8 +20,8 @@
 # talks to the zone's private build engine.
 #
 # Repo variables (Settings -> Actions -> Variables):
-#   REGISTRY     git.<slug>.<BASE_DOMAIN>            e.g. git.alpha.hackzone.com
-#                (must match the zone's registry exactly — hz-control checks it)
+#   REGISTRY     git.<slug>.<BASE_DOMAIN>            e.g. git.quantum-badgers.ignition.example
+#                (must match the zone's registry exactly — ign-control checks it)
 #   CONTROL_URL  https://admin.<slug>.<BASE_DOMAIN>  the zone's control endpoint
 #   APP_NAME     my-app                              -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
 #   APP_PORT     8080                                the port your app listens on

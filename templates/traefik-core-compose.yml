@@ -5,15 +5,13 @@
 #   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the certs
 #   docker compose -f templates/traefik-core-compose.yml up -d
 #
-# Watchtower polls the zone registries and rolls any deployed app container
-# forward when its image tag gets a new digest — so a re-pushed build (or a
-# base-image rebuild) goes live without a fresh CI /deploy call. It only acts
-# on containers labelled com.centurylinklabs.watchtower.enable=true (every
-# app-compose.tmpl container carries it); Traefik, Forgejo, DinD and runners
-# are never touched. Pushing to a floating tag (examples/deploy.yml pushes
-# :<branch> alongside :<sha>) is what makes this useful.
+# Watchtower rolls any deployed app container forward if its image tag ever
+# gets a new digest — e.g. CI re-runs for the same release tag after a
+# base-image rebuild — without a fresh /deploy call. It only acts on containers
+# labelled com.centurylinklabs.watchtower.enable=true, which ign-control stamps
+# on every app it deploys; Traefik, Forgejo, DinD and runners are never touched.
 #
-# BASE_DOMAIN is the apex of the whole hackzone install (e.g. example.com).
+# BASE_DOMAIN is the apex of the whole Ignition install (e.g. example.com).
 # Traefik owns :80 / :443 on the node.
 #
 # Domain scheme:
@@ -24,21 +22,21 @@
 #     <app>.apps.<slug>.${BASE_DOMAIN}     a deployed app (name unique per zone)
 #
 # The control host's Traefik holds the apex cert (${BASE_DOMAIN} + a
-# *.${BASE_DOMAIN} SAN, which covers admin.${BASE_DOMAIN}) and fronts hz-control
+# *.${BASE_DOMAIN} SAN, which covers admin.${BASE_DOMAIN}) and fronts ign-control
 # on the loopback. Each zone's own Forgejo router (see zone-compose.yml.tmpl)
 # additionally requests *.<slug>.${BASE_DOMAIN} + *.apps.<slug>.${BASE_DOMAIN},
 # since those are two labels deep. provision-zone.sh drops a dynamic router
 # snippet in state/control/dynamic/<slug>.yml so admin.<slug>.${BASE_DOMAIN}
-# reaches hz-control with its own cert.
+# reaches ign-control with its own cert.
 #
 # DNS: admin.${BASE_DOMAIN} -> the control host. Per zone, git.<slug> /
 # admin.<slug> / *.apps.<slug> -> whichever node runs that zone (single node:
 # one *.<slug>.${BASE_DOMAIN} record covers all three).
 
-name: hackzone-core
+name: ignition-core
 
 networks:
-  # The one shared network this node's Traefik watches. hz-control attaches
+  # The one shared network this node's Traefik watches. ign-control attaches
   # each zone's live app container here, and each zone's Forgejo joins it too.
   traefik-public:
     name: traefik-public
@@ -74,7 +72,7 @@ services:
       - "80:80"
       - "443:443"
     extra_hosts:
-      # so a file-provider router can reach hz-control on the control host's loopback
+      # so a file-provider router can reach ign-control on the control host's loopback
       - "host.docker.internal:host-gateway"
     environment:
       # Cloudflare by default; swap ACME_DNS_PROVIDER + the matching var for
