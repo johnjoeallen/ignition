@@ -7,7 +7,7 @@ why" section before refactoring any of them.
 
 > **Direction:** the shell CLI + Python control plane are being replaced by one
 > Java (Spring Boot) service, deployed as a container, with all management in
-> the web UI. Design in **[DESIGN.md](DESIGN.md)** (proposed; no code yet). The
+> the web UI. Design in **[DESIGN.md](DESIGN.md)** (accepted; no code yet). The
 > decisions below still describe the running system.
 
 ## What this is

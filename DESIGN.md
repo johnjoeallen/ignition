@@ -1,7 +1,7 @@
 # Ignition control plane — design for the Java rewrite
 
-Status: **proposed** (design only, no code yet). Supersedes the "stdlib / shell
-only" convention in `CLAUDE.md` once accepted.
+Status: **accepted** — design agreed, no code yet. Supersedes the "stdlib /
+shell only" convention in `CLAUDE.md`.
 
 ## Why
 
@@ -134,8 +134,8 @@ card.
 **CI bridge** — bearer = deploy token: `POST /deploy`, `POST /undeploy`. The
 JSON contract is **unchanged**, so `examples/deploy.yml` does not change.
 
-No CLI is part of the management path. (A thin read-only `ign` that just calls
-the REST API could exist for scripting — optional, out of scope.)
+No CLI is part of the management path, and none is kept for scripting — the
+REST endpoints are the API.
 
 ## Docker engine access
 
@@ -190,7 +190,7 @@ conditionals — the reason it isn't a template today).
   `admin.<slug>` routers.
 - `traefik-core-compose.yml` is unchanged for worker nodes. The control host
   runs core **and** control.
-- `ignition-control:<version>` published to a registry.
+- `ghcr.io/johnjoeallen/ignition-control:<version>` published to GHCR.
 - Health via `/actuator/health` + a Docker healthcheck.
 - At cutover, `ign`, `scripts/`, and `control/ign-control.py` are removed.
 
@@ -221,11 +221,7 @@ conditionals — the reason it isn't a template today).
   log); revisit SQLite only if the UI outgrows it.
 - **CLI:** none. The old `ign` and `scripts/` are removed at cutover; no
   read-only wrapper is kept — "no CLI magic" is the whole point.
-
-## Still to settle
-
-- Registry + name for the published image. Default assumption:
-  `ghcr.io/johnjoeallen/ignition-control:<version>`.
-- Whether `traefik-core-compose.yml` gains the `ignition-control` service on the
-  control host or it ships as a separate `ignition-control-compose.yml`.
-  Default assumption: separate file (worker nodes never run it).
+- **Image:** `ghcr.io/johnjoeallen/ignition-control:<version>`.
+- **Compose:** ships as its own `templates/ignition-control-compose.yml`, run
+  on the control host only. `traefik-core-compose.yml` is unchanged and runs on
+  every node including the control host.
