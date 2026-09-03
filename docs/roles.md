@@ -40,7 +40,7 @@ the **`hz` CLI** and the control plane's **platform view**.
 | See every zone and its live status | `hz zone list`, `hz zone status <slug>`, or the platform view |
 | Move a zone to another node | `hz zone move <slug> --node <name>` (the stack is rebuilt; data volumes don't follow) |
 | Destroy a zone | `hz zone destroy <slug>` — the stack **and every app it deployed**, complete |
-| See / stop any deployed app | `hz app list`, `hz app show <name>`, `hz app rm <name>` |
+| See / stop any deployed app | `hz app list`, `hz app show <zone> <name>`, `hz app rm <zone> <name>` |
 | Reclaim idle zones | `hz sweep` / a cron on `scripts/sweep-idle.sh` |
 
 The platform admin **never logs into a zone's Forgejo**. Their surface is

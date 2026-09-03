@@ -228,9 +228,9 @@ Real chicken-and-egg, not accidental complexity.
 
 **Watchtower** (`--label-enable`, 60s poll, `--cleanup --rolling-restart`)
 rolls any container labelled `com.centurylinklabs.watchtower.enable=true`
-forward when its image tag gets a new digest. Every `app-compose.tmpl`
-container carries the label; nothing else does, so Traefik, Forgejo, DinD and
-runners are never restarted. It reads
+forward when its image tag gets a new digest. `hz-control` stamps that label on
+every app it deploys (teams don't opt in) and nothing else carries it, so
+Traefik, Forgejo, DinD and runners are never restarted. It reads
 `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json` for registry auth — the same
 `docker login` a node needs for private packages.
 

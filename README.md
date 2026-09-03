@@ -74,7 +74,7 @@ HZ_ADMIN_TOKEN=$(openssl rand -hex 32) BASE_DOMAIN=hackzone.com ./hz control &
 BASE_DOMAIN=hackzone.com ./hz zone create alpha
 #   -> Forgejo     https://git.alpha.hackzone.com/
 #   -> zone admin  https://admin.alpha.hackzone.com/
-#   -> apps        https://<name>.apps.alpha.hackzone.com/   (CI deploys on push to main or a git tag)
+#   -> apps        https://<name>.apps.alpha.hackzone.com/   (CI deploys on a release or push to main)
 #   -> state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 
 ./hz zone list

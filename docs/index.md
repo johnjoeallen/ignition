@@ -77,23 +77,27 @@ flowchart TB
 
 ## How a zone's apps get deployed
 
-1. A developer pushes to a Forgejo repo that has the deploy workflow.
+1. The zone admin **cuts a release** in the Forgejo web UI (or a developer
+   pushes to `main`) on a repo that has the deploy workflow.
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.
-3. It pushes the image to the zone's own registry (`git.<zone>.hackzone.com/…`), then
-   POSTs the **control plane** `{app, image, port}` with the zone's deploy
+3. It pushes the image to the zone's own registry (`git.<zone>.hackzone.com/…`),
+   then POSTs the **control plane** `{app, image, port}` with the zone's deploy
    token.
-4. The control plane checks the app name (global; first zone to use it owns
-   it) and runs the image on the zone's node, on the Traefik-watched network.
-   Within seconds `https://<app>.apps.<zone>.hackzone.com/` serves the new build.
+4. The control plane checks the image came from that zone's registry and runs
+   it on the zone's node, on the Traefik-watched network, with a Watchtower
+   label added automatically. Within seconds
+   `https://<app>.apps.<zone>.hackzone.com/` serves the new build — and any
+   later re-push of that tag rolls out on its own (~60s), no workflow rerun.
+   App names are unique within a zone, not global.
 
 ## Why it's built this way
 
-A few choices look odd until you hit the constraint behind them — git and apps
-each get their own subdomain namespace rather than a URL path, apps are
-deployed from the control host rather than from inside the sandbox, there are
-no per-zone host ports, and one central control plane holds every credential
-rather than an agent per node. See **[Architecture](architecture.md)** for
+A few choices look odd until you hit the constraint behind them — each zone
+gets its own subdomain subtree rather than a URL path, apps are deployed from
+the control host rather than from inside the sandbox, there are no per-zone
+host ports, and one central control plane holds every credential rather than an
+agent per node. See **[Architecture](architecture.md)** for
 each, **[Roles](roles.md)** for the platform-admin / zone-admin split, and
 **[Executive Overview](executive-overview.md)** for why infrastructure like
 this decides whether an innovation event produces working software or slides.
@@ -104,5 +108,5 @@ A working scaffold: the `hz` CLI (`node`, `zone`, `app`, scheduler), zone
 provisioning/teardown (two-phase, mints the zone-admin account and tokens), the
 idle sweeper, and the control plane (platform view, zone-admin surface, CI
 `/deploy` + `/undeploy`) are all in place and validate. Rough edges — the
-`<slug>.git` / `<app>.apps` DNS records, repo seeding, hardening the control
-plane — are tracked in `README` and `CLAUDE.md`.
+per-zone (`git.<slug>` / `*.apps.<slug>` / `admin.<slug>`) DNS records, repo
+seeding, hardening the control plane — are tracked in `README` and `CLAUDE.md`.

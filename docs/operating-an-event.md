@@ -42,7 +42,7 @@ BASE_DOMAIN=hackzone.com ./hz zone create alpha
 BASE_DOMAIN=hackzone.com ./hz zone create bravo --node node-2
 #   → Forgejo   https://git.alpha.hackzone.com/
 #   → zone admin https://admin.alpha.hackzone.com/
-#   → apps      https://<name>.apps.alpha.hackzone.com/   (per app CI deploys)
+#   → apps      https://<name>.apps.alpha.hackzone.com/   (one per app the team ships)
 #   → state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 ```
 
@@ -63,8 +63,8 @@ its own, ~60s).
 ```sh
 ./hz zone list                     # zones, node, footprint, app count
 ./hz zone status alpha             # forgejo + apps health on alpha's node
-./hz app list                      # every deployed app across all zones
-./hz app rm shop                   # stop and remove one app
+./hz app list                      # every deployed app across all zones (zone + name)
+./hz app rm alpha shop             # stop and remove one app (zone, then name)
 ./hz zone move alpha --node node-1 # rebuild the zone elsewhere (data + apps don't follow)
 ./hz zone destroy alpha            # zone + every app it deployed
 ./hz node drain node-2             # stop placing new zones here
@@ -95,8 +95,9 @@ capacity per node.
 
 ## Rough edges
 
-- **DNS records for `<slug>.git` / `<app>.apps` aren't created for you** —
-  wildcard both namespaces for one node; automate per-record across nodes.
+- **DNS records for `git.<slug>` / `admin.<slug>` / `*.apps.<slug>` aren't
+  created for you** — wildcard `*.<slug>.<BASE_DOMAIN>` for one node; automate
+  per-record across nodes.
 - **`traefik-public` is one flat network** — app containers and Forgejo
   instances on a node can reach each other by IP.
 - **`hz-control` runs bare** with Docker access and every token on disk — it

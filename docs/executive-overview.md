@@ -57,11 +57,13 @@ through a scoped surface, without coming back to the platform team. The
 marginal cost of one more team is close to zero.
 
 **3. Real deployments, not screenshots.**
-Every app a team ships is live at `https://<app>.apps.<team>.<event-domain>/` and
-redeploys on every push — one team can run several. Stakeholders engage with
-**working software** during judging. The best ideas leave the event as a
-running URL and a git repo — already deployed, already shareable — instead of a
-deck that needs a project to become real.
+Every app a team ships is live at `https://<app>.apps.<team>.<event-domain>/`.
+The team lead cuts a release from the web UI and it builds and deploys itself;
+every app is also wired to reload automatically when its image changes. One
+team can run several. Stakeholders engage with **working software** during
+judging. The best ideas leave the event as a running URL and a git repo —
+already deployed, already shareable — instead of a deck that needs a project to
+become real.
 
 **4. Deterministic teardown.**
 Every resource is namespaced per zone; teardown is a single, complete
