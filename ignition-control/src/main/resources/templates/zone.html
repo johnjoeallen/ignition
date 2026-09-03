@@ -25,13 +25,19 @@
 
   <h2>Apps <span class="muted" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span></h2>
   <table>
-    <tr><th>app</th><th>image</th><th>deploy</th></tr>
+    <tr><th>app</th><th>image</th><th>deploy</th><th></th></tr>
     <tr th:each="a : ${apps}">
       <td><a th:href="${a.url(baseDomain)}" th:text="${a.name}">web</a></td>
       <td><code th:text="${a.image}">img</code></td>
       <td th:text="${a.deployId}">—</td>
+      <td>
+        <form method="post" th:action="@{/z/apps/delete}" class="inline">
+          <input type="hidden" name="name" th:value="${a.name}">
+          <button>remove</button>
+        </form>
+      </td>
     </tr>
-    <tr th:if="${apps.isEmpty()}"><td colspan="3" class="muted">none yet — hit Release on a repo below</td></tr>
+    <tr th:if="${apps.isEmpty()}"><td colspan="4" class="muted">none yet — hit Release on a repo below</td></tr>
   </table>
   <p class="muted">Deploys come only from a release. A plain push to <code>main</code> does not deploy.</p>
 

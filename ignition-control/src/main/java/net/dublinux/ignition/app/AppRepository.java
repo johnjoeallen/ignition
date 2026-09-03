@@ -31,8 +31,13 @@ public class AppRepository {
         return all;
     }
 
+    /** {@code state/zones/<slug>/apps} */
+    public Path dir(String slug) {
+        return props.zonesDir().resolve(slug).resolve("apps");
+    }
+
     public List<DeployedApp> findByZone(String slug) {
-        Path dir = props.zonesDir().resolve(slug).resolve("apps");
+        Path dir = dir(slug);
         if (!Files.isDirectory(dir)) {
             return List.of();
         }

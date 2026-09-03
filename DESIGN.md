@@ -209,9 +209,12 @@ conditionals — the reason it isn't a template today).
    `classifyBump` / `cut`, unit-tested), Users create/delete, Repositories
    create + per-repo **Release** (auto / patch / minor / major), runner restart
    and stack status via a `DockerCli` (`docker -H <endpoint> compose …`).
-4. **in progress** — the CI bridge: `POST /deploy` / `/undeploy` still return
-   `501`. `DockerCli` exists; the app-compose render + `up -d --pull always`
-   and the registry check port next.
+4. **done** — the CI bridge. `ComposeTemplate` (explicit `${VAR}` render,
+   unit-tested), `AppService.deploy` / `undeploy` (name + registry checks,
+   render `app-compose.tmpl` to `state/zones/<slug>/apps/<name>-compose.yml`,
+   `docker compose -p app-<slug>-<name> up -d --pull always` on the zone's
+   node, write the app record, bump `last-activity`). `DeployController` maps
+   bad input to 400 and a failed compose to 502; contract unchanged.
 5. Port provisioning (the two-phase flow); verify a zone-create end to end.
 6. Port scheduler + move + destroy + sweep.
 7. Add the platform-console write operations (register node, zone

@@ -93,6 +93,16 @@ public class ZoneConsoleController {
         return "redirect:/z?m=" + enc(ok ? "runner restarted" : "runner restart failed");
     }
 
+    @PostMapping("/z/apps/delete")
+    public String deleteApp(@RequestParam String name) {
+        try {
+            apps.undeploy(slug(), name);
+            return "redirect:/z?m=" + enc("app " + name + " removed");
+        } catch (IllegalArgumentException e) {
+            return "redirect:/z?m=" + enc(e.getMessage());
+        }
+    }
+
     private String back(ForgejoClient.Response res, String okMsg) {
         return "redirect:/z?m=" + enc(res.ok() ? okMsg
                 : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
