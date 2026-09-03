@@ -115,3 +115,6 @@ capacity per node.
   private packages need `docker login git.<slug>.<BASE_DOMAIN>` on the node
   (Watchtower reads `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json`).
 - **No repo seeding, no roster loop** — both are top items in `CLAUDE.md`.
+- **No services catalogue** — one-click backing services (Postgres, mocks) and
+  keyed proxies to real internal/external APIs are a planned addition
+  (`CLAUDE.md`, task 5).

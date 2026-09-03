@@ -190,6 +190,8 @@ as bytes, hex, `8-4-4-4-12` — so we don't parse the register command's stdout.
 - **No repo seeding.** The starter repo, `deploy.yml`, and repo vars/secrets
   are still set up by hand per zone.
 - **No roster loop.** 80 zones is 80 `ign zone create` calls.
+- **No services catalogue.** A team that needs Postgres, a mock of an internal
+  API, or a keyed proxy to an external one stands it up by hand. See task 5.
 
 ## Likely next tasks
 
@@ -203,3 +205,22 @@ as bytes, hex, `8-4-4-4-12` — so we don't parse the register command's stdout.
    cookie-authed UI.
 4. Zone-level quota requests (zone admin asks, platform admin approves) and
    `ign zone move` that carries the Forgejo data volume.
+5. **A per-zone services catalogue** (`ign svc` / a "Services" section in the
+   console). A curated set of containerised services a zone deploys into itself
+   with one click, so a team doesn't hand-roll its backing infrastructure.
+   Two kinds:
+   - **Backing services** — Postgres, Redis, MinIO, Mailhog, a canned mock of
+     an internal API. Rendered from `catalogue/<name>.compose.tmpl` (same
+     `envsubst` discipline as `app-compose.tmpl`) onto a per-zone `svc-<slug>`
+     network that the zone's own apps also join, with **no Traefik router** —
+     reachable only by that zone's apps, by DNS name.
+   - **Credentialed proxies** — a small proxy container in front of a real
+     internal or external service (the corp LLM gateway, a payments sandbox, an
+     internal data API) that injects an org-held key `ign-control` stores (same
+     model as `deploy-token` / `zone-admin.txt`). The team gets an endpoint on
+     `svc-<slug>`; the real key never reaches their repo or laptop, and the
+     platform can meter / rotate / revoke it per zone.
+   Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
+   entries live in `catalogue/` (or a pinned catalogue repo): compose template
+   plus a manifest — ports, env, which secrets it needs from `ign-control`, and
+   whether it's backing-only or routed.

@@ -102,6 +102,12 @@ judging. The best ideas leave the event as a running URL and a git repo —
 already deployed, already shareable — instead of a deck that needs a project to
 become real.
 
+A planned **services catalogue** extends this: a team deploys Postgres, a mock
+of an internal system, or a *keyed proxy* to a real corporate or external API
+into its zone with one click. The proxy holds an org-issued credential the
+platform can meter and revoke per zone, so participants build against real
+services without a real key ever landing on a laptop or in a repo.
+
 **4. Deterministic teardown.**
 Every resource is namespaced per zone; teardown is a single, complete
 operation, and an idle sweeper reclaims zones that go quiet. The event leaves

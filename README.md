@@ -137,3 +137,6 @@ rebuild goes live without another workflow run.
   packages need `docker login git.<slug>.ignition.example` on the node (Watchtower
   reads `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json`).
 - **No repo seeding, no roster loop** — both are top next tasks (`CLAUDE.md`).
+- **No services catalogue yet** — a curated set of one-click backing services
+  (Postgres, mocks) and keyed proxies to real internal/external APIs would save
+  every team from hand-rolling its dependencies (`CLAUDE.md`, task 5).
