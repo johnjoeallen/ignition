@@ -1,7 +1,14 @@
 # Ignition
 
 Per-team hackathon infrastructure. Many teams (target ~80), a pool of hosts
-("nodes"). Each team gets a fully isolated stack (a "zone").
+("nodes"). Each team gets a fully isolated stack (a "zone") that stands up in
+seconds and tears down without residue.
+
+A zone per team isn't just a security measure. Even with root everywhere and no
+restrictions, isolated disposable stacks are the model that ships the most
+working software per event — failure containment, zero coordination tax, an
+identical clean start, a real deploy surface, and teardown that's actually
+finished. See [Why a zone per team](https://johnjoeallen.github.io/ignition/#why-a-zone-per-team).
 
 `BASE_DOMAIN` is the apex where ignition is hosted (e.g. `ignition.example`). Each zone
 owns the whole `<slug>.ignition.example` subtree; the platform admin sits on the apex:

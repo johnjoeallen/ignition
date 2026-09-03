@@ -2,7 +2,17 @@
 
 **Per-team infrastructure for hackathons and innovation sprints.** Many teams
 (target ~80) across a small pool of hosts. Each team gets a fully isolated
-stack — a **zone** — that stands up in seconds and tears down without residue.
+stack — a **zone**: its own git host, CI, container registry, private build
+engine, and a routed HTTPS origin for whatever it deploys. A zone stands up in
+seconds from one command and tears down in one more, leaving nothing behind.
+
+The point isn't just to satisfy a security review (though it does that too — see
+[Why a zone per team](#why-a-zone-per-team)). Even on infrastructure with no
+restrictions at all, giving each team its own disposable stack is simply the
+model that produces the most working software per event: it removes the
+coordination tax of shared environments, contains the failures that hackathon
+code inevitably causes, and makes every team's output a real running URL instead
+of a laptop demo.
 
 <div class="ign-actions">
   <a class="ign-button" href="executive-overview.md">Executive Overview</a>
@@ -96,7 +106,47 @@ flowchart TB
    later re-push of that tag rolls out on its own (~60s), no workflow rerun.
    App names are unique within a zone, not global.
 
-## Why it's built this way
+## Why a zone per team
+
+Assume the friendliest possible environment: root on every box, no security
+team to convince, unlimited budget. A zone per team is *still* the right call.
+
+- **Failure isolation.** Hackathon code is code no one has run before —
+  half-written migrations, an accidental fork bomb in a Dockerfile, a process
+  that eats all the RAM, a CI job that never exits. In a zone that's one team's
+  problem for two minutes. On a shared host it's everyone's problem, and the
+  recovery is "who has root and what did they just change." Isolation turns a
+  shared incident into a private one.
+- **No coordination tax.** Teams on shared infrastructure spend real time
+  negotiating: ports, base-image versions, "can I restart the box", "why is CI
+  slow", "who's on the GPU". Each of those is a synchronous interruption to
+  someone else's flow. A zone has one tenant — there is nothing to negotiate.
+- **An identical, clean start.** Every zone is rendered from the same
+  templates, so every team begins from the same known-good baseline: no "works
+  because I installed something last week", no cruft inherited from the last
+  event. A team that wedges its setup gets a fresh zone in seconds instead of
+  spelunking shared state.
+- **Fidelity.** A real routed HTTPS origin, a real registry, real CI — the
+  shape of production, not a localhost approximation. Ideas that survive that
+  are ideas that could actually ship, and the demo *is* the artifact you hand
+  to a product team.
+- **Fair, predictable capacity.** Per-zone CPU/memory quotas mean one team's
+  build storm can't starve everyone else's pipeline. The platform team sizes
+  for concurrency, not for the worst-behaved tenant.
+- **Teardown that's actually finished.** Everything a zone touches is namespaced
+  to it, so one command removes all of it, verifiably. No leaked volumes, no
+  "is this still needed?" six months later, no slow spend creep — and that's a
+  reliability and trust problem before it's ever a cost one.
+- **It matches the shape of the work.** A sprint is bursty and short-lived.
+  Standing up permanent per-team infrastructure is overkill; a shared permanent
+  box accumulates every problem above. Spin up Monday, gone Friday, keep the
+  scripts.
+
+And where the environment *does* impose limits — no root Docker on shared hosts
+for unvetted participants, audit or network-policy requirements — the same
+design is what makes a "yes" possible at all. That's a bonus, not the reason.
+
+## How it's built
 
 A few choices look odd until you hit the constraint behind them — each zone
 gets its own subdomain subtree rather than a URL path, apps are deployed from
@@ -104,8 +154,7 @@ the control host rather than from inside the sandbox, there are no per-zone
 host ports, and one central control plane holds every credential rather than an
 agent per node. See **[Architecture](architecture.md)** for
 each, **[Roles](roles.md)** for the platform-admin / zone-admin split, and
-**[Executive Overview](executive-overview.md)** for why infrastructure like
-this decides whether an innovation event produces working software or slides.
+**[Executive Overview](executive-overview.md)** for the business case.
 
 ## Status
 
