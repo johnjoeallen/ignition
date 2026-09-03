@@ -1,0 +1,33 @@
+# One deployed app. A zone can deploy many; each gets a global name and lives
+# at https://${APP_NAME}.apps.${BASE_DOMAIN}/. Rendered and applied by the
+# control plane (control/hz-control.py) on the owning zone's node — NOT inside
+# the zone's DinD sandbox (see CLAUDE.md) — so that node's Traefik can route to
+# it. The node holds a *.apps.${BASE_DOMAIN} wildcard, so no per-name cert.
+#
+# Substituted vars: APP_NAME ZONE_SLUG BASE_DOMAIN APP_IMAGE APP_PORT DEPLOY_ID CPU_APP MEM_APP
+
+name: app-${APP_NAME}
+
+networks:
+  traefik-public:
+    external: true
+
+services:
+  app:
+    image: ${APP_IMAGE}
+    container_name: app-${APP_NAME}
+    restart: unless-stopped
+    networks: [traefik-public]
+    labels:
+      hackzone.app: ${APP_NAME}
+      hackzone.zone: ${ZONE_SLUG}
+      hackzone.deploy-id: "${DEPLOY_ID}"
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.app-${APP_NAME}.rule: Host(`${APP_NAME}.apps.${BASE_DOMAIN}`)
+      traefik.http.routers.app-${APP_NAME}.entrypoints: websecure
+      traefik.http.routers.app-${APP_NAME}.tls: "true"
+      traefik.http.services.app-${APP_NAME}.loadbalancer.server.port: "${APP_PORT}"
+    deploy:
+      resources:
+        limits: { cpus: "${CPU_APP}", memory: "${MEM_APP}" }

@@ -52,7 +52,7 @@ else
     node_exists "$NODE" || die "no such node: $NODE (see: hz node list)"
 fi
 DH="$(node_get "$NODE" DOCKER_HOST)"
-GIT_HOST="git.$SLUG.$BASE_DOMAIN"
+GIT_HOST="$(git_host "$SLUG")"
 
 # zone.env early so `zc` knows the node for the rest of the script.
 cat > "$S/zone.env" <<EOF
@@ -65,14 +65,14 @@ APP_PORT=$APP_PORT
 GIT_HOST=$GIT_HOST
 REGISTRY=$GIT_HOST
 FORGEJO_URL=https://$GIT_HOST/
-APP_URL=https://$SLUG.$BASE_DOMAIN/
+APPS_BASE=apps.$BASE_DOMAIN
 EOF
 
 export ZONE_SLUG="$SLUG"
 export BASE_DOMAIN CPU_FORGEJO MEM_FORGEJO CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
 render "$TEMPLATES/zone-compose.yml.tmpl" "$ZONE_TMPL_VARS" "$S/docker-compose.yml"
 
-echo "==> zone=$SLUG  node=$NODE ('${DH:-local}')  forgejo=https://$GIT_HOST/  app=https://$SLUG.$BASE_DOMAIN/"
+echo "==> zone=$SLUG  node=$NODE ('${DH:-local}')  forgejo=https://$GIT_HOST/  apps=*.apps.$BASE_DOMAIN"
 
 # --- phase 1: forgejo + dind ---------------------------------------------
 zc "$SLUG" up -d forgejo dind
@@ -136,11 +136,12 @@ date +%s > "$S/last-activity"
 cat <<EOF
 
   provisioned zone: $SLUG   (node $NODE)
-    Forgejo         https://$GIT_HOST/
-    Live app        https://$SLUG.$BASE_DOMAIN/   (once CI deploys)
-    Zone-admin login    state/zones/$SLUG/zone-admin.txt   (Forgejo admin: users, repos, ...)
-    Zone control token  state/zones/$SLUG/zone-token       (control-plane surface)
-    CI deploy token     state/zones/$SLUG/deploy-token     (DEPLOY_TOKEN secret)
+    Forgejo             https://$GIT_HOST/
+    Apps               https://<name>.apps.$BASE_DOMAIN/   (per app the zone deploys)
+    Zone-admin login    state/zones/$SLUG/zone-admin.txt    (Forgejo admin: users, repos, ...)
+    Zone control token  state/zones/$SLUG/zone-token        (admin.$BASE_DOMAIN zone view)
+    CI deploy token     state/zones/$SLUG/deploy-token      (DEPLOY_TOKEN secret)
 
-  DNS: git.$SLUG.$BASE_DOMAIN must resolve to node $NODE's host.
+  DNS: $GIT_HOST must resolve to node $NODE's host (covered by *.git.$BASE_DOMAIN
+  where zones share a node; per-record where they don't).
 EOF

@@ -5,11 +5,22 @@ TEMPLATES="$REPO_ROOT/templates"
 STATE_DIR="$REPO_ROOT/state"
 NODES_DIR="$STATE_DIR/nodes"
 ZONES_DIR="$STATE_DIR/zones"
+APPS_DIR="$STATE_DIR/apps"
 
-# The full set of vars the zone templates reference. envsubst is told exactly
-# these so a literal `$foo` in a compose file is left untouched.
+# The full set of vars the templates reference. envsubst is told exactly these
+# so a literal `$foo` in a compose file is left untouched.
 ZONE_TMPL_VARS='${ZONE_SLUG} ${BASE_DOMAIN} ${CPU_FORGEJO} ${MEM_FORGEJO} ${CPU_DIND} ${MEM_DIND} ${CPU_RUNNER} ${MEM_RUNNER}'
-APP_TMPL_VARS='${ZONE_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} ${DEPLOY_ID} ${CPU_APP} ${MEM_APP}'
+APP_TMPL_VARS='${APP_NAME} ${ZONE_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} ${DEPLOY_ID} ${CPU_APP} ${MEM_APP}'
+
+# --- domain scheme -------------------------------------------------------
+# BASE_DOMAIN is the apex where hackzone is hosted (e.g. x.com). Segregated
+# subdomains sit under it:
+#   admin.<BASE_DOMAIN>          the control plane (one, hz-control)
+#   <zone>.git.<BASE_DOMAIN>     a zone's Forgejo (git + PRs + Actions + registry)
+#   <app>.apps.<BASE_DOMAIN>     a deployed app (globally unique name, zone-owned)
+admin_host() { echo "admin.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
+git_host()   { echo "$1.git.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
+app_host()   { echo "$1.apps.${BASE_DOMAIN:?set BASE_DOMAIN}"; }
 
 die() { echo "error: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
@@ -75,6 +86,15 @@ zc() {
     DOCKER_HOST="${dh:-}" docker compose \
         -p "zone-$slug" -f "$(zone_dir "$slug")/docker-compose.yml" "$@"
 }
+
+# --- apps ---------------------------------------------------------------
+# An app is state/apps/<name>.env with: APP_NAME, ZONE, NODE, IMAGE, PORT,
+# DEPLOY_ID. The name is global; the owning ZONE is fixed on first deploy.
+app_file()   { echo "$APPS_DIR/$1.env"; }
+app_exists() { [ -f "$(app_file "$1")" ]; }
+app_get()    { grep -E "^$2=" "$(app_file "$1")" 2>/dev/null | head -1 | cut -d= -f2-; }
+list_apps()  { [ -d "$APPS_DIR" ] || return 0; for f in "$APPS_DIR"/*.env; do [ -e "$f" ] || continue; basename "$f" .env; done; }
+zone_apps()  { local s; for a in $(list_apps); do [ "$(app_get "$a" ZONE)" = "$1" ] && echo "$a"; done; }
 
 # Forgejo derives a runner's UUID from the first 16 chars of the 40-hex shared
 # secret: those chars, as raw bytes, hex-encoded, formatted 8-4-4-4-12.

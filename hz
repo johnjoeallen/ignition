@@ -3,8 +3,9 @@
 #
 #   hz node   add|list|show|drain|undrain|rm
 #   hz zone   create|list|show|status|move|destroy
+#   hz app    list|show|rm       # deployed apps (<name>.apps.<BASE_DOMAIN>)
 #   hz sweep  [--dry-run]        # reclaim idle zones now
-#   hz control                   # run the control-plane service (zone-admin surface + CI deploy bridge)
+#   hz control                   # run the control-plane service (admin.<BASE_DOMAIN>)
 #
 # Everything reads/writes state/ under this repo. Run it from a host that can
 # reach every node's Docker daemon (local socket, ssh://, or tcp://+TLS).
@@ -15,8 +16,9 @@ cmd="${1:-}"; [ $# -gt 0 ] && shift || true
 case "$cmd" in
     node)    exec "$HERE/scripts/node.sh" "$@" ;;
     zone)    exec "$HERE/scripts/zone.sh" "$@" ;;
+    app)     exec "$HERE/scripts/app.sh" "$@" ;;
     sweep)   [ "${1:-}" = "--dry-run" ] && export DRY_RUN=1; exec "$HERE/scripts/sweep-idle.sh" ;;
     control) exec "$HERE/control/hz-control.py" "$@" ;;
-    ""|-h|--help) sed -n '2,10p' "$0" | sed 's/^# \?//' ;;
+    ""|-h|--help) sed -n '2,11p' "$0" | sed 's/^# \?//' ;;
     *) echo "unknown command: hz $cmd" >&2; exit 2 ;;
 esac

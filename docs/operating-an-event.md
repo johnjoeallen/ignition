@@ -7,24 +7,27 @@
   daemon (local socket, `ssh://`, or `tcp://`+TLS).
 - **Nodes** — hosts with Docker, each with the shared network created:
   `docker network create traefik-public`.
-- DNS: `*.<event-domain>` → the node(s) (covers every zone's live app). Each
-  zone's Forgejo is at `git.<slug>.<event-domain>` — two labels deep, so
-  `*.<event-domain>` misses it; add a `*.<slug>.<event-domain>` record per zone.
+- **DNS** (`BASE_DOMAIN` is the apex, e.g. `x.com`):
+  `admin.<BASE_DOMAIN>` → the control host, and `<zone>.git.<BASE_DOMAIN>` /
+  `<app>.apps.<BASE_DOMAIN>` → whichever node runs them. On a single node,
+  `*.git.<BASE_DOMAIN>` and `*.apps.<BASE_DOMAIN>` A-records cover it; across
+  nodes, a record per zone/app.
 - A DNS-provider API token for Traefik's ACME DNS challenge (Cloudflare by
-  default; swap the provider in `templates/traefik-core-compose.yml`).
+  default; swap the provider in `templates/traefik-core-compose.yml`). Each
+  node's Traefik fetches `admin.<BASE_DOMAIN>`, `*.git.<BASE_DOMAIN>`, and
+  `*.apps.<BASE_DOMAIN>` certs.
 
-Traefik terminates TLS for the apps and the Forgejo instances, so no
-`insecure-registries` entry is needed anywhere.
+Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
 ## Standing up the event
 
 ```sh
 # 1. Traefik — once per node.
-export BASE_DOMAIN=hz.example.com ACME_EMAIL=ops@example.com CF_DNS_API_TOKEN=...
+export BASE_DOMAIN=x.com ACME_EMAIL=ops@x.com CF_DNS_API_TOKEN=...
 docker compose -f templates/traefik-core-compose.yml up -d
 
-# 2. The control plane — once, on the control host. Front it with Traefik / a
-#    tunnel; do not expose it raw.
+# 2. The control plane — once, on the control host. Front it with Traefik at
+#    admin.x.com / a tunnel; do not expose it raw.
 export HZ_ADMIN_TOKEN=$(openssl rand -hex 32)      # keep this — it's the platform key
 ./hz control &
 
@@ -34,28 +37,31 @@ export HZ_ADMIN_TOKEN=$(openssl rand -hex 32)      # keep this — it's the plat
 ./hz node list
 
 # 4. Create zones (scheduler picks a node; --node to pin, --label to constrain).
-BASE_DOMAIN=hz.example.com ./hz zone create alpha
-BASE_DOMAIN=hz.example.com ./hz zone create bravo --node node-2
-#   → Forgejo   https://git.alpha.hz.example.com/
-#   → live app  https://alpha.hz.example.com/
+BASE_DOMAIN=x.com ./hz zone create alpha
+BASE_DOMAIN=x.com ./hz zone create bravo --node node-2
+#   → Forgejo  https://alpha.git.x.com/
+#   → apps     https://<name>.apps.x.com/   (per app CI deploys)
 #   → state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 ```
 
 Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
-**`zone-token`** (control-plane zone view). They seed the starter repo with
-`.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and set its repo
-variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_PORT`, `FORGEJO_TOKEN`,
-`DEPLOY_TOKEN`. A push to `main` then builds, pushes, and deploys.
+**`zone-token`** (sign in at `admin.x.com`). They seed each repo they want
+deployed with `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and
+its repo variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
+`FORGEJO_TOKEN`, `DEPLOY_TOKEN`. A push to `main` builds, pushes, and deploys
+`APP_NAME.apps.x.com`; more repos → more apps.
 
 ## During the event
 
 ```sh
-./hz zone list
-./hz zone status alpha              # live container health on alpha's node
-./hz zone move alpha --node node-1  # rebuild on another node (data does not follow)
-./hz zone destroy alpha             # complete: containers, volumes, state
-./hz node drain node-2              # stop placing new zones here
-./hz sweep                          # reclaim idle zones now (or cron sweep-idle.sh)
+./hz zone list                     # zones, node, footprint, app count
+./hz zone status alpha             # forgejo + apps health on alpha's node
+./hz app list                      # every deployed app across all zones
+./hz app rm shop                   # stop and remove one app
+./hz zone move alpha --node node-1 # rebuild the zone elsewhere (data + apps don't follow)
+./hz zone destroy alpha            # zone + every app it deployed
+./hz node drain node-2             # stop placing new zones here
+./hz sweep                         # reclaim idle zones now (or cron sweep-idle.sh)
 ```
 
 `sweep-idle.sh` reads `state/zones/<slug>/last-activity`, bumped by
@@ -71,7 +77,7 @@ Per-zone quotas have defaults at the top of `provision-zone.sh`:
 | `CPU_FORGEJO` / `MEM_FORGEJO` | `1.0` / `1g` | idle Forgejo is light; bursts during Actions |
 | `CPU_DIND` / `MEM_DIND` | `2.0` / `4g` | image builds are the heavy part |
 | `CPU_RUNNER` / `MEM_RUNNER` | `1.0` / `2g` | |
-| `CPU_APP` / `MEM_APP` | `1.0` / `1g` | the live demo container |
+| `CPU_APP` / `MEM_APP` | `1.0` / `1g` | one app container (counted once in the footprint; a zone may run more) |
 
 The scheduler sums these limits as a zone's "footprint" for node accounting.
 They are **limits**, not reservations — zones are bursty and rarely build at
@@ -82,9 +88,9 @@ capacity per node.
 
 ## Rough edges
 
-- **`git.<slug>.<event-domain>` DNS isn't created for you** — provisioning
-  assumes it resolves. Wiring it to the DNS-provider API is the top task.
-- **`traefik-public` is one flat network** — live-app containers and Forgejo
+- **DNS records for `<slug>.git` / `<app>.apps` aren't created for you** —
+  wildcard both namespaces for one node; automate per-record across nodes.
+- **`traefik-public` is one flat network** — app containers and Forgejo
   instances on a node can reach each other by IP.
 - **`hz-control` runs bare** with Docker access and every token on disk — it
   needs a systemd unit / locked-down container and its own TLS front.

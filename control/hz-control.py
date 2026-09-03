@@ -24,6 +24,7 @@ import hmac
 import html
 import json
 import os
+import re
 import ssl
 import subprocess
 import time
@@ -38,7 +39,10 @@ REPO = Path(__file__).resolve().parent.parent
 STATE = REPO / "state"
 NODES = STATE / "nodes"
 ZONES = STATE / "zones"
-APP_TMPL = REPO / "templates" / "app-compose.zone.yml.tmpl"
+APPS = STATE / "apps"
+APP_TMPL = REPO / "templates" / "app-compose.tmpl"
+
+_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
 
 ADDR = os.environ.get("HZ_CONTROL_ADDR", "127.0.0.1")
 PORT = int(os.environ.get("HZ_CONTROL_PORT", "8790"))
@@ -76,6 +80,18 @@ def zone_env(slug: str) -> dict[str, str]:
 
 def node_env(name: str) -> dict[str, str]:
     return _envfile(NODES / f"{name}.env")
+
+
+def apps() -> list[str]:
+    return sorted(f.stem for f in APPS.glob("*.env")) if APPS.is_dir() else []
+
+
+def app_env(name: str) -> dict[str, str]:
+    return _envfile(APPS / f"{name}.env")
+
+
+def zone_apps(slug: str) -> list[str]:
+    return [a for a in apps() if app_env(a).get("ZONE") == slug]
 
 
 def _read(slug: str, name: str) -> str:
@@ -161,44 +177,82 @@ def zc(slug: str, *args: str) -> subprocess.CompletedProcess:
     )
 
 
+def _app_dc(slug: str, name: str, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["docker", "compose", "-p", f"app-{name}",
+         "-f", str(APPS / f"{name}-compose.yml"), *args] if (APPS / f"{name}-compose.yml").is_file()
+        else ["docker", "compose", "-p", f"app-{name}", *args],
+        env=_dc_env(slug), capture_output=True, text=True, check=False,
+    )
+
+
+def app_status(name: str) -> dict:
+    a = app_env(name)
+    slug = a.get("ZONE", "")
+    state = _app_dc(slug, name, "ps", "--format", "{{.State}}").stdout.strip() or "not running"
+    base = zone_env(slug).get("BASE_DOMAIN", "")
+    return {"name": name, "zone": slug, "node": a.get("NODE"), "image": a.get("IMAGE"),
+            "url": f"https://{name}.apps.{base}/", "state": state,
+            "deploy_id": a.get("DEPLOY_ID")}
+
+
 def zone_status(slug: str) -> dict:
     r = zc(slug, "ps", "--format", "{{.Service}}={{.State}}")
     stack = dict(x.split("=", 1) for x in r.stdout.split() if "=" in x)
-    app = subprocess.run(
-        ["docker", "compose", "-p", f"zone-{slug}-app", "ps", "--format", "{{.State}}"],
-        env=_dc_env(slug), capture_output=True, text=True, check=False,
-    ).stdout.strip()
     z = zone_env(slug)
     return {
         "slug": slug, "node": z.get("NODE"), "forgejo_url": z.get("FORGEJO_URL"),
-        "app_url": z.get("APP_URL"), "stack": stack,
-        "app": app or "not deployed",
+        "apps_base": f"apps.{z.get('BASE_DOMAIN','')}", "stack": stack,
+        "apps": [app_status(a) for a in zone_apps(slug)],
         "last_activity": _read(slug, "last-activity"),
     }
 
 
-def deploy(slug: str, image: str, port: int) -> dict:
+def deploy(slug: str, name: str, image: str, port: int) -> dict:
     z = zone_env(slug)
-    registry = z.get("REGISTRY", f"git.{slug}.{z.get('BASE_DOMAIN','')}")
+    if not _NAME_RE.match(name):
+        raise ValueError("app name must be [a-z0-9-], 1–40 chars, no leading/trailing dash")
+    registry = z.get("REGISTRY", f"{slug}.git.{z.get('BASE_DOMAIN','')}")
     if not image.startswith(registry + "/"):
         raise ValueError(f"image must be from {registry}/")
+
+    APPS.mkdir(parents=True, exist_ok=True)
+    owner = app_env(name).get("ZONE")
+    if owner and owner != slug:
+        raise ValueError(f"app name '{name}' is already owned by zone '{owner}'")
+
     deploy_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     env = {
-        **_dc_env(slug), "ZONE_SLUG": slug, "BASE_DOMAIN": z["BASE_DOMAIN"],
+        **_dc_env(slug), "APP_NAME": name, "ZONE_SLUG": slug, "BASE_DOMAIN": z["BASE_DOMAIN"],
         "APP_IMAGE": image, "APP_PORT": str(port), "DEPLOY_ID": deploy_id,
         "CPU_APP": os.environ.get("CPU_APP", "1.0"), "MEM_APP": os.environ.get("MEM_APP", "1g"),
     }
-    rendered = ZONES / slug / "app-compose.yml"
-    vlist = "${ZONE_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} ${DEPLOY_ID} ${CPU_APP} ${MEM_APP}"
+    rendered = APPS / f"{name}-compose.yml"
+    vlist = ("${APP_NAME} ${ZONE_SLUG} ${BASE_DOMAIN} ${APP_IMAGE} ${APP_PORT} "
+             "${DEPLOY_ID} ${CPU_APP} ${MEM_APP}")
     with rendered.open("w") as fh:
         subprocess.run(["envsubst", vlist], stdin=APP_TMPL.open(), stdout=fh, env=env, check=True)
     subprocess.run(
-        ["docker", "compose", "-p", f"zone-{slug}-app", "-f", str(rendered),
+        ["docker", "compose", "-p", f"app-{name}", "-f", str(rendered),
          "up", "-d", "--pull", "always", "--remove-orphans"],
         env=env, check=True, capture_output=True, text=True,
     )
+    (APPS / f"{name}.env").write_text(
+        f"APP_NAME={name}\nZONE={slug}\nNODE={z.get('NODE','')}\n"
+        f"IMAGE={image}\nPORT={port}\nDEPLOY_ID={deploy_id}\n"
+    )
     (ZONES / slug / "last-activity").write_text(str(int(time.time())))
-    return {"ok": True, "zone": slug, "deploy_id": deploy_id, "url": z.get("APP_URL")}
+    return {"ok": True, "zone": slug, "app": name, "deploy_id": deploy_id,
+            "url": f"https://{name}.apps.{z['BASE_DOMAIN']}/"}
+
+
+def undeploy(slug: str, name: str) -> dict:
+    if app_env(name).get("ZONE") != slug:
+        raise ValueError(f"zone {slug} does not own app '{name}'")
+    _app_dc(slug, name, "down", "-v", "--remove-orphans")
+    (APPS / f"{name}.env").unlink(missing_ok=True)
+    (APPS / f"{name}-compose.yml").unlink(missing_ok=True)
+    return {"ok": True, "removed": name}
 
 
 # ----------------------------------------------------------------------- html
@@ -248,15 +302,23 @@ def platform_page(msg: str) -> bytes:
         z = zone_env(s)
         zrows += (f"<tr><td>{s}</td><td>{z.get('NODE')}</td>"
                   f"<td>{z.get('ZONE_CPUS')}cpu/{z.get('ZONE_MEM_GB')}g</td>"
-                  f"<td><a href='{html.escape(z.get('FORGEJO_URL',''))}'>forge</a> · "
-                  f"<a href='{html.escape(z.get('APP_URL',''))}'>app</a></td></tr>")
+                  f"<td>{len(zone_apps(s))}</td>"
+                  f"<td><a href='{html.escape(z.get('FORGEJO_URL',''))}'>forge</a></td></tr>")
+    arows = "".join(
+        f"<tr><td><a href='{html.escape(a['url'])}'>{html.escape(a['name'])}</a></td>"
+        f"<td>{html.escape(a['zone'] or '')}</td><td>{html.escape(a['node'] or '')}</td>"
+        f"<td>{html.escape(a['state'])}</td></tr>"
+        for a in (app_status(n) for n in apps())
+    ) or "<tr><td colspan=4>none deployed</td></tr>"
     return page("platform", (f"<div class='msg'>{html.escape(msg)}</div>" if msg else "") + f"""
       <h2>Nodes</h2>
       <table><tr><th>node<th>state<th>docker host<th>allocated<th>zones</tr>{rows}</table>
       <p><code>hz node add &lt;name&gt; &lt;docker-host&gt;</code> to register a node,
          <code>hz zone create &lt;slug&gt;</code> to place a zone.</p>
       <h2>Zones</h2>
-      <table><tr><th>zone<th>node<th>footprint<th>links</tr>{zrows}</table>
+      <table><tr><th>zone<th>node<th>footprint<th>apps<th>forge</tr>{zrows}</table>
+      <h2>Apps</h2>
+      <table><tr><th>app (*.apps.&lt;base&gt;)<th>zone<th>node<th>state</tr>{arows}</table>
       <form method=post action=/ui/logout><button>Sign out</button></form>""")
 
 
@@ -281,13 +343,23 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
         banner += f"<div class='msg'>{html.escape(msg)}</div>"
     if err:
         banner += f"<div class='msg err'>{html.escape(err)}</div>"
+    applist = "".join(
+        f"<tr><td><a href='{html.escape(a['url'])}'>{html.escape(a['name'])}</a></td>"
+        f"<td>{html.escape(a['state'])}</td><td><code>{html.escape(a['image'] or '')}</code></td>"
+        f"<td><form method=post action=/ui/app/delete style=display:inline>"
+        f"<input type=hidden name=name value='{html.escape(a['name'])}'>"
+        f"<button>remove</button></form></td></tr>"
+        for a in st["apps"]
+    ) or "<tr><td colspan=4>none yet — a push to <code>main</code> deploys one</td></tr>"
     return page(f"zone {slug}", banner + f"""
       <div class=card>
         <b>Forgejo</b> <a href='{html.escape(st['forgejo_url'])}'>{html.escape(st['forgejo_url'])}</a><br>
-        <b>Live app</b> <a href='{html.escape(st['app_url'])}'>{html.escape(st['app_url'])}</a> — {html.escape(st['app'])}<br>
         <b>Node</b> {html.escape(st['node'] or '?')} &nbsp; <b>Stack</b> <code>{html.escape(stack)}</code>
         <form method=post action=/ui/runner/restart><button>Restart runner</button></form>
       </div>
+
+      <h2>Apps <span style=font-weight:normal>· <code>&lt;name&gt;.{html.escape(st['apps_base'])}</code></span></h2>
+      <table><tr><th>app<th>state<th>image<th></tr>{applist}</table>
 
       <h2>Users</h2>
       <form method=post action=/ui/user/create>
@@ -373,6 +445,8 @@ class H(BaseHTTPRequestHandler):
             return self._json(200, {n: {**node_env(n), "alloc": node_alloc(n)} for n in nodes()})
         if path == "/api/zones" and role == "platform":
             return self._json(200, {s: zone_status(s) for s in zones()})
+        if path == "/api/apps" and role == "platform":
+            return self._json(200, {a: app_status(a) for a in apps()})
         if path == "/api/zone" and role == "zone":
             return self._json(200, zone_status(slug))
         if path == "/api/zone/users" and role == "zone":
@@ -385,12 +459,16 @@ class H(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         role, slug = self._role()
 
-        if path == "/deploy":
+        if path in ("/deploy", "/undeploy"):
             if role != "deploy":
                 return self._json(401, {"error": "bad or missing deploy token"})
             try:
                 req = json.loads(self.rfile.read(int(self.headers.get("content-length") or 0)) or b"{}")
-                return self._json(200, deploy(slug, str(req.get("image", "")), int(req.get("port", 8080))))
+                name = str(req.get("app", "")).strip()
+                if path == "/undeploy":
+                    return self._json(200, undeploy(slug, name))
+                return self._json(200, deploy(
+                    slug, name, str(req.get("image", "")), int(req.get("port", 8080))))
             except (ValueError, KeyError) as e:
                 return self._json(400, {"error": str(e)})
             except subprocess.CalledProcessError as e:
@@ -427,8 +505,11 @@ class H(BaseHTTPRequestHandler):
                     r = zc(slug, "restart", "runner")
                     ok = r.returncode == 0
                     return self._redirect("/?m=" + ("runner+restarted" if ok else "restart+failed"))
-            except KeyError as e:
-                return self._html(zone_page(slug, "", f"missing field {e}"), 400)
+                if path == "/ui/app/delete":
+                    undeploy(slug, f["name"])
+                    return self._redirect("/?m=app+" + f["name"] + "+removed")
+            except (KeyError, ValueError) as e:
+                return self._html(zone_page(slug, "", str(e)), 400)
 
         return self._json(403, {"error": "forbidden"})
 

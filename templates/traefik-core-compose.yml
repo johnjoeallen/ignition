@@ -1,15 +1,19 @@
 # Per-node Traefik. Runs once on every node, before any zone is placed there.
 #
-#   export BASE_DOMAIN=hz.example.com ACME_EMAIL=ops@example.com
-#   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the wildcard cert
+#   export BASE_DOMAIN=x.com ACME_EMAIL=ops@x.com
+#   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the wildcard certs
 #   docker compose -f templates/traefik-core-compose.yml up -d
 #
-# Owns :80 and :443 on the node and terminates TLS for every zone on it:
-#   <zone-slug>.${BASE_DOMAIN}        -> the zone's live app
-#   git.<zone-slug>.${BASE_DOMAIN}    -> the zone's Forgejo
-# The entrypoint holds a *.${BASE_DOMAIN} wildcard for the app hosts; each
-# zone's Forgejo router additionally asks for a *.<zone-slug>.${BASE_DOMAIN}
-# wildcard (git.<slug> is two labels deep, so *.${BASE_DOMAIN} misses it).
+# BASE_DOMAIN is the apex. Owns :80 / :443 on the node and holds three
+# certificates, so any zone or app on this node is covered with no per-name
+# cert request:
+#   admin.${BASE_DOMAIN}          the control plane
+#   *.git.${BASE_DOMAIN}          every zone's Forgejo   (<slug>.git.<base>)
+#   *.apps.${BASE_DOMAIN}         every deployed app     (<name>.apps.<base>)
+#
+# DNS still routes per zone / per app: <slug>.git.<base> and <name>.apps.<base>
+# A-records point at whichever node runs that zone/app (single-node: just make
+# *.git.<base> and *.apps.<base> A-records).
 
 name: hackzone-core
 
@@ -36,8 +40,11 @@ services:
       - --entrypoints.websecure.address=:443
       - --entrypoints.websecure.http.tls=true
       - --entrypoints.websecure.http.tls.certresolver=le
-      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN:?set BASE_DOMAIN}
-      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[0].main=admin.${BASE_DOMAIN:?set BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[1].main=git.${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[1].sans=*.git.${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[2].main=apps.${BASE_DOMAIN}
+      - --entrypoints.websecure.http.tls.domains[2].sans=*.apps.${BASE_DOMAIN}
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/acme/acme.json
       - --certificatesresolvers.le.acme.dnschallenge=true

@@ -17,11 +17,12 @@ cmd_create() {
 }
 
 cmd_list() {
-    printf '%-16s %-12s %-10s %s\n' ZONE NODE 'CPU/MEMg' FORGEJO
+    printf '%-16s %-12s %-10s %-5s %s\n' ZONE NODE 'CPU/MEMg' APPS FORGEJO
     for slug in $(list_zones); do
-        printf '%-16s %-12s %-10s %s\n' \
+        printf '%-16s %-12s %-10s %-5s %s\n' \
             "$slug" "$(zone_get "$slug" NODE)" \
             "$(zone_get "$slug" ZONE_CPUS)/$(zone_get "$slug" ZONE_MEM_GB)" \
+            "$(zone_apps "$slug" | wc -l | tr -d ' ')" \
             "$(zone_get "$slug" FORGEJO_URL)"
     done
 }
@@ -35,11 +36,14 @@ cmd_show() {
 cmd_status() {
     [ $# -eq 1 ] || die "usage: hz zone status <slug>"
     zone_exists "$1" || die "no such zone: $1"
-    echo "zone $1  on node $(zone_get "$1" NODE)"
-    zc "$1" ps --format 'table {{.Service}}\t{{.Status}}\t{{.Health}}' || true
     local dh; dh="$(zone_docker_host "$1")"
-    DOCKER_HOST="${dh:-}" docker compose -p "zone-$1-app" ps \
-        --format 'table {{.Service}}\t{{.Status}}' 2>/dev/null || true
+    echo "zone $1  on node $(zone_get "$1" NODE)   forgejo $(zone_get "$1" FORGEJO_URL)"
+    zc "$1" ps --format 'table {{.Service}}\t{{.Status}}\t{{.Health}}' || true
+    echo "apps:"
+    for a in $(zone_apps "$1"); do
+        printf '  %-24s %s\n' "https://$a.apps.$(zone_get "$1" BASE_DOMAIN)/" \
+            "$(DOCKER_HOST="${dh:-}" docker compose -p "app-$a" ps --format '{{.State}}' 2>/dev/null | paste -sd, -)"
+    done
 }
 
 cmd_move() {
@@ -51,7 +55,9 @@ cmd_move() {
     node_exists "$target" || die "no such node: $target"
     local from; from="$(zone_get "$slug" NODE)"
     [ "$from" = "$target" ] && { echo "already on $target"; exit 0; }
-    echo "==> moving zone $slug: $from -> $target  (data volumes do not follow — the zone is rebuilt empty)"
+    echo "==> moving zone $slug: $from -> $target"
+    echo "    data volumes do not follow — the zone is rebuilt empty."
+    [ -n "$(zone_apps "$slug")" ] && echo "    its apps ($(zone_apps "$slug" | paste -sd, -)) stay on $from until CI redeploys them."
     ./scripts/teardown-zone.sh "$slug" --keep-state
     rm -f "$(zone_dir "$slug")/docker-compose.yml" "$(zone_dir "$slug")/runner-secret" \
           "$(zone_dir "$slug")/zone-admin.txt"

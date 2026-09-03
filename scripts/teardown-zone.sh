@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tear down one zone's full stack — Forgejo/DinD/runner AND the live app — on
-# its assigned node, and remove its state. Everything is prefixed zone-<slug>.
+# Tear down one zone's stack — Forgejo/DinD/runner AND every app it deployed —
+# on its assigned node, and remove its state. Prefixes: zone-<slug>, app-<name>.
 #
 #   ./scripts/teardown-zone.sh <slug> [--keep-state]
 set -euo pipefail
@@ -16,7 +16,12 @@ DH="$(zone_docker_host "$SLUG")"
 
 echo "==> tearing down zone-$SLUG  (node $(zone_get "$SLUG" NODE || echo '?'))"
 
-DOCKER_HOST="${DH:-}" docker compose -p "zone-$SLUG-app" down -v --remove-orphans 2>/dev/null || true
+# every app this zone deployed
+for app in $(zone_apps "$SLUG"); do
+    echo "    app $app"
+    DOCKER_HOST="${DH:-}" docker compose -p "app-$app" down -v --remove-orphans 2>/dev/null || true
+    rm -f "$(app_file "$app")"
+done
 
 if [ -f "$S/docker-compose.yml" ]; then
     zc "$SLUG" down -v --remove-orphans
