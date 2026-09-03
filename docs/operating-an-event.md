@@ -1,5 +1,8 @@
 # Operating an Event
 
+This is the current shell workflow. The [in-progress rewrite](architecture.md)
+replaces every `ign …` command here with a button in the platform console.
+
 ## Prerequisites
 
 - A **control host** with Docker + Compose v2, `envsubst` (gettext),

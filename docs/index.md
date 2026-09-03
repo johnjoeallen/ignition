@@ -164,3 +164,9 @@ idle sweeper, and the control plane (platform view, zone-admin surface, CI
 `/deploy` + `/undeploy`) are all in place and validate. Rough edges — the
 per-zone (`git.<slug>` / `*.apps.<slug>` / `admin.<slug>`) DNS records, repo
 seeding, hardening the control plane — are tracked in `README` and `CLAUDE.md`.
+
+**In progress:** the shell CLI and the Python control plane are being replaced
+by a single Java (Spring Boot) service, deployed as a container, with **every**
+platform-admin and zone-admin operation in the web UI — no CLI. The model
+(zones, the domain scheme, roles, release-driven deploys) is unchanged; see
+`DESIGN.md` in the repo.

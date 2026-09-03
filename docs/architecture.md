@@ -5,6 +5,15 @@ service. State is a directory per node, per zone, and per app under `state/`.
 This page covers the domain scheme, the shape of a zone's stack, node
 placement, the control plane, and the decisions that aren't obvious.
 
+!!! note "Where this is heading"
+    The `ign` CLI + shell scripts + the Python `ign-control` are being folded
+    into **one Java (Spring Boot) service**, deployed as a container, with
+    every platform-admin and zone-admin action in the web UI — no CLI to run
+    by hand. Everything below (the domain scheme, zone stack, scheduler,
+    auth model, two-phase runner registration) is unchanged; only the
+    implementation and the operator surface move. Design: `DESIGN.md` in the
+    repo.
+
 ## The domain scheme
 
 `BASE_DOMAIN` is the apex (`ignition.example` in these docs — a placeholder; use any

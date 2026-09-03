@@ -27,7 +27,9 @@ flowchart TB
 ## Platform admin
 
 The person (or two) running the event. Holds `IGN_ADMIN_TOKEN`. Works through
-the **`ign` CLI** and the control plane's **platform view**.
+the **`ign` CLI** and the control plane's **platform view** today; the
+[in-progress rewrite](architecture.md) moves every command below into the
+platform console so there is no CLI.
 
 | Task | How |
 |---|---|
