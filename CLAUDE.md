@@ -125,15 +125,15 @@ port}`, per-zone bearer token); the control plane renders `app-compose.tmpl`
 and runs it on the zone's node's real daemon, on `traefik-public`.
 `POST /undeploy` (or `hz app rm`) tears one down.
 
-**New builds redeploy automatically, two ways.** The CI workflow
-(`examples/deploy.yml`) triggers on a push to `main` **and** on a git tag. Tags
-are created by the zone console's **Release** button: `cut_release()` in
-`hz-control.py` diffs the last tag against `main`, runs `classify_bump()` over
-those commit messages (Conventional Commits: `feat!:`/`BREAKING CHANGE:` →
-major, `feat:` → minor, else patch; a `bump=` override skips this), and creates
-the next `vMAJOR.MINOR.PATCH` tag on `main` (first release `v0.1.0` or
-`v1.0.0`). The zone admin never types a version. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch or tag) and
-`POST /deploy`s the `:<ref>` one, rolling the app forward immediately.
+**Deploys come only from a release — never a plain push to `main`.** The CI
+workflow (`examples/deploy.yml`) triggers on a git tag only. Tags are created
+by the zone console's **Release** button: `cut_release()` in `hz-control.py`
+diffs the last tag against `main`, runs `classify_bump()` over those commit
+messages (Conventional Commits: `feat!:`/`BREAKING CHANGE:` → major, `feat:` →
+minor, else patch; a `bump=` override skips this), and creates the next
+`vMAJOR.MINOR.PATCH` tag on `main` (first release `v0.1.0` or `v1.0.0`). The
+zone admin never types a version. Each run pushes `:<sha>` (immutable) +
+`:<tag>` and `POST /deploy`s `:<tag>`, rolling the app forward immediately.
 Independently, a **per-node Watchtower** (in `traefik-core-compose.yml`,
 `--label-enable`, 60s poll) pulls a new digest for any container labelled
 `com.centurylinklabs.watchtower.enable=true` — which `app-compose.tmpl` sets on

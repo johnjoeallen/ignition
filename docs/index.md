@@ -36,9 +36,10 @@ subdomain:
   zone's CI can never see another zone's images, containers, or network.
 - **Live, shareable apps** — each repo with the deploy workflow puts an app at
   `https://<app-name>.apps.<team>.hackzone.com/`. Builds start when the zone
-  admin hits **Release** in the zone console (or pushes to `main`), and every
-  deployed app is wired with a Watchtower agent automatically, so a re-pushed
-  image also rolls out on its own — nothing to configure in the repo.
+  admin hits **Release** in the zone console — a plain push to `main` does not
+  deploy. Every deployed app is also wired with a Watchtower agent
+  automatically, so if an image is re-pushed to a tag it rolls out on its own
+  — nothing to configure in the repo.
 - **A zone admin** — the team lead adds members, creates repos, ships releases,
   manages the zone's apps, and restarts the runner, without a platform ticket.
 
@@ -80,7 +81,8 @@ flowchart TB
 1. The zone admin hits **Release** in the zone console — hz-control reads the
    commits since the last release, picks the version bump from them
    (Conventional Commits; override available) and tags the next `vX.Y.Z` on
-   `main`. A developer can also just push to `main`. See
+   `main`. That release tag is the only thing that deploys — a plain push to
+   `main` does not. See
    [Roles → Shipping a release](roles.md#shipping-a-release).
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.

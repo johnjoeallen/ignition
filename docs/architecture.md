@@ -178,17 +178,16 @@ sequenceDiagram
     Traefik-->>CI: https://<app>.apps.<slug>.<domain>/ serves the new build
 ```
 
-The workflow triggers on a push to `main` and on a git tag. Teams don't tag
-locally and don't use Forgejo's Releases form — the **Release** button in the
-zone console has hz-control diff the last tag against `main`, pick the semver
-bump from those commit messages (Conventional Commits; the admin can override),
-and create the next `vX.Y.Z` tag on `main` through the Forgejo API, so the tag
-is always made from reviewed, pushed history. Each run pushes an immutable
-`:<sha>` **and** a `:<ref>` tag (the branch or the git tag) and deploys the
-`:<ref>` one. `POST /deploy` is the
-immediate rollout; after that the per-node **Watchtower** (see below) polls
-that tag and pulls a new digest on its own — so a re-push or a base-image
-rebuild redeploys without another workflow run. `hz-control` stamps
+The workflow triggers **only on a release tag** — a plain push to `main` does
+not deploy. Teams don't tag locally and don't use Forgejo's Releases form: the
+**Release** button in the zone console has hz-control diff the last tag against
+`main`, pick the semver bump from those commit messages (Conventional Commits;
+the admin can override), and create the next `vX.Y.Z` tag on `main` through the
+Forgejo API — so the tag is always made from reviewed, pushed history. Each run
+pushes an immutable `:<sha>` **and** the `:<tag>` and deploys `:<tag>`.
+`POST /deploy` is the immediate rollout; if CI later re-runs for the same tag
+(a base-image rebuild), the per-node **Watchtower** (see below) picks up the
+new digest without another deploy call. `hz-control` stamps
 `com.centurylinklabs.watchtower.enable=true` onto every app it deploys (the
 label is in `app-compose.tmpl` — teams don't opt in); Watchtower manages only
 those containers and never touches Traefik, Forgejo, DinD or runners.

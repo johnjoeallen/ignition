@@ -453,7 +453,7 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
         f"<button>remove</button></form></td></tr>"
         for a in st["apps"]
     ) or ("<tr><td colspan=4>none yet — hit <b>Release</b> on a repo below "
-          "(or push to <code>main</code>) to deploy one</td></tr>")
+          "to build and deploy one</td></tr>")
     return page(f"zone {slug}", banner + f"""
       <div class=card>
         <b>Forgejo</b> <a href='{html.escape(st['forgejo_url'])}'>{html.escape(st['forgejo_url'])}</a><br>
@@ -463,12 +463,13 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
 
       <h2>Apps <span style=font-weight:normal>· <code>&lt;name&gt;.{html.escape(st['apps_base'])}</code></span></h2>
       <table><tr><th>app<th>state<th>image<th></tr>{applist}</table>
-      <p style=font-size:.85rem;color:#555>Deploys are automatic: hit
+      <p style=font-size:.85rem;color:#555>Deploys come only from a release: hit
       <b>Release</b> on a repo (Repositories, below) — the next version is read
       from the commit messages since the last release, tagged on
-      <code>main</code>, and CI builds + ships it. Every app also gets a
-      Watchtower agent wired in automatically, so a re-pushed image rolls out on
-      its own within ~a minute — no config in your repo.</p>
+      <code>main</code>, and CI builds + ships it. A plain push to
+      <code>main</code> does not deploy. Every app also gets a Watchtower agent
+      wired in automatically, so if an image is re-pushed to the same tag it
+      rolls out on its own within ~a minute — no config in your repo.</p>
 
       <h2>Users</h2>
       <form method=post action=/ui/user/create>
@@ -481,8 +482,8 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
 
       <h2>Repositories <span style=font-weight:normal>· <b>Release</b> picks the
         next version from the commit messages since the last release
-        (override with patch/minor/major), tags <code>main</code> and ships it;
-        a plain push to <code>main</code> ships the tip</span></h2>
+        (override with patch/minor/major), tags <code>main</code> and ships it
+        — deploys happen only on a release</span></h2>
       <form method=post action=/ui/repo/create>
         <label>name<input name=name required></label>
         <label>&nbsp;<span><input type=checkbox name=private> private</span></label>

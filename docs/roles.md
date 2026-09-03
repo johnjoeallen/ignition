@@ -92,8 +92,8 @@ The dropdown next to **Release** defaults to *auto (from commits)*; switch it to
 
 The new tag fires the `build and deploy` workflow; on success the app is live
 at `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
-A plain push to `main` also deploys (handy mid-hack), but a release is what
-gives every deployed image a version to redeploy or roll back to.
+**Only a release deploys** — a plain push to `main` does not — so every running
+image carries a version you can redeploy or roll back to.
 
 Re-pushing an image to the **same** tag later (a base-image rebuild, say) needs
 no new release: the per-node Watchtower notices the new digest and rolls the

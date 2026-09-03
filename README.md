@@ -94,11 +94,11 @@ zone admin clicks **Release**; hz-control reads the commit messages since the
 last release, picks the bump from them (Conventional Commits: `fix:` → patch,
 `feat:` → minor, `feat!:`/`BREAKING CHANGE:` → major; a dropdown overrides),
 and tags the next `vX.Y.Z` on `main` — no one bumps a version, no
-`git push --tags`. That builds, pushes to
-`git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`. A
-push to `main` works too. Several repos → several apps. After that, rollout is
-automatic two ways:
-the workflow's `POST /deploy` rolls the app forward immediately, and
+`git push --tags`. The tag builds, pushes to `git.alpha.hackzone.com`, and
+deploys `APP_NAME.apps.alpha.hackzone.com`. **A plain push to `main` does not
+deploy** — only a release does. Several repos → several apps. After a release,
+rollout is automatic two ways: the workflow's `POST /deploy` rolls the app
+forward immediately, and
 **hz-control wires a Watchtower agent into every deployed app** (the
 `app-compose.tmpl` label is added for you) so the per-node Watchtower pulls a
 new digest for that tag on its own (~60s poll) — a re-push or a base-image

@@ -52,13 +52,13 @@ surface (`zone-admin.txt` is hz-control's service credential; keep it on the
 control host). In each repo they want deployed they add
 `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and its
 variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
-`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). A push to `main`, or the zone
-admin hitting **Release** in the console (which reads the commits since the
-last release, picks the bump, and tags the next `vX.Y.Z` on `main`), builds,
-pushes, and deploys `APP_NAME.apps.<slug>.hackzone.com`; more
-repos → more apps. The `POST /deploy` rolls the app forward at once, and the
-per-node Watchtower keeps the deployed `:<ref>` tag fresh afterwards (a re-push
-or base-image rebuild goes live on its own, ~60s).
+`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). The zone admin hits
+**Release** in the console — which reads the commits since the last release,
+picks the bump, and tags the next `vX.Y.Z` on `main` — and that tag builds,
+pushes, and deploys `APP_NAME.apps.<slug>.hackzone.com`. **A plain push to
+`main` does not deploy.** More repos → more apps. The `POST /deploy` rolls the
+app forward at once; if CI later re-runs for the same tag, the per-node
+Watchtower picks up the new image (~60s).
 
 ## During the event
 
@@ -79,10 +79,10 @@ free their node capacity automatically.
 
 Teams deploy themselves — in the zone console the team lead hits **Release**
 (Repositories); hz-control derives the version bump from the commits since the
-last release and tags the next `vX.Y.Z` on `main`, and CI builds and ships it;
-a push to `main` works too. See
-[Roles → Shipping a release](roles.md#shipping-a-release).
-You don't run deploys for them.
+last release, tags the next `vX.Y.Z` on `main`, and CI builds and ships it. A
+plain push to `main` does not deploy. See
+[Roles → Shipping a release](roles.md#shipping-a-release). You don't run
+deploys for them.
 
 ## Capacity
 

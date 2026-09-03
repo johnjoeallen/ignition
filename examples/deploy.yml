@@ -3,17 +3,17 @@
 # A zone can run this from several repos — each deploys its own app at
 # <APP_NAME>.apps.<slug>.<BASE_DOMAIN>. App names are unique within the zone.
 #
-# Runs on a push to `main` AND when a git tag (e.g. `v1.2.0`) appears. The tag
-# is normally created by the zone admin console's "Release" button — hz-control
-# reads the repo's highest vX.Y.Z tag, bumps it, and creates the tag on `main`
-# via the Forgejo API — so it always points at reviewed, already-pushed history,
-# never a developer's `git push --tags`. See docs/roles.md ("Shipping a
-# release").
+# Deploys happen ONLY on a release tag (e.g. `v1.2.0`) — never on a plain push
+# to `main`. The tag is created by the zone console's "Release" button:
+# hz-control diffs the last tag against `main`, picks the semver bump from those
+# commit messages (Conventional Commits; the admin can override), and creates
+# the next vX.Y.Z tag on `main` via the Forgejo API — always from reviewed,
+# already-pushed history, never `git push --tags`. See docs/roles.md
+# ("Shipping a release").
 #
-# Each run builds and pushes two image tags — :<sha> (immutable) and :<ref>
-# (the branch or git tag) — then deploys the :<ref> one. POST /deploy rolls it
-# out now; the per-node Watchtower also watches that tag, so a later re-push
-# (or a base-image rebuild) goes live on its own without another workflow run.
+# Each run builds and pushes :<sha> (immutable) and :<tag>, then deploys :<tag>.
+# If CI ever re-runs for the same tag (e.g. a base-image rebuild), the per-node
+# Watchtower rolls the running app forward without a manual redeploy.
 #
 # Assumes a Dockerfile at the repo root. The runner (set up by
 # provision-zone.sh) forwards DOCKER_HOST=tcp://dind:2375, so `docker` here
@@ -36,7 +36,6 @@ name: build and deploy
 
 on:
   push:
-    branches: [main]
     tags: ["*"]
 
 permissions:
@@ -57,16 +56,15 @@ jobs:
       - name: Build and push
         run: |
           REPO="${{ vars.REGISTRY }}/${{ github.repository }}"
-          # branch or tag, '/' -> '-' for a valid image tag (POSIX sh: the job
-          # image is Alpine, no bash)
-          REF=$(printf '%s' "${GITHUB_REF_NAME:-main}" | tr '/' '-')
+          # the release tag, '/' -> '-' for a valid image tag (POSIX sh: the
+          # job image is Alpine, no bash)
+          TAG=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
           echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
             | docker login "${{ vars.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
-          docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$REF" .
+          docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$TAG" .
           docker push "$REPO:${{ github.sha }}"
-          docker push "$REPO:$REF"
-          # deploy the branch/tag ref so the node's Watchtower can keep it fresh
-          echo "IMAGE=$REPO:$REF" >> "$GITHUB_ENV"
+          docker push "$REPO:$TAG"
+          echo "IMAGE=$REPO:$TAG" >> "$GITHUB_ENV"
 
       - name: Deploy
         run: |
