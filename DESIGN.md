@@ -1,8 +1,8 @@
 # Ignition control plane — design for the Java rewrite
 
-Status: **in progress** — design agreed; `ignition-control/` scaffolded and
-building (see "Migration / cutover"). Supersedes the "stdlib / shell only"
-convention in `CLAUDE.md`.
+Status: **in progress** — the Java service is feature-complete and containerised
+(DESIGN.md steps 1–8); cutover (step 9) is pending one real end-to-end
+provision. Supersedes the "stdlib / shell only" convention in `CLAUDE.md`.
 
 ## Why
 
@@ -233,9 +233,17 @@ conditionals — the reason it isn't a template today).
    `/roster` page (bulk apply / teardown a slug list) + "sweep idle zones now".
    Provisioning runs on a small pool (`ignition.provisioning.concurrency`, 3)
    so a roster fans out.
-8. Package as a container; add `ignition-control-compose.yml`; run it against a
-   test node.
-9. Cut over: remove the scripts + `ign-control.py`; rewrite the docs and the
+8. **done** — multi-stage `Dockerfile` (maven build -> JRE + docker CLI +
+   compose plugin + ssh client). `templates/ignition-control-compose.yml`:
+   control-host only, mounts `/var/run/docker.sock` + `../state` + ssh keys,
+   joins `traefik-public`, sets `IGNITION_CONTROL_PLANE_URL=http://ignition-control:8790`
+   so the file-provider routers reach it. `TraefikDynamicConfig` writes
+   `_platform.yml` on startup. Verified: image builds, container is healthy,
+   the in-container `docker` talks to the host socket.
+9. **pending a live end-to-end** — the container-orchestration paths
+   (Forgejo health wait, runner registration, `compose cp`, teardown) are only
+   smoke-tested. Run one real `provision` against a live node, then cut over:
+   remove the scripts + `ign-control.py`; rewrite the docs and the
    `CLAUDE.md` conventions.
 10. `examples/deploy.yml` is untouched — the contract is preserved.
 

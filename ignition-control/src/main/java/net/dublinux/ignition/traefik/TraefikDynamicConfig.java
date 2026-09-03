@@ -7,6 +7,8 @@ import java.nio.file.Path;
 
 import net.dublinux.ignition.config.IgnitionProperties;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,6 +35,12 @@ public class TraefikDynamicConfig {
 
     public TraefikDynamicConfig(IgnitionProperties props) {
         this.props = props;
+    }
+
+    /** Ensure the platform router exists as soon as the service is up. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void onStartup() {
+        writePlatformRouter();
     }
 
     public void writePlatformRouter() {

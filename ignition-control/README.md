@@ -4,7 +4,7 @@ The Ignition control plane — one Spring Boot service that replaces the `ign`
 bash CLI, the `scripts/*.sh`, and `control/ign-control.py`. See
 [`../DESIGN.md`](../DESIGN.md).
 
-Status: **in progress** (DESIGN.md through step 7). Working now:
+Status: **in progress** (DESIGN.md through step 8 — feature-complete + containerised). Working now:
 
 - health at `/actuator/health`
 - token auth: platform (`ignition.admin-token`), zone (`state/zones/<slug>/zone-token`),
@@ -59,10 +59,19 @@ docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
 | `sweep` | `IdleSweeper` (`@Scheduled`) |
 | `resources/compose` | `zone-compose.yml.tmpl`, `app-compose.tmpl` (moved from repo `templates/`) |
 
-## Not yet done (DESIGN.md step 8+)
+## Build the image
 
-Packaging the service as a container with its own `ignition-control-compose.yml`,
-then the cutover (retire the scripts + `ign-control.py`, rewrite the docs).
+```sh
+docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
+```
+
+Multi-stage (maven build -> JRE + docker CLI + compose plugin + ssh client).
+Run it with `templates/ignition-control-compose.yml` on the control host.
+
+## Not yet done (DESIGN.md step 9)
+
+One real end-to-end provision against a live node, then the cutover: retire
+`ign` + `scripts/` + `ign-control.py` and rewrite the docs.
 
 Every operator action is now in the console (nodes, zones, apps, roster, sweep).
 The parts that need a live Docker daemon (Forgejo health wait, runner

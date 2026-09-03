@@ -1,0 +1,44 @@
+# The Ignition control plane — runs on the control host ONLY, next to that
+# host's core stack (traefik-core-compose.yml). One Java service; every
+# platform-admin and zone-admin operation is in its web UI. See DESIGN.md.
+#
+#   export BASE_DOMAIN=ignition.example
+#   export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)      # the platform key — keep it
+#   docker compose -f templates/ignition-control-compose.yml up -d
+#
+# Traefik reaches it on traefik-public; the file-provider snippets it writes to
+# state/control/dynamic/ (which traefik-core mounts) route admin.<BASE_DOMAIN>
+# and every admin.<slug>.<BASE_DOMAIN> here. No Traefik labels on this container
+# — the routers come from those snippets so there is exactly one per host.
+
+name: ignition-control
+
+networks:
+  traefik-public:
+    external: true
+
+services:
+  ignition-control:
+    image: ghcr.io/johnjoeallen/ignition-control:${IGN_CONTROL_VERSION:-latest}
+    container_name: ignition-control
+    restart: unless-stopped
+    environment:
+      BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN}
+      IGN_ADMIN_TOKEN: ${IGN_ADMIN_TOKEN:?set IGN_ADMIN_TOKEN}
+      IGN_STATE_DIR: /state
+      # how the file-provider routers reach this service (it's on traefik-public)
+      IGNITION_CONTROL_PLANE_URL: http://ignition-control:8790
+      IGN_INSECURE_TLS: ${IGN_INSECURE_TLS:-false}
+      IGN_SWEEP_TTL: ${IGN_SWEEP_TTL:-24h}
+    volumes:
+      # the local node's daemon
+      - /var/run/docker.sock:/var/run/docker.sock
+      # the generated state tree — same dir traefik-core mounts as its file provider
+      - ../state:/state
+      # keys / certs for ssh:// and tcp://+TLS nodes (optional; read-only)
+      - ${IGN_SSH_DIR:-./ssh-empty}:/root/.ssh:ro
+    networks:
+      - traefik-public
+
+# `docker compose` won't create a bind source that doesn't exist, so make an
+# empty ./ssh-empty if you have no remote nodes:  mkdir -p ssh-empty
