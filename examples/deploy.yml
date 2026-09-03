@@ -14,14 +14,22 @@
 # out now; the per-node Watchtower also watches that tag, so a later re-push
 # (or a base-image rebuild) goes live on its own without another workflow run.
 #
+# Assumes a Dockerfile at the repo root. The runner (set up by
+# provision-zone.sh) forwards DOCKER_HOST=tcp://dind:2375, so `docker` here
+# talks to the zone's private build engine.
+#
 # Repo variables (Settings -> Actions -> Variables):
-#   REGISTRY     git.<slug>.<BASE_DOMAIN>          e.g. git.alpha.hackzone.com
+#   REGISTRY     git.<slug>.<BASE_DOMAIN>            e.g. git.alpha.hackzone.com
+#                (must match the zone's registry exactly — hz-control checks it)
 #   CONTROL_URL  https://admin.<slug>.<BASE_DOMAIN>  the zone's control endpoint
-#   APP_NAME     my-app                            -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
-#   APP_PORT     8080                              the port your app listens on
+#   APP_NAME     my-app                              -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
+#   APP_PORT     8080                                the port your app listens on
 # Repo secrets (Settings -> Actions -> Secrets):
-#   FORGEJO_TOKEN  a token with package:write, for pushing to the registry
 #   DEPLOY_TOKEN   the zone's CI token (state/zones/<slug>/deploy-token)
+#   FORGEJO_TOKEN  optional — a token with package:write for the registry. If
+#                  unset, the automatic per-run Actions token is used (its user
+#                  always matches github.actor, and `permissions:` below grants
+#                  it package writes).
 
 name: build and deploy
 
@@ -29,6 +37,15 @@ on:
   push:
     branches: [main]
     tags: ["*"]
+
+permissions:
+  contents: read
+  packages: write
+
+# one deploy at a time per repo; a newer run waits rather than clobbering
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -39,8 +56,11 @@ jobs:
       - name: Build and push
         run: |
           REPO="${{ vars.REGISTRY }}/${{ github.repository }}"
-          REF="${GITHUB_REF_NAME:-main}"          # branch name, or the git tag
-          echo "${{ secrets.FORGEJO_TOKEN }}" | docker login "${{ vars.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+          # branch or tag, '/' -> '-' for a valid image tag (POSIX sh: the job
+          # image is Alpine, no bash)
+          REF=$(printf '%s' "${GITHUB_REF_NAME:-main}" | tr '/' '-')
+          echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
+            | docker login "${{ vars.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
           docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$REF" .
           docker push "$REPO:${{ github.sha }}"
           docker push "$REPO:$REF"

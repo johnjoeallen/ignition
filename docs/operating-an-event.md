@@ -50,7 +50,7 @@ Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
 **`zone-token`** (sign in at `admin.<slug>.hackzone.com`). They seed each repo they want
 deployed with `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and
 its repo variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
-`FORGEJO_TOKEN`, `DEPLOY_TOKEN`. A push to `main`, or a release cut in the
+`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). A push to `main`, or a release cut in the
 Forgejo web UI (Releases → New release, target `main` — this is a zone-admin
 job), builds, pushes, and deploys `APP_NAME.apps.<slug>.hackzone.com`; more
 repos → more apps. The `POST /deploy`

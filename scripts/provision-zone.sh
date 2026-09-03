@@ -134,6 +134,9 @@ runner:
   file: /data/.runner
   capacity: ${RUNNER_CAPACITY}
   timeout: 3h
+  # forwarded into every job so `docker` in a job talks to the zone's DinD
+  envs:
+    DOCKER_HOST: tcp://dind:2375
   labels:
     - "ubuntu-latest:docker://code.forgejo.org/oci/node:22-bookworm"
     - "docker-cli:docker://code.forgejo.org/oci/docker:cli"
