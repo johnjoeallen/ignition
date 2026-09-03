@@ -46,7 +46,7 @@
 
   <h2>Zones</h2>
   <table>
-    <tr><th>zone</th><th>node</th><th>footprint</th><th>status</th><th>forge</th></tr>
+    <tr><th>zone</th><th>node</th><th>footprint</th><th>status</th><th>forge</th><th></th></tr>
     <tr th:each="z : ${zones}">
       <td th:text="${z.slug}">quantum-badgers</td>
       <td th:text="${z.node}">node-1</td>
@@ -57,21 +57,39 @@
               th:classappend="${p.state().name() == 'FAILED'} ? 'err' : ''">provisioning</span>
       </td>
       <td><a th:href="${z.forgejoUrl}" th:text="${z.forgejoUrl}">git…</a></td>
+      <td style="white-space:nowrap">
+        <form method="post" th:action="@{'/zones/' + ${z.slug} + '/move'}" class="inline">
+          <select name="node">
+            <option th:each="n : ${nodeNames}" th:value="${n}" th:text="${n}"
+                    th:disabled="${n == z.node}">node</option>
+          </select>
+          <button>move</button>
+        </form>
+        <form method="post" th:action="@{'/zones/' + ${z.slug} + '/destroy'}" class="inline"
+              onsubmit="return confirm('Destroy zone ' + this.action.split('/zones/')[1].split('/')[0] + ' and every app it deployed?')">
+          <button>destroy</button>
+        </form>
+      </td>
     </tr>
-    <tr th:if="${zones.isEmpty()}"><td colspan="5" class="muted">no zones yet</td></tr>
+    <tr th:if="${zones.isEmpty()}"><td colspan="6" class="muted">no zones yet</td></tr>
   </table>
   <p><a href="/zones/new">Provision a zone →</a></p>
 
   <h2>Apps</h2>
   <table>
-    <tr><th>app</th><th>zone</th><th>node</th><th>image</th></tr>
+    <tr><th>app</th><th>zone</th><th>node</th><th>image</th><th></th></tr>
     <tr th:each="a : ${apps}">
       <td><a th:href="${a.url(baseDomain)}" th:text="${a.name}">web</a></td>
       <td th:text="${a.zone}">quantum-badgers</td>
       <td th:text="${a.node}">node-1</td>
       <td><code th:text="${a.image}">img</code></td>
+      <td>
+        <form method="post" th:action="@{'/apps/' + ${a.zone} + '/' + ${a.name} + '/delete'}" class="inline">
+          <button>stop</button>
+        </form>
+      </td>
     </tr>
-    <tr th:if="${apps.isEmpty()}"><td colspan="4" class="muted">none deployed</td></tr>
+    <tr th:if="${apps.isEmpty()}"><td colspan="5" class="muted">none deployed</td></tr>
   </table>
 </body>
 </html>

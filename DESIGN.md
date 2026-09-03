@@ -222,7 +222,12 @@ conditionals — the reason it isn't a template today).
    tokens) running off-request with a status the console polls; platform
    console gains a **Provision a zone** form. The container-orchestration steps
    are faithful command translations — full end-to-end needs a real daemon.
-6. Port scheduler + move + destroy + sweep.
+6. **done** — `ZoneService.destroy` (port of `teardown-zone.sh`: every app's
+   compose down + optional state removal + router-snippet removal + zone stack
+   down / stray-container sweep) and `prepareMove` (teardown-keep-state, drop
+   per-node artefacts, repoint `NODE`, caller re-provisions). `IdleSweeper`
+   now actually reclaims (`ignition.sweep.dry-run` to only report). Platform
+   console: per-zone move / destroy, per-app stop.
 7. Add the platform-console write operations (register node, zone
    create / move / destroy, roster, sweep-now).
 8. Package as a container; add `ignition-control-compose.yml`; run it against a

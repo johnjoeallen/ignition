@@ -2,7 +2,6 @@ package net.dublinux.ignition.web;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.node.Node;
@@ -19,9 +18,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The platform-admin console at {@code admin.<BASE_DOMAIN>}. Read views + node
- * register / drain / remove + zone provisioning. Move / destroy and roster
- * land next (DESIGN.md step 6–7).
+ * The platform-admin console at {@code admin.<BASE_DOMAIN>}. Nodes
+ * (register / drain / remove), zones (provision / move / destroy), apps (stop).
+ * The roster (bulk create/destroy) and a "sweep now" button land next
+ * (DESIGN.md step 7).
  */
 @Controller
 public class PlatformConsoleController {
@@ -45,13 +45,11 @@ public class PlatformConsoleController {
             var a = nodes.allocation(n.name());
             return new NodeRow(n, a.cpus(), a.memGb(), a.zones());
         }).toList();
-        Map<String, ProvisioningService.Status> provisioningRows = zones.list().stream()
-                .map(z -> z.slug())
-                .collect(Collectors.toMap(s -> s,
-                        s -> provisioning.status(s).orElse(null),
-                        (a, b) -> a));
-        provisioningRows.values().removeIf(v -> v == null);
+        Map<String, ProvisioningService.Status> provisioningRows = new java.util.LinkedHashMap<>();
+        zones.list().forEach(z ->
+                provisioning.status(z.slug()).ifPresent(s -> provisioningRows.put(z.slug(), s)));
         model.addAttribute("nodes", nodeRows);
+        model.addAttribute("nodeNames", nodeRows.stream().map(r -> r.node().name()).toList());
         model.addAttribute("zones", zones.list());
         model.addAttribute("apps", apps.list());
         model.addAttribute("provisioning", provisioningRows);
@@ -83,6 +81,41 @@ public class PlatformConsoleController {
         return provisioning.status(slug)
                 .map(s -> ResponseEntity.ok(Map.of("state", s.state().name(), "message", s.message())))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/zones/{slug}/destroy")
+    public String destroyZone(@PathVariable String slug) {
+        try {
+            zones.destroy(slug, false);
+            return "redirect:/?m=" + slug + "+destroyed";
+        } catch (RuntimeException e) {
+            return "redirect:/?m=" + enc(e.getMessage());
+        }
+    }
+
+    @PostMapping("/zones/{slug}/move")
+    public String moveZone(@PathVariable String slug, @RequestParam String node) {
+        try {
+            zones.prepareMove(slug, node.strip());
+            provisioning.submit(slug, node.strip(), "");
+            return "redirect:/?m=moving+" + slug + "+to+" + node.strip();
+        } catch (RuntimeException e) {
+            return "redirect:/?m=" + enc(e.getMessage());
+        }
+    }
+
+    @PostMapping("/apps/{zone}/{name}/delete")
+    public String stopApp(@PathVariable String zone, @PathVariable String name) {
+        try {
+            apps.undeploy(zone, name);
+            return "redirect:/?m=app+" + zone + "/" + name + "+stopped";
+        } catch (RuntimeException e) {
+            return "redirect:/?m=" + enc(e.getMessage());
+        }
+    }
+
+    private static String enc(String s) {
+        return java.net.URLEncoder.encode(s == null ? "" : s, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @GetMapping("/nodes/new")

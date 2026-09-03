@@ -8,16 +8,18 @@ import java.time.Instant;
 import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
+import net.dublinux.ignition.zone.ZoneService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
  * Reclaims zones idle past {@code ignition.sweep.ttl}. Idle = the zone's
  * {@code last-activity} epoch (bumped by provisioning and every deploy) is
- * older than the TTL. Today it only reports; the actual teardown wires in with
- * {@code ZoneService.destroy()} (DESIGN.md step 6).
+ * older than the TTL. Port of {@code sweep-idle.sh}. Set
+ * {@code ignition.sweep.dry-run=true} to only report.
  */
 @Component
 public class IdleSweeper {
@@ -26,10 +28,15 @@ public class IdleSweeper {
 
     private final IgnitionProperties props;
     private final ZoneRepository zones;
+    private final ZoneService zoneService;
 
-    public IdleSweeper(IgnitionProperties props, ZoneRepository zones) {
+    @Value("${ignition.sweep.dry-run:false}")
+    private boolean dryRun;
+
+    public IdleSweeper(IgnitionProperties props, ZoneRepository zones, ZoneService zoneService) {
         this.props = props;
         this.zones = zones;
+        this.zoneService = zoneService;
     }
 
     @Scheduled(fixedDelayString = "${ignition.sweep.interval}", initialDelay = 60_000)
@@ -38,8 +45,18 @@ public class IdleSweeper {
         Instant cutoff = Instant.now().minus(ttl);
         for (Zone z : zones.findAll()) {
             Instant last = lastActivity(z.slug());
-            if (last != null && last.isBefore(cutoff)) {
-                log.info("zone {} idle since {} (> {}) — would reclaim", z.slug(), last, ttl);
+            if (last == null || !last.isBefore(cutoff)) {
+                continue;
+            }
+            if (dryRun) {
+                log.info("zone {} idle since {} (> {}) — would reclaim (dry-run)", z.slug(), last, ttl);
+                continue;
+            }
+            log.info("zone {} idle since {} (> {}) — reclaiming", z.slug(), last, ttl);
+            try {
+                zoneService.destroy(z.slug(), false);
+            } catch (RuntimeException e) {
+                log.warn("failed to reclaim idle zone {}", z.slug(), e);
             }
         }
     }

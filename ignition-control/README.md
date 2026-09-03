@@ -58,13 +58,14 @@ docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
 | `sweep` | `IdleSweeper` (`@Scheduled`) |
 | `resources/compose` | `zone-compose.yml.tmpl`, `app-compose.tmpl` (moved from repo `templates/`) |
 
-## Not yet ported (DESIGN.md steps 6–7)
+## Not yet ported (DESIGN.md step 7+)
 
-Zone **move / destroy**, the platform-console **roster** (bulk create/destroy)
-and **sweep-now** button, and packaging the service as a container with its own
+The platform-console **roster** (bulk create/destroy) and a **sweep-now**
+button, and packaging the service as a container with its own
 `ignition-control-compose.yml`.
 
-`ProvisioningService` and `Scheduler` are in place (step 5) — the two-phase
-apply runs off-request and the console polls its status; the parts that need a
-live Docker daemon (Forgejo health wait, runner registration, `compose cp`) are
-translated but only exercised against a real node.
+`ProvisioningService` / `Scheduler` (step 5) and zone **move / destroy** + the
+real **idle sweep** (step 6) are in place. The parts that need a live Docker
+daemon (Forgejo health wait, runner registration, `compose cp`, stack teardown)
+are faithful command translations, exercised end-to-end only against a real
+node.
