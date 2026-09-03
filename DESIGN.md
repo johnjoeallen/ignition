@@ -1,7 +1,8 @@
 # Ignition control plane — design for the Java rewrite
 
-Status: **accepted** — design agreed, no code yet. Supersedes the "stdlib /
-shell only" convention in `CLAUDE.md`.
+Status: **in progress** — design agreed; `ignition-control/` scaffolded and
+building (see "Migration / cutover"). Supersedes the "stdlib / shell only"
+convention in `CLAUDE.md`.
 
 ## Why
 
@@ -19,7 +20,7 @@ scripts to run by hand.
 ## Language and framework
 
 - **Java 21** (LTS; virtual threads suit the many blocking calls out to
-  Docker, Forgejo, and SSH), **Spring Boot 3.x**.
+  Docker, Forgejo, and SSH), **Spring Boot 4.0.x**.
   - **Spring MVC + Thymeleaf** for server-rendered console pages — a plain
     multi-page app, no SPA build step, same spirit as `ign-control.py` today.
     Optionally **htmx** for live status and inline form posts (no build step).
@@ -27,12 +28,12 @@ scripts to run by hand.
   - **Spring Scheduling** (`@Scheduled`) for the idle sweep and periodic
     reconciliation.
   - **`RestClient`** for the Forgejo API.
-- Build: **Gradle** (Kotlin DSL). Output is a **container image**
-  (`ignition-control:<version>`) built from a Dockerfile on a **slim JRE base**
-  (`eclipse-temurin:21-jre` or similar) that also installs the **`docker` CLI**
-  (incl. the compose plugin) and **`openssh-client`** — required for compose
-  operations against local and `ssh://` nodes (see "Docker engine access").
-  Not distroless.
+- Build: **Maven** (`mvnw` wrapper). Output is `target/ignition-control.jar`
+  and a **container image** (`ghcr.io/johnjoeallen/ignition-control:<version>`)
+  built from a Dockerfile on a **slim JRE base** (`eclipse-temurin:21-jre`)
+  that also installs the **`docker` CLI** (incl. the compose plugin) and
+  **`openssh-client`** — required for compose operations against local and
+  `ssh://` nodes (see "Docker engine access"). Not distroless.
 - Group / package: **`net.dublinux.ignition`**.
 
 ## The control plane is itself a container
@@ -64,7 +65,7 @@ host's core stack.
 
 ```
 ignition-control/
-  build.gradle.kts
+  pom.xml   mvnw   .mvn/
   Dockerfile                       # eclipse-temurin:21-jre + docker CLI + openssh-client
   src/main/java/net/dublinux/ignition/
     IgnitionControlApplication.java
@@ -196,10 +197,16 @@ conditionals — the reason it isn't a template today).
 
 ## Migration / cutover
 
-1. Land this doc.
-2. Scaffold `ignition-control/` (Gradle, app, Security, health, empty consoles).
-3. Port read paths: Node / Zone / App repositories over the existing `state/`
-   tree; platform console read views; zone console 1:1 from `ign-control.py`.
+1. ~~Land this doc.~~ **done**
+2. ~~Scaffold `ignition-control/`~~ **done** — Maven, Spring Boot 4, token auth
+   (platform / zone / deploy), `/actuator/health`, both console shells, the CI
+   `/deploy` bridge stubbed `501`, `EnvFile` + file-tree repositories for
+   nodes / zones / apps, `IdleSweeper` (`@Scheduled`, reports only).
+3. **in progress** — read paths done (platform console renders nodes / zones /
+   apps live from `state/`; zone console renders the caller's zone). Node
+   register / drain / remove is the first write slice and works. Still to port
+   1:1 from `ign-control.py`: the zone console's Users / Repositories / Release /
+   runner-restart.
 4. Port the CI bridge; verify against a real zone.
 5. Port provisioning (the two-phase flow); verify a zone-create end to end.
 6. Port scheduler + move + destroy + sweep.
@@ -213,7 +220,7 @@ conditionals — the reason it isn't a template today).
 
 ## Decisions
 
-- **Language / framework:** Java 21 + Spring Boot 3, Gradle (Kotlin DSL).
+- **Language / framework:** Java 21 + Spring Boot 4.0.x, Maven.
 - **Package:** `net.dublinux.ignition`.
 - **Image:** `eclipse-temurin:21-jre` + `docker` CLI (with compose plugin) +
   `openssh-client`. Not distroless.

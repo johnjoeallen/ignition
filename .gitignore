@@ -27,6 +27,10 @@ tmp/
 __pycache__/
 *.pyc
 
+# Java control plane
+/ignition-control/target/
+/ignition-control/.mvn/wrapper/maven-wrapper.jar
+
 # MkDocs build output
 /site/
 /_site/

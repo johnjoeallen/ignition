@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <title>Ignition · register node</title>
+  <link rel="stylesheet" href="/css/ignition.css">
+</head>
+<body>
+  <nav class="top"><a href="/">← platform</a></nav>
+  <h1>Register a node</h1>
+  <div class="msg err" th:if="${error != null}" th:text="${error}">bad input</div>
+  <form method="post" th:action="@{/nodes}" class="stack">
+    <label>name<input name="name" required placeholder="node-1"></label>
+    <label>docker host<input name="dockerHost" required placeholder="local | ssh://ops@10.0.0.2 | tcp://host:2376"></label>
+    <label>cpus<input name="cpus" type="number" step="0.5" required placeholder="32"></label>
+    <label>mem (GB)<input name="memGb" type="number" step="1" required placeholder="128"></label>
+    <label>labels<input name="labels" placeholder="fast,gpu (optional)"></label>
+    <button>Register</button>
+  </form>
+</body>
+</html>

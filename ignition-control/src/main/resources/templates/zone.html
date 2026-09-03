@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <title th:text="|Ignition · zone ${zone.slug}|">Ignition · zone</title>
+  <link rel="stylesheet" href="/css/ignition.css">
+</head>
+<body>
+  <nav class="top">
+    <span th:text="${principal}">zone:…</span>
+    <form method="post" th:action="@{/logout}" class="inline">
+      <button>Sign out</button>
+    </form>
+  </nav>
+
+  <h1 th:text="|Ignition · zone ${zone.slug}|">Ignition · zone</h1>
+
+  <p>
+    <b>Forgejo</b> <a th:href="${zone.forgejoUrl}" th:text="${zone.forgejoUrl}">git…</a><br>
+    <b>Node</b> <span th:text="${zone.node}">node-1</span>
+  </p>
+
+  <h2>Apps <span class="muted" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span></h2>
+  <table>
+    <tr><th>app</th><th>image</th><th>deploy</th></tr>
+    <tr th:each="a : ${apps}">
+      <td><a th:href="${a.url(baseDomain)}" th:text="${a.name}">web</a></td>
+      <td><code th:text="${a.image}">img</code></td>
+      <td th:text="${a.deployId}">—</td>
+    </tr>
+    <tr th:if="${apps.isEmpty()}"><td colspan="3" class="muted">none yet — Release ships one</td></tr>
+  </table>
+
+  <p class="muted">Users, Repositories and the Release button are ported from the
+    previous control plane in a later step.</p>
+</body>
+</html>

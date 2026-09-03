@@ -1,0 +1,108 @@
+# A zone's stack: Forgejo (git + PRs + Actions + registry) + a private
+# Docker-in-Docker build engine + a Forgejo Actions runner wired to it.
+#
+# Rendered by scripts/provision-zone.sh with envsubst, then applied on the
+# zone's assigned node. Do not run directly. Substituted vars:
+#   ZONE_SLUG BASE_DOMAIN
+#   CPU_FORGEJO MEM_FORGEJO CPU_DIND MEM_DIND CPU_RUNNER MEM_RUNNER
+#
+# Forgejo: https://git.${ZONE_SLUG}.${BASE_DOMAIN}/ serves the web UI,
+# git-over-https, the Actions API and the container registry — all on one
+# origin. git.<slug> is two labels deep, so *.${BASE_DOMAIN} misses it; this
+# zone's router asks Traefik for a *.${ZONE_SLUG}.${BASE_DOMAIN} cert.
+# See CLAUDE.md.
+
+name: zone-${ZONE_SLUG}
+
+networks:
+  zone-${ZONE_SLUG}:
+    name: zone-${ZONE_SLUG}
+  traefik-public:
+    external: true
+
+volumes:
+  forgejo-data:
+    name: zone-${ZONE_SLUG}-forgejo-data
+  dind-data:
+    name: zone-${ZONE_SLUG}-dind-data
+  runner-data:
+    name: zone-${ZONE_SLUG}-runner-data
+
+services:
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:11
+    container_name: zone-${ZONE_SLUG}-forgejo
+    restart: unless-stopped
+    networks: [zone-${ZONE_SLUG}, traefik-public]
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__server__DOMAIN: git.${ZONE_SLUG}.${BASE_DOMAIN}
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__ROOT_URL: https://git.${ZONE_SLUG}.${BASE_DOMAIN}/
+      FORGEJO__server__START_SSH_SERVER: "false"
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__actions__ENABLED: "true"
+      FORGEJO__packages__ENABLED: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__repository__ENABLE_PUSH_CREATE_USER: "true"
+      FORGEJO__repository__DEFAULT_PUSH_CREATE_PRIVATE: "false"
+      FORGEJO__webhook__ALLOWED_HOST_LIST: "*"
+      FORGEJO__migrations__ALLOWED_DOMAINS: "*"
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.zone-${ZONE_SLUG}-git.rule: Host(`git.${ZONE_SLUG}.${BASE_DOMAIN}`)
+      traefik.http.routers.zone-${ZONE_SLUG}-git.entrypoints: websecure
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls: "true"
+      # git.<slug> is two labels deep — this zone gets its own *.<slug> cert.
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].main: ${ZONE_SLUG}.${BASE_DOMAIN}
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].sans: "*.${ZONE_SLUG}.${BASE_DOMAIN},*.apps.${ZONE_SLUG}.${BASE_DOMAIN}"
+      traefik.http.services.zone-${ZONE_SLUG}-git.loadbalancer.server.port: "3000"
+    volumes:
+      - forgejo-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    deploy:
+      resources:
+        limits: { cpus: "${CPU_FORGEJO}", memory: "${MEM_FORGEJO}" }
+
+  dind:
+    image: docker:27-dind
+    container_name: zone-${ZONE_SLUG}-dind
+    restart: unless-stopped
+    privileged: true
+    networks: [zone-${ZONE_SLUG}]
+    command: ["--host=tcp://0.0.0.0:2375"]
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - dind-data:/var/lib/docker
+    deploy:
+      resources:
+        limits: { cpus: "${CPU_DIND}", memory: "${MEM_DIND}" }
+
+  runner:
+    image: code.forgejo.org/forgejo/runner:13
+    container_name: zone-${ZONE_SLUG}-runner
+    restart: unless-stopped
+    networks: [zone-${ZONE_SLUG}]
+    depends_on:
+      forgejo: { condition: service_healthy }
+      dind:    { condition: service_started }
+    # provision-zone.sh writes /data/config.yml into the runner-data volume
+    # (via `docker compose cp`) after registering the shared secret — this
+    # works whether the zone's node is local or reached over SSH.
+    command: ["forgejo-runner", "--config", "/data/config.yml", "daemon"]
+    environment:
+      DOCKER_HOST: tcp://dind:2375
+    volumes:
+      - runner-data:/data
+    deploy:
+      resources:
+        limits: { cpus: "${CPU_RUNNER}", memory: "${MEM_RUNNER}" }

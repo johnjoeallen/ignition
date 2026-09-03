@@ -67,6 +67,7 @@ scripts/
   sweep-idle.sh                # cron: reclaim zones idle past a TTL
 control/
   ign-control.py                # the control plane: platform view, zone-admin surface, CI /deploy + /undeploy
+ignition-control/               # the Java rewrite (Spring Boot 4, Maven) — scaffold, see DESIGN.md
 templates/
   zone-compose.yml.tmpl        # per-zone forgejo + dind + runner (envsubst template)
   app-compose.tmpl             # one deployed app (envsubst template)

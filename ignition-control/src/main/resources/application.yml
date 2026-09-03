@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: ignition-control
+  thymeleaf:
+    cache: false
+
+server:
+  port: ${IGN_CONTROL_PORT:8790}
+  address: ${IGN_CONTROL_ADDR:0.0.0.0}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+ignition:
+  base-domain: ${IGN_BASE_DOMAIN:${BASE_DOMAIN:ignition.example}}
+  admin-token: ${IGN_ADMIN_TOKEN:}
+  state-dir: ${IGN_STATE_DIR:../state}
+  insecure-tls: ${IGN_INSECURE_TLS:false}
+  sweep:
+    ttl: ${IGN_SWEEP_TTL:24h}
+    interval: ${IGN_SWEEP_INTERVAL:15m}
+
+logging:
+  level:
+    net.dublinux.ignition: INFO
