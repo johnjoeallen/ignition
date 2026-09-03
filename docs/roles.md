@@ -11,18 +11,17 @@ flowchart TB
     subgraph cp["Control plane (hz + hz-control)"]
         nodes["Nodes<br/>register · drain · capacity"]
         zones["Zones<br/>create · place · move · destroy"]
-        zoneview["Zone view<br/>users · repos · apps · runner · status"]
+        zoneconsole["Zone console<br/>users · repos · releases · apps · runner · status"]
     end
 
     pa --> nodes
     pa --> zones
-    za --> zoneview
-    zoneview -->|"proxied Forgejo admin API"| forgejo["the zone's own Forgejo"]
-    za -->|"Release button → auto-tag main"| zoneview
-    dev -->|git push / PRs| forgejo
+    za -->|"the only surface a zone admin sees"| zoneconsole
+    zoneconsole -->|"proxied API (service token)"| forgejo["the zone's Forgejo"]
+    dev -->|"git push / PRs / CI logs"| forgejo
 
     pa -. "never touches" .-> forgejo
-    za -. "no node or Docker access" .-> nodes
+    za -. "no node, Docker or Forgejo-admin access" .-> nodes
 ```
 
 ## Platform admin
@@ -48,53 +47,48 @@ nodes and zones.
 
 ## Zone admin
 
-One per zone — the team lead. Gets, at provisioning time:
+One per zone — the team lead. At provisioning time they get **one** credential:
+a **zone token** (`state/zones/<slug>/zone-token`) which signs them in at
+`https://admin.<slug>.<event-domain>/` — the **zone console**.
 
-- a **Forgejo admin login** (`state/zones/<slug>/zone-admin.txt`) for that
-  zone's Forgejo, and
-- a **zone control token** (`state/zones/<slug>/zone-token`) — they sign in
-  with it at `https://admin.<slug>.<event-domain>/` to get the zone view.
+That console is their whole surface. They never touch a Forgejo admin screen;
+the `zoneadmin` Forgejo account exists only as hz-control's service credential
+and stays on the control host. Everything below is a console action:
 
-Through the zone view (or Forgejo directly) they manage **their zone only**:
-
-| Task | Where |
+| Task | In the console |
 |---|---|
-| Add / remove team members | zone view "Users", or Forgejo → Site Administration → Users |
-| Create repositories | zone view "Repositories", or Forgejo → New Repository |
-| Ship a build | zone view "Repositories" → pick `patch`/`minor`/`major` → **Release**. hz-control tags the next `vX.Y.Z` on `main` for you (via the Forgejo API — no local `git tag`, no Releases form) and that starts the build-and-deploy workflow. A push to `main` deploys the same way. |
-| Manage the zone's apps | zone view "Apps" — list, live status, remove. Deploys come from CI; every app also gets a Watchtower agent wired in automatically, so a re-pushed image redeploys on its own (~60s). |
-| Restart a stuck Actions runner | zone view button (`docker compose -p zone-<slug> restart runner`) |
-| See build / deploy status, the live-app URL | zone view status card |
-| Manage PRs, issues, Actions, packages | Forgejo, as normal |
+| Add / remove team members | **Users** — creates the Forgejo account for them |
+| Create repositories | **Repositories → Create repo** |
+| Ship a build | **Repositories →** pick `patch` / `minor` / `major` **→ Release** — see below |
+| Manage the zone's apps | **Apps** — list, live status, remove. Deploys come from CI; every app is wired with a Watchtower agent automatically, so a re-pushed image redeploys on its own (~60s). |
+| Restart a stuck Actions runner | **Restart runner** button |
+| See build / deploy status, the live-app URL | status card |
 
-Every zone-view action is either a **proxied call to that zone's own Forgejo
-admin API** (with the token minted at provisioning) or a `docker compose`
-command **scoped to a `zone-<slug>` or `app-<slug>-<name>` project the zone owns**. A
-zone admin has no node access, no Docker access, and no visibility into any
-other zone.
+Every console action is either a **proxied call to that zone's Forgejo admin
+API** (with the service token, never exposed) or a `docker compose` command
+**scoped to a `zone-<slug>` or `app-<slug>-<name>` project the zone owns**. A
+zone admin has no node access, no Docker access, no Forgejo admin access, and
+no visibility into any other zone.
+
+Developers on the team use the git remote for code, pull requests and CI logs
+like any forge — that's the *developer* surface, separate from this one.
 
 ### Shipping a release
 
-Releases are cut **from the zone console**, not with a local `git tag` and not
-through Forgejo's Releases form — so the tag is always made by hz-control
-against reviewed, already-pushed `main`.
+Release versioning is automated — **no tag names to type**, no Releases form.
+In the console under **Repositories**, each repo shows its current version
+(e.g. `· v1.2.3`). Pick the bump and click **Release**:
 
-1. Get the change onto `main` (merge the PR).
-2. In the zone view under **Repositories**, each repo shows its current version
-   (e.g. `· v1.2.3`). Pick the bump — `patch` for a fix, `minor` for a feature,
-   `major` for a breaking change — and click **Release**.
-3. hz-control reads the repo's highest `vMAJOR.MINOR.PATCH` tag, computes the
-   next one, and creates it on `main` via the Forgejo API (the first release is
-   `v0.1.0`, or `v1.0.0` for a major). It shows as a normal tag/release in
-   Forgejo.
-4. The new tag fires the `build and deploy` workflow — watch it under the
-   repo's **Actions** tab; on success the app is live at
-   `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
+- **patch** — a bug fix (`v1.2.3 → v1.2.4`)
+- **minor** — a backwards-compatible feature (`v1.2.3 → v1.3.0`)
+- **major** — a breaking change (`v1.2.3 → v2.0.0`)
 
-A plain push to `main` deploys the same way (useful mid-hack); a release is the
-one to use for anything a judge or stakeholder will look at, because the
-running image is labelled with the version and it is trivial to redeploy or
-roll back to that exact tag.
+hz-control reads the repo's highest `vMAJOR.MINOR.PATCH` tag, computes the next
+one (first release is `v0.1.0`, or `v1.0.0` for a major), and creates it on
+`main`. That fires the `build and deploy` workflow; on success the app is live
+at `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
+A plain push to `main` also deploys (handy mid-hack), but a release is what
+gives every deployed image a version to redeploy or roll back to.
 
 Re-pushing an image to the **same** tag later (a base-image rebuild, say) needs
 no new release: the per-node Watchtower notices the new digest and rolls the
@@ -105,7 +99,7 @@ app forward on its own within ~60s.
 - Platform admin: *which* hosts exist, *where* zones run, *whether* a zone
   exists at all.
 - Zone admin: *what happens inside* one zone — people, repos, the runner, and
-  shipping releases (the **Release** button auto-tags `main`).
+  shipping releases — all from the zone console, never a Forgejo admin screen.
 
 The control plane (`hz-control`) is the single process that holds both sets of
 credentials and enforces the split: it authenticates the caller's token,

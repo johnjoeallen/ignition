@@ -49,7 +49,8 @@ flowchart TB
   optional `LABELS`, and a `STATE` (`active` / `draining`).
 - A **zone** is `state/zones/<slug>/`: `zone.env` (node, base domain,
   footprint, URLs), the rendered `docker-compose.yml`, `runner-secret`,
-  `zone-admin.txt` (Forgejo admin login + API token), `zone-token`,
+  `zone-admin.txt` (Forgejo admin login + API token — hz-control's service
+  credential, never handed to the team lead), `zone-token`,
   `deploy-token`, `last-activity`.
 - An **app** is `state/zones/<slug>/apps/<name>.env`: which node it
   runs on, its image, port, and last deploy id — plus the rendered

@@ -125,17 +125,18 @@ and runs it on the zone's node's real daemon, on `traefik-public`.
 `POST /undeploy` (or `hz app rm`) tears one down.
 
 **New builds redeploy automatically, two ways.** The CI workflow
-(`examples/deploy.yml`) triggers on a push to `main` **and** on a git tag —
-releases are cut from the zone console — the **Release** button in the zone
-view picks the next `vX.Y.Z` and tags it on `main` via the Forgejo API (no
-local `git tag`, no Releases form), which is part of the zone-admin role. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch
-or tag) and `POST /deploy`s the `:<ref>` one, rolling the app forward
-immediately. Independently, a **per-node Watchtower** (in
-`traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls a new digest for
-any container labelled `com.centurylinklabs.watchtower.enable=true` — which
-`app-compose.tmpl` sets on every app hz-control deploys, so teams get
-auto-reload without touching their repo — and never touches
-Traefik/Forgejo/DinD/runners.
+(`examples/deploy.yml`) triggers on a push to `main` **and** on a git tag. Tags
+are created by the zone console's **Release** button: `cut_release()` in
+`hz-control.py` reads the repo's highest `vMAJOR.MINOR.PATCH` tag over the
+Forgejo API, bumps it (patch/minor/major; first release `v0.1.0` or `v1.0.0`),
+and creates the tag on `main` — the zone admin never types a version or opens
+Forgejo. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch or tag) and
+`POST /deploy`s the `:<ref>` one, rolling the app forward immediately.
+Independently, a **per-node Watchtower** (in `traefik-core-compose.yml`,
+`--label-enable`, 60s poll) pulls a new digest for any container labelled
+`com.centurylinklabs.watchtower.enable=true` — which `app-compose.tmpl` sets on
+every app hz-control deploys, so teams get auto-reload without touching their
+repo — and never touches Traefik/Forgejo/DinD/runners.
 
 **One central control plane, not an agent per node.** `hz-control` orchestrates
 across nodes: it holds `HZ_ADMIN_TOKEN` (platform), each zone's `zone-token`

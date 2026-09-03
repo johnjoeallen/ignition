@@ -31,8 +31,9 @@ Read **[CLAUDE.md](CLAUDE.md)** for the design decisions before changing anythin
 - **Platform admin** — registers nodes, creates/places/moves/destroys zones,
   sees every zone and app. Uses the `hz` CLI and `admin.hackzone.com`.
 - **Zone admin** — one per zone (the team lead). Adds users, creates repos,
-  restarts the runner, manages the zone's apps — for *their* zone only, at
-  `admin.<slug>.hackzone.com` (or Forgejo directly).
+  cuts releases (automated semver bumps), manages the zone's apps, restarts the
+  runner — all from the **zone console** at `admin.<slug>.hackzone.com`, for
+  *their* zone only. They never touch a Forgejo admin screen.
 
 **Forgejo, not Gitea:** community-governed (Codeberg e.V.), FOSS-first, no
 open-core drift. Server `codeberg.org/forgejo/forgejo:11` (LTS), runner
@@ -83,19 +84,18 @@ BASE_DOMAIN=hackzone.com ./hz zone create alpha
 ./hz zone destroy alpha       # zone + all its apps
 ```
 
-A zone lead then seeds a repo with `.forgejo/workflows/deploy.yml`
-([`examples/deploy.yml`](examples/deploy.yml)) and its vars/secrets
+A zone lead then adds `.forgejo/workflows/deploy.yml`
+([`examples/deploy.yml`](examples/deploy.yml)) to a repo with its vars/secrets
 (`REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, and an
-optional `FORGEJO_TOKEN`). A push to `main` **or the zone admin hitting Release**
-in the zone console (which auto-tags the next `vX.Y.Z` on `main` — no
-`git push --tags`) builds, pushes to
-`git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`.
-Several repos → several apps.
+optional `FORGEJO_TOKEN`).
 
-Builds normally **start from a release** — in the zone console the zone admin
-picks `patch`/`minor`/`major` and clicks **Release**; hz-control tags the next
-`vX.Y.Z` on `main` via the Forgejo API and CI builds + ships that tag. A push
-to `main` works too. After that, rollout is automatic two ways:
+Builds **start from a release** — in the zone console under Repositories the
+zone admin picks `patch` / `minor` / `major` and clicks **Release**; hz-control
+reads the repo's current `vX.Y.Z`, computes the next one, and tags it on `main`
+(no tag names typed, no `git push --tags`). That builds, pushes to
+`git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`. A
+push to `main` works too. Several repos → several apps. After that, rollout is
+automatic two ways:
 the workflow's `POST /deploy` rolls the app forward immediately, and
 **hz-control wires a Watchtower agent into every deployed app** (the
 `app-compose.tmpl` label is added for you) so the per-node Watchtower pulls a

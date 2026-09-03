@@ -46,18 +46,18 @@ BASE_DOMAIN=hackzone.com ./hz zone create bravo --node node-2
 #   → state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 ```
 
-Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
-**`zone-token`** (sign in at `admin.<slug>.hackzone.com`). They seed each repo they want
-deployed with `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and
-its repo variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
-`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). A push to `main`, or the
-zone admin hitting **Release** in the zone console (which auto-tags the next
-`vX.Y.Z` on `main`), builds, pushes, and deploys
-`APP_NAME.apps.<slug>.hackzone.com`; more
-repos → more apps. The `POST /deploy`
-rolls the app forward at once, and the per-node Watchtower keeps the deployed
-`:<ref>` tag fresh afterwards (a re-push or base-image rebuild goes live on
-its own, ~60s).
+Hand each team lead just their zone's **`zone-token`** — they sign in with it at
+`https://admin.<slug>.hackzone.com/`, the zone console, and that's their whole
+surface (`zone-admin.txt` is hz-control's service credential; keep it on the
+control host). In each repo they want deployed they add
+`.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and its
+variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
+`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). A push to `main`, or the zone
+admin hitting **Release** in the console (which auto-tags the next `vX.Y.Z` on
+`main`), builds, pushes, and deploys `APP_NAME.apps.<slug>.hackzone.com`; more
+repos → more apps. The `POST /deploy` rolls the app forward at once, and the
+per-node Watchtower keeps the deployed `:<ref>` tag fresh afterwards (a re-push
+or base-image rebuild goes live on its own, ~60s).
 
 ## During the event
 
@@ -76,11 +76,11 @@ its own, ~60s).
 `hz zone create` and every deploy. Cron it (every ~15 min) so abandoned zones
 free their node capacity automatically.
 
-Teams deploy themselves — a team lead publishes a release in the Forgejo web
-console (Repositories → pick a bump → **Release**, which auto-tags `main`) and
-CI builds and ships it; a push to `main` works too. See
-[Roles → Shipping a release](roles.md#shipping-a-release). You don't run
-deploys for them.
+Teams deploy themselves — in the zone console the team lead picks a bump and
+hits **Release** (Repositories), hz-control auto-tags the next `vX.Y.Z` on
+`main`, and CI builds and ships it; a push to `main` works too. See
+[Roles → Shipping a release](roles.md#shipping-a-release).
+You don't run deploys for them.
 
 ## Capacity
 

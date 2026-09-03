@@ -77,9 +77,9 @@ flowchart TB
 
 ## How a zone's apps get deployed
 
-1. The zone admin picks a bump and hits **Release** in the zone console —
-   hz-control tags the next `vX.Y.Z` on `main` via the Forgejo API (or a
-   developer just pushes to `main`). See
+1. The zone admin picks `patch` / `minor` / `major` and hits **Release** in the
+   zone console — hz-control computes the next `vX.Y.Z` and tags it on `main`
+   (or a developer just pushes to `main`). See
    [Roles → Shipping a release](roles.md#shipping-a-release).
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.
