@@ -63,5 +63,6 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Executive Overview: executive-overview.md
+  - Roles: roles.md
   - Architecture: architecture.md
   - Operating an Event: operating-an-event.md

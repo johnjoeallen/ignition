@@ -10,9 +10,11 @@ Thumbs.db
 .env.*
 !.env.example
 
-# Runtime state — generated per team by provision-team.sh, never source
-/state/*
-!/state/.gitkeep
+# Runtime state — generated per node/zone, never source
+/state/nodes/*
+/state/zones/*
+!/state/nodes/.gitkeep
+!/state/zones/.gitkeep
 
 # Rendered compose files / logs / temp
 *.rendered.yml

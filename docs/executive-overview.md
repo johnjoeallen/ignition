@@ -44,15 +44,17 @@ HackZone is built around four properties that only matter once the team count is
 large:
 
 **1. Hard isolation, not politeness.**
-Every team's git, CI, build engine, images, and network are separate. One team
-cannot see, reach, or disrupt another — not by convention, by construction. This
-is what lets a security team say *yes* to eighty untrusted teams on one host
-without writing eighty exceptions.
+Every team gets a **zone** — its own git, CI, build engine, images, and
+network. One zone cannot see, reach, or disrupt another — not by convention, by
+construction. This is what lets a security team say *yes* to eighty untrusted
+teams without writing eighty exceptions.
 
-**2. Self-service provisioning.**
-Standing up a team is one command (`provision-team.sh <slug> <index>`) and takes
-seconds, not a ticket. The marginal cost of one more team is close to zero, so
-capacity stops being a gate on who gets to participate.
+**2. Self-service, and delegated.**
+Standing up a zone is one command (`hz zone create <slug>`) and takes seconds,
+not a ticket — a scheduler places it on whichever host has room. And the team
+lead is their zone's admin: they add teammates and create repos themselves,
+through a scoped surface, without coming back to the platform team. The
+marginal cost of one more team is close to zero.
 
 **3. Real deployments, not screenshots.**
 Every team's app is live at `https://<team>.<event-domain>/` and redeploys on
@@ -61,18 +63,19 @@ best ideas leave the event as a running URL and a git repo — already deployed,
 already shareable — instead of a deck that needs a project to become real.
 
 **4. Deterministic teardown.**
-Every resource is namespaced per team; teardown is a single, complete operation,
-and an idle sweeper reclaims stacks that go quiet. The event leaves **no
-residue** — no leaked containers, no creeping spend, no "what is this from?" six
-months later.
+Every resource is namespaced per zone; teardown is a single, complete
+operation, and an idle sweeper reclaims zones that go quiet. The event leaves
+**no residue** — no leaked containers, no creeping spend, no "what is this
+from?" six months later.
 
 ## The operating posture
 
-- **One host.** Up to ~80 team stacks on a single machine you already control.
-  Not a Kubernetes platform to stand up and staff; a set of shell scripts and
-  compose templates.
-- **Predictable footprint.** Per-team CPU and memory quotas are set in one
-  place. Capacity is arithmetic, not guesswork.
+- **A handful of hosts, one control plane.** Register each host as a *node*;
+  zones are scheduled across them by free capacity. No Kubernetes to stand up
+  and staff — shell scripts, compose templates, and one small control service.
+- **Predictable footprint.** Per-zone CPU and memory quotas are set in one
+  place; `hz node list` shows allocation vs. capacity. Adding a node is one
+  command.
 - **No new vendor.** Forgejo (community-governed, FOSS), Docker, and Traefik —
   all things a platform team can already reason about and audit.
 - **Reversible.** Nothing here is a long-lived commitment. Run an event, tear it
@@ -85,14 +88,15 @@ isolated forge + CI + build sandbox + a routed live app per team, provisioned
 and reclaimed on demand.
 
 **It is not** a permanent internal developer platform, a replacement for
-production CI/CD, or a multi-host orchestrator. Ideas that graduate from an
-event move onto the organisation's real platform — HackZone's job is to get them
-to the point of being worth graduating.
+production CI/CD, or a general-purpose orchestrator. It schedules zones across
+a handful of nodes for the length of an event and no more. Ideas that graduate
+move onto the organisation's real platform — HackZone's job is to get them to
+the point of being worth graduating.
 
 ## The bottom line
 
 Organisations don't lack ideas from their engineers; they lack a cheap, safe,
 repeatable way to let many people try many ideas at once and come away with
 something real. That capability is infrastructure, and it is the constraint that
-actually binds. HackZone removes it for the price of one host and a handful of
+actually binds. HackZone removes it for the price of a few hosts and a handful of
 scripts.

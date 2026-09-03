@@ -2,58 +2,69 @@
 
 ## Prerequisites
 
-- A host with Docker + Docker Compose v2, `envsubst` (gettext), `openssl`,
-  Python 3.11+.
-- DNS: `*.<event-domain>` → the host (covers every team's live app). Each
-  team's Forgejo is at `git.<slug>.<event-domain>` — two labels deep, so
-  `*.<event-domain>` misses it; add a `*.<slug>.<event-domain>` record per team
-  (or one broad record if your DNS allows it).
+- A **control host** with Docker + Compose v2, `envsubst` (gettext),
+  `openssl`, `bash`, Python 3.11+, and a way to reach each node's Docker
+  daemon (local socket, `ssh://`, or `tcp://`+TLS).
+- **Nodes** — hosts with Docker, each with the shared network created:
+  `docker network create traefik-public`.
+- DNS: `*.<event-domain>` → the node(s) (covers every zone's live app). Each
+  zone's Forgejo is at `git.<slug>.<event-domain>` — two labels deep, so
+  `*.<event-domain>` misses it; add a `*.<slug>.<event-domain>` record per zone.
 - A DNS-provider API token for Traefik's ACME DNS challenge (Cloudflare by
-  default; swap the provider in `templates/traefik-core-compose.yml`). Traefik
-  fetches the `*.<event-domain>` cert plus a `*.<slug>.<event-domain>` cert per
-  team.
+  default; swap the provider in `templates/traefik-core-compose.yml`).
 
-Traefik terminates TLS for both the apps and the Forgejo instances with real
-certificates, so the host Docker daemon needs **no `insecure-registries`
-entry**.
+Traefik terminates TLS for the apps and the Forgejo instances, so no
+`insecure-registries` entry is needed anywhere.
 
 ## Standing up the event
 
 ```sh
-# 1. Host Traefik — once, before any team.
+# 1. Traefik — once per node.
 export BASE_DOMAIN=hz.example.com ACME_EMAIL=ops@example.com CF_DNS_API_TOKEN=...
 docker compose -f templates/traefik-core-compose.yml up -d
 
-# 2. The deploy bridge — once. Front it with Traefik / a tunnel; do not expose it raw.
-./scripts/deploy-agent.py &
+# 2. The control plane — once, on the control host. Front it with Traefik / a
+#    tunnel; do not expose it raw.
+export HZ_ADMIN_TOKEN=$(openssl rand -hex 32)      # keep this — it's the platform key
+./hz control &
 
-# 3. A team.
-BASE_DOMAIN=hz.example.com ./scripts/provision-team.sh team-a
-#   → Forgejo at https://git.team-a.hz.example.com/
-#   → live app  at https://team-a.hz.example.com/  (once CI deploys)
-#   → deploy token at state/team-a/deploy-token
+# 3. Register nodes.
+./hz node add node-1 local              --cpus 32 --mem 128g
+./hz node add node-2 ssh://ops@10.0.0.2 --cpus 32 --mem 128g --labels fast
+./hz node list
+
+# 4. Create zones (scheduler picks a node; --node to pin, --label to constrain).
+BASE_DOMAIN=hz.example.com ./hz zone create alpha
+BASE_DOMAIN=hz.example.com ./hz zone create bravo --node node-2
+#   → Forgejo   https://git.alpha.hz.example.com/
+#   → live app  https://alpha.hz.example.com/
+#   → state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 ```
 
-Then, in the team's Forgejo: create the admin user, make a repo, add
-`.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`), and set the repo
-variables and secrets it documents (`REGISTRY`, `DEPLOY_URL`, `APP_PORT`,
-`FORGEJO_TOKEN`, `DEPLOY_TOKEN`). A push to `main` then builds, pushes, and
-deploys.
+Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
+**`zone-token`** (control-plane zone view). They seed the starter repo with
+`.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and set its repo
+variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_PORT`, `FORGEJO_TOKEN`,
+`DEPLOY_TOKEN`. A push to `main` then builds, pushes, and deploys.
 
 ## During the event
 
 ```sh
-./scripts/teardown-team.sh team-a          # complete: containers, volumes, state
-IDLE_TTL=86400 ./scripts/sweep-idle.sh     # cron: reclaim stacks idle > TTL
+./hz zone list
+./hz zone status alpha              # live container health on alpha's node
+./hz zone move alpha --node node-1  # rebuild on another node (data does not follow)
+./hz zone destroy alpha             # complete: containers, volumes, state
+./hz node drain node-2              # stop placing new zones here
+./hz sweep                          # reclaim idle zones now (or cron sweep-idle.sh)
 ```
 
-`sweep-idle.sh` reads `state/<slug>/last-activity`, which `provision-team.sh`
-and every deploy bump. Run it from cron (e.g. every 15 minutes) so abandoned
-stacks free their quota automatically.
+`sweep-idle.sh` reads `state/zones/<slug>/last-activity`, bumped by
+`hz zone create` and every deploy. Cron it (every ~15 min) so abandoned zones
+free their node capacity automatically.
 
 ## Capacity
 
-Per-team quotas have defaults at the top of `provision-team.sh`:
+Per-zone quotas have defaults at the top of `provision-zone.sh`:
 
 | Var | Default | Notes |
 |---|---|---|
@@ -62,27 +73,21 @@ Per-team quotas have defaults at the top of `provision-team.sh`:
 | `CPU_RUNNER` / `MEM_RUNNER` | `1.0` / `2g` | |
 | `CPU_APP` / `MEM_APP` | `1.0` / `1g` | the live demo container |
 
-These are **limits**, not reservations — teams are bursty and rarely build at
-the same instant, so a host can safely oversubscribe. As a rough guide, budget
-~2–3 GB of steady-state memory per active team and size the box for the
-number you expect building concurrently, not the total team count. Tighten the
-DinD quota first if you need to fit more.
+The scheduler sums these limits as a zone's "footprint" for node accounting.
+They are **limits**, not reservations — zones are bursty and rarely build at
+the same instant, so nodes safely oversubscribe. As a rough guide, budget
+~2–3 GB steady-state memory per active zone and size each node for the number
+building concurrently, not the total. `hz node list` shows allocated vs.
+capacity per node.
 
 ## Rough edges
 
-- **`git.<slug>.<event-domain>` DNS isn't created for you.** Provisioning
-  assumes it already resolves (a `*.<slug>.<event-domain>` record, or one per
-  team). Wiring it to the DNS-provider API is the top item in `CLAUDE.md`.
-- **`traefik-public` is one flat network.** The live-app containers and the
-  Forgejo instances can reach each other by IP; a Traefik-per-team network or an
-  L3 policy would close that seam.
-- **The deploy agent has no registry credentials.** It pulls as whatever the
-  host daemon can reach — anonymous pulls of public packages work; private ones
-  need `docker login` / a per-team `DOCKER_CONFIG` wired in.
-- **No automatic repo seeding.** The starter repo, workflow file, and repo
-  vars/secrets are still set up by hand per team. Automating this via Forgejo's
-  API is the top item in `CLAUDE.md`.
-- **`deploy-agent.py` runs bare** with docker-socket access — move it into a
-  systemd unit or a locked-down container.
-- **No roster loop.** Eighty teams is eighty script invocations; a
-  `provision-all.sh` reading a roster file is a good next task.
+- **`git.<slug>.<event-domain>` DNS isn't created for you** — provisioning
+  assumes it resolves. Wiring it to the DNS-provider API is the top task.
+- **`traefik-public` is one flat network** — live-app containers and Forgejo
+  instances on a node can reach each other by IP.
+- **`hz-control` runs bare** with Docker access and every token on disk — it
+  needs a systemd unit / locked-down container and its own TLS front.
+- **The control plane pulls images anonymously** — private packages need
+  `docker login` / a per-zone `DOCKER_CONFIG` on the node.
+- **No repo seeding, no roster loop** — both are top items in `CLAUDE.md`.

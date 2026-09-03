@@ -1,12 +1,12 @@
-# Seed this into each team's starter repo as .forgejo/workflows/deploy.yml
+# Seed this into each zone's starter repo as .forgejo/workflows/deploy.yml
 #
 # Repo variables (Settings -> Actions -> Variables):
-#   REGISTRY     git.<slug>.<BASE_DOMAIN>      e.g. git.team-a.hz.example.com
-#   DEPLOY_URL   https://deploy.<BASE_DOMAIN>  where deploy-agent.py answers
-#   APP_PORT     8080                          the port your app listens on
+#   REGISTRY     git.<slug>.<BASE_DOMAIN>       e.g. git.alpha.hz.example.com
+#   CONTROL_URL  https://control.<BASE_DOMAIN>  where hz-control answers
+#   APP_PORT     8080                           the port your app listens on
 # Repo secrets (Settings -> Actions -> Secrets):
 #   FORGEJO_TOKEN  a token with package:write, for pushing to the registry
-#   DEPLOY_TOKEN   the team's deploy token (state/<slug>/deploy-token on the host)
+#   DEPLOY_TOKEN   the zone's CI token (state/zones/<slug>/deploy-token on the control host)
 
 name: build and deploy
 
@@ -30,7 +30,7 @@ jobs:
 
       - name: Deploy the live app
         run: |
-          curl -fsS --retry 3 -X POST "${{ vars.DEPLOY_URL }}/deploy" \
+          curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
             -H 'content-type: application/json' \
             -d "{\"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}}"

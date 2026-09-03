@@ -1,0 +1,31 @@
+# A zone's live demo app. Rendered and applied by the control plane
+# (control/hz-control.py) on the zone's assigned node — NOT inside the zone's
+# DinD sandbox (see CLAUDE.md) — so Traefik on traefik-public can route
+# https://${ZONE_SLUG}.${BASE_DOMAIN}/ to it.
+#
+# Substituted vars: ZONE_SLUG BASE_DOMAIN APP_IMAGE APP_PORT DEPLOY_ID CPU_APP MEM_APP
+
+name: zone-${ZONE_SLUG}-app
+
+networks:
+  traefik-public:
+    external: true
+
+services:
+  app:
+    image: ${APP_IMAGE}
+    container_name: zone-${ZONE_SLUG}-app
+    restart: unless-stopped
+    networks: [traefik-public]
+    labels:
+      hackzone.zone: ${ZONE_SLUG}
+      hackzone.deploy-id: "${DEPLOY_ID}"
+      traefik.enable: "true"
+      traefik.docker.network: traefik-public
+      traefik.http.routers.zone-${ZONE_SLUG}.rule: Host(`${ZONE_SLUG}.${BASE_DOMAIN}`)
+      traefik.http.routers.zone-${ZONE_SLUG}.entrypoints: websecure
+      traefik.http.routers.zone-${ZONE_SLUG}.tls: "true"
+      traefik.http.services.zone-${ZONE_SLUG}.loadbalancer.server.port: "${APP_PORT}"
+    deploy:
+      resources:
+        limits: { cpus: "${CPU_APP}", memory: "${MEM_APP}" }

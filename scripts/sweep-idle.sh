@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Reclaim team stacks idle longer than IDLE_TTL. Meant for cron:
+# Reclaim zones idle longer than IDLE_TTL. Meant for cron:
 #
 #   */15 * * * *  IDLE_TTL=86400 /opt/hackzone/scripts/sweep-idle.sh >> /var/log/hackzone-sweep.log 2>&1
 #
-# "Idle" = state/<slug>/last-activity older than IDLE_TTL seconds. That file is
-# bumped by provision-team.sh and by deploy-agent.py on every deploy. Add other
-# signals (Forgejo last-commit via API, etc.) here if a heartbeat isn't enough.
+# "Idle" = state/zones/<slug>/last-activity older than IDLE_TTL seconds. That
+# file is bumped by provision-zone.sh and by the control plane on every deploy.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/lib.sh
@@ -14,17 +13,13 @@ cd "$(dirname "$0")/.."
 : "${DRY_RUN:=0}"
 now=$(date +%s)
 
-[ -d "$STATE_DIR" ] || exit 0
-for dir in "$STATE_DIR"/*/; do
-    [ -d "$dir" ] || continue
-    slug=$(basename "$dir")
-    valid_slug "$slug" || continue
-    last=$(cat "$dir/last-activity" 2>/dev/null || echo 0)
+for slug in $(list_zones); do
+    last=$(cat "$(zone_dir "$slug")/last-activity" 2>/dev/null || echo 0)
     age=$(( now - last ))
     if [ "$age" -lt "$IDLE_TTL" ]; then
-        echo "keep   $slug  (idle ${age}s)"
+        echo "keep    $slug  (idle ${age}s)"
         continue
     fi
     echo "reclaim $slug  (idle ${age}s > ${IDLE_TTL}s)"
-    [ "$DRY_RUN" = "1" ] || ./scripts/teardown-team.sh "$slug"
+    [ "$DRY_RUN" = "1" ] || ./scripts/teardown-zone.sh "$slug"
 done

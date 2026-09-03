@@ -14,8 +14,8 @@
 name: hackzone-core
 
 networks:
-  # The one shared network Traefik watches. deploy-agent.py attaches each
-  # team's live app container here; nothing else should join it.
+  # The one shared network this node's Traefik watches. hz-control attaches
+  # each zone's live app container here, and each zone's Forgejo joins it too.
   traefik-public:
     name: traefik-public
 
