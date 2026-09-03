@@ -202,12 +202,16 @@ conditionals — the reason it isn't a template today).
    (platform / zone / deploy), `/actuator/health`, both console shells, the CI
    `/deploy` bridge stubbed `501`, `EnvFile` + file-tree repositories for
    nodes / zones / apps, `IdleSweeper` (`@Scheduled`, reports only).
-3. **in progress** — read paths done (platform console renders nodes / zones /
-   apps live from `state/`; zone console renders the caller's zone). Node
-   register / drain / remove is the first write slice and works. Still to port
-   1:1 from `ign-control.py`: the zone console's Users / Repositories / Release /
-   runner-restart.
-4. Port the CI bridge; verify against a real zone.
+3. **done** — read paths live (platform console renders nodes / zones / apps
+   from `state/`). Node register / drain / remove works. The **zone console is
+   ported 1:1** from `ign-control.py`: `ForgejoClient` (per-zone REST via the
+   `zoneadmin` token), `ReleaseService` (`latestSemver` / `bump` /
+   `classifyBump` / `cut`, unit-tested), Users create/delete, Repositories
+   create + per-repo **Release** (auto / patch / minor / major), runner restart
+   and stack status via a `DockerCli` (`docker -H <endpoint> compose …`).
+4. **in progress** — the CI bridge: `POST /deploy` / `/undeploy` still return
+   `501`. `DockerCli` exists; the app-compose render + `up -d --pull always`
+   and the registry check port next.
 5. Port provisioning (the two-phase flow); verify a zone-create end to end.
 6. Port scheduler + move + destroy + sweep.
 7. Add the platform-console write operations (register node, zone

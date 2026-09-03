@@ -8,17 +8,20 @@
 <body>
   <nav class="top">
     <span th:text="${principal}">zone:…</span>
-    <form method="post" th:action="@{/logout}" class="inline">
-      <button>Sign out</button>
-    </form>
+    <form method="post" th:action="@{/logout}" class="inline"><button>Sign out</button></form>
   </nav>
 
   <h1 th:text="|Ignition · zone ${zone.slug}|">Ignition · zone</h1>
+  <div class="msg" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
 
-  <p>
+  <div class="card">
     <b>Forgejo</b> <a th:href="${zone.forgejoUrl}" th:text="${zone.forgejoUrl}">git…</a><br>
-    <b>Node</b> <span th:text="${zone.node}">node-1</span>
-  </p>
+    <b>Node</b> <span th:text="${zone.node} ?: '?'">node-1</span> &nbsp;
+    <b>Stack</b> <code th:text="${stack}">—</code>
+    <form method="post" th:action="@{/z/runner/restart}" style="margin-top:.6rem">
+      <button>Restart runner</button>
+    </form>
+  </div>
 
   <h2>Apps <span class="muted" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span></h2>
   <table>
@@ -28,10 +31,55 @@
       <td><code th:text="${a.image}">img</code></td>
       <td th:text="${a.deployId}">—</td>
     </tr>
-    <tr th:if="${apps.isEmpty()}"><td colspan="3" class="muted">none yet — Release ships one</td></tr>
+    <tr th:if="${apps.isEmpty()}"><td colspan="3" class="muted">none yet — hit Release on a repo below</td></tr>
+  </table>
+  <p class="muted">Deploys come only from a release. A plain push to <code>main</code> does not deploy.</p>
+
+  <h2>Users</h2>
+  <form method="post" th:action="@{/z/users}" class="stack">
+    <label>username<input name="username" required></label>
+    <label>email<input name="email" type="email" required></label>
+    <label>password<input name="password" type="password" required></label>
+    <button>Add user</button>
+  </form>
+  <table>
+    <tr><th>login</th><th>email</th><th>role</th><th></th></tr>
+    <tr th:each="u : ${users}">
+      <td th:text="${u.login}">alice</td>
+      <td th:text="${u.email}">a@x</td>
+      <td th:text="${u.admin} ? 'admin' : ''"></td>
+      <td>
+        <form method="post" th:action="@{/z/users/delete}" class="inline">
+          <input type="hidden" name="login" th:value="${u.login}">
+          <button th:disabled="${u.login == 'zoneadmin'}">remove</button>
+        </form>
+      </td>
+    </tr>
+    <tr th:if="${users.isEmpty()}"><td colspan="4" class="muted">could not list users</td></tr>
   </table>
 
-  <p class="muted">Users, Repositories and the Release button are ported from the
-    previous control plane in a later step.</p>
+  <h2>Repositories <span class="muted">· <b>Release</b> reads the commits since the last
+    release and tags the next <code>vX.Y.Z</code> on <code>main</code></span></h2>
+  <form method="post" th:action="@{/z/repos}" class="stack">
+    <label>name<input name="name" required></label>
+    <label>&nbsp;<span><input type="checkbox" name="priv"> private</span></label>
+    <button>Create repo</button>
+  </form>
+  <ul style="line-height:2.2">
+    <li th:each="r : ${repos}">
+      <a th:href="${r.htmlUrl}" th:text="${r.fullName}">owner/repo</a>
+      <span class="muted" th:text="|· ${r.version}|">· v1.2.3</span>
+      <form method="post" th:action="@{/z/repos/release}" class="inline">
+        <input type="hidden" name="owner" th:value="${r.owner}">
+        <input type="hidden" name="repo" th:value="${r.name}">
+        <select name="bump">
+          <option value="auto">auto (from commits)</option>
+          <option>patch</option><option>minor</option><option>major</option>
+        </select>
+        <button>Release</button>
+      </form>
+    </li>
+    <li th:if="${repos.isEmpty()}" class="muted">none yet</li>
+  </ul>
 </body>
 </html>
