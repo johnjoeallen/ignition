@@ -8,7 +8,7 @@ Per-team hackathon infrastructure. Many teams (target ~80), a pool of hosts
 - **private DinD** — a per-zone Docker-in-Docker engine so one zone's CI can
   never touch another's images, containers or network
 - **a live demo app** — `https://<slug>.<BASE_DOMAIN>/`, deployed by CI and
-  routed by a single host-level Traefik (which also fronts the Forgejo above)
+  routed by the zone's node Traefik (which also fronts the Forgejo above)
 
 Zones are placed on nodes by a scheduler, and provisioned / torn down
 independently.

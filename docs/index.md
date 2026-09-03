@@ -68,7 +68,7 @@ flowchart TB
 
 A few choices look odd until you hit the constraint behind them — the forge
 gets its own subdomain rather than a URL path, the live app is deployed from
-the control host rather than from inside the sandbox, there are no per-team
+the control host rather than from inside the sandbox, there are no per-zone
 host ports, and one central control plane holds every credential rather than an
 agent per node. See **[Architecture](architecture.md)** for each,
 **[Roles](roles.md)** for the platform-admin / zone-admin split, and

@@ -45,7 +45,7 @@ control/
 templates/
   zone-compose.yml.tmpl        # per-zone forgejo + dind + runner (envsubst template)
   app-compose.zone.yml.tmpl    # per-zone live demo app (envsubst template)
-  traefik-core-compose.yml     # host-level Traefik, wildcard TLS, runs once per event
+  traefik-core-compose.yml     # per-node Traefik, wildcard TLS, runs once per node
 examples/deploy.yml            # sample workflow to seed into each zone's starter repo
 state/
   nodes/<name>.env             # node registry (DOCKER_HOST, CPUS, MEM_GB, LABELS, STATE)

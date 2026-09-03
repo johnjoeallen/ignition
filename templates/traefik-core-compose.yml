@@ -1,14 +1,14 @@
-# Host-level Traefik. Runs once, before any team is provisioned.
+# Per-node Traefik. Runs once on every node, before any zone is placed there.
 #
 #   export BASE_DOMAIN=hz.example.com ACME_EMAIL=ops@example.com
 #   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the wildcard cert
 #   docker compose -f templates/traefik-core-compose.yml up -d
 #
-# Owns :80 and :443 on the host and terminates TLS for everything:
-#   <team-slug>.${BASE_DOMAIN}        -> the team's live app
-#   git.<team-slug>.${BASE_DOMAIN}    -> the team's Forgejo
+# Owns :80 and :443 on the node and terminates TLS for every zone on it:
+#   <zone-slug>.${BASE_DOMAIN}        -> the zone's live app
+#   git.<zone-slug>.${BASE_DOMAIN}    -> the zone's Forgejo
 # The entrypoint holds a *.${BASE_DOMAIN} wildcard for the app hosts; each
-# team's Forgejo router additionally asks for a *.<team-slug>.${BASE_DOMAIN}
+# zone's Forgejo router additionally asks for a *.<zone-slug>.${BASE_DOMAIN}
 # wildcard (git.<slug> is two labels deep, so *.${BASE_DOMAIN} misses it).
 
 name: hackzone-core

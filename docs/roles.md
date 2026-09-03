@@ -50,8 +50,8 @@ One per zone — the team lead. Gets, at provisioning time:
 
 - a **Forgejo admin login** (`state/zones/<slug>/zone-admin.txt`) for that
   zone's Forgejo, and
-- a **zone control token** (`state/zones/<slug>/zone-token`) for the control
-  plane's zone view.
+- a **zone control token** (`state/zones/<slug>/zone-token`) — they sign in
+  with it at `https://control.<event-domain>/` to get the zone view.
 
 Through the zone view (or Forgejo directly) they manage **their zone only**:
 
