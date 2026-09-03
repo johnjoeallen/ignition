@@ -228,8 +228,11 @@ conditionals — the reason it isn't a template today).
    per-node artefacts, repoint `NODE`, caller re-provisions). `IdleSweeper`
    now actually reclaims (`ignition.sweep.dry-run` to only report). Platform
    console: per-zone move / destroy, per-app stop.
-7. Add the platform-console write operations (register node, zone
-   create / move / destroy, roster, sweep-now).
+7. **done** — every platform write op is in the console: register / drain /
+   remove a node, provision / move / destroy a zone, stop an app, and a
+   `/roster` page (bulk apply / teardown a slug list) + "sweep idle zones now".
+   Provisioning runs on a small pool (`ignition.provisioning.concurrency`, 3)
+   so a roster fans out.
 8. Package as a container; add `ignition-control-compose.yml`; run it against a
    test node.
 9. Cut over: remove the scripts + `ign-control.py`; rewrite the docs and the

@@ -4,7 +4,7 @@ import net.dublinux.ignition.config.IgnitionProperties;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
-@ControllerAdvice(assignableTypes = {PlatformConsoleController.class, ZoneConsoleController.class})
+@ControllerAdvice(assignableTypes = {PlatformConsoleController.class, ZoneConsoleController.class, RosterController.class})
 public class GlobalModelAdvice {
 
     private final IgnitionProperties props;

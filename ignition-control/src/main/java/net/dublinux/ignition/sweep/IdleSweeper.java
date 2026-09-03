@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.zone.Zone;
@@ -41,24 +43,34 @@ public class IdleSweeper {
 
     @Scheduled(fixedDelayString = "${ignition.sweep.interval}", initialDelay = 60_000)
     public void sweep() {
+        sweepNow();
+    }
+
+    /** Run one sweep now and return a line per zone acted on. */
+    public List<String> sweepNow() {
         Duration ttl = props.getSweep().getTtl();
         Instant cutoff = Instant.now().minus(ttl);
+        List<String> actions = new ArrayList<>();
         for (Zone z : zones.findAll()) {
             Instant last = lastActivity(z.slug());
             if (last == null || !last.isBefore(cutoff)) {
                 continue;
             }
             if (dryRun) {
-                log.info("zone {} idle since {} (> {}) — would reclaim (dry-run)", z.slug(), last, ttl);
+                actions.add(z.slug() + ": idle since " + last + " — would reclaim (dry-run)");
+                log.info("zone {} idle since {} — would reclaim (dry-run)", z.slug(), last);
                 continue;
             }
             log.info("zone {} idle since {} (> {}) — reclaiming", z.slug(), last, ttl);
             try {
                 zoneService.destroy(z.slug(), false);
+                actions.add(z.slug() + ": reclaimed (idle since " + last + ")");
             } catch (RuntimeException e) {
                 log.warn("failed to reclaim idle zone {}", z.slug(), e);
+                actions.add(z.slug() + ": reclaim FAILED — " + e.getMessage());
             }
         }
+        return actions;
     }
 
     private Instant lastActivity(String slug) {

@@ -56,16 +56,20 @@ public class ProvisioningService {
     private final TraefikDynamicConfig traefik;
     private final DockerCli docker;
 
-    private final ExecutorService pool = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "provisioner");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService pool;
     private final Map<String, Status> statuses = new ConcurrentHashMap<>();
 
     public ProvisioningService(IgnitionProperties props, ZoneRepository zones, NodeRepository nodes,
                                Scheduler scheduler, ComposeTemplate templates,
-                               TraefikDynamicConfig traefik, DockerCli docker) {
+                               TraefikDynamicConfig traefik, DockerCli docker,
+                               @org.springframework.beans.factory.annotation.Value(
+                                       "${ignition.provisioning.concurrency:3}") int concurrency) {
+        java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger();
+        this.pool = Executors.newFixedThreadPool(Math.max(1, concurrency), r -> {
+            Thread t = new Thread(r, "provisioner-" + seq.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        });
         this.props = props;
         this.zones = zones;
         this.nodes = nodes;

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <title>Ignition · roster</title>
+  <link rel="stylesheet" href="/css/ignition.css">
+</head>
+<body>
+  <nav class="top"><a href="/">← platform</a> · <span th:text="${principal}">platform</span></nav>
+  <h1>Roster</h1>
+  <p class="muted">One slug per line (or space/comma separated). <code>#</code> comments ignored.
+    <b>Apply</b> queues a provision for each slug that isn't already a zone;
+    <b>Teardown</b> destroys each slug that is.</p>
+
+  <form method="post" th:action="@{/roster/apply}">
+    <textarea name="slugs" rows="10" style="width:100%;font:inherit;padding:.4rem"
+              th:text="${slugs}" placeholder="quantum-badgers&#10;pixel-foxes&#10;neon-yaks"></textarea>
+    <div style="margin:.6rem 0;display:flex;gap:.6rem">
+      <button formaction="/roster/apply">Apply</button>
+      <button formaction="/roster/teardown"
+              onclick="return confirm('Destroy every listed zone and its apps?')">Teardown</button>
+    </div>
+  </form>
+
+  <form method="post" th:action="@{/sweep}" style="margin:1rem 0">
+    <button>Sweep idle zones now</button>
+  </form>
+
+  <div th:if="${report != null}">
+    <h2>Result</h2>
+    <ul>
+      <li th:each="line : ${report}" th:text="${line}">slug — queued</li>
+    </ul>
+  </div>
+</body>
+</html>
