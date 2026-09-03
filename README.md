@@ -86,16 +86,16 @@ BASE_DOMAIN=hackzone.com ./hz zone create alpha
 A zone lead then seeds a repo with `.forgejo/workflows/deploy.yml`
 ([`examples/deploy.yml`](examples/deploy.yml)) and its vars/secrets
 (`REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, and an
-optional `FORGEJO_TOKEN`). A push to `main` **or a release cut in the Forgejo web UI**
-(Releases → New release, target `main` — a zone-admin task, so tags come from
-reviewed history, not `git push --tags`) builds, pushes to
+optional `FORGEJO_TOKEN`). A push to `main` **or the zone admin hitting Release**
+in the zone console (which auto-tags the next `vX.Y.Z` on `main` — no
+`git push --tags`) builds, pushes to
 `git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`.
 Several repos → several apps.
 
-Builds normally **start from a release** — the zone admin cuts one in the
-Forgejo web UI (repo → Releases → New release, tag `vX.Y.Z`, target `main`; the
-zone view links straight to it) and CI builds + ships that tag; a push to
-`main` works too. After that, rollout is automatic two ways:
+Builds normally **start from a release** — in the zone console the zone admin
+picks `patch`/`minor`/`major` and clicks **Release**; hz-control tags the next
+`vX.Y.Z` on `main` via the Forgejo API and CI builds + ships that tag. A push
+to `main` works too. After that, rollout is automatic two ways:
 the workflow's `POST /deploy` rolls the app forward immediately, and
 **hz-control wires a Watchtower agent into every deployed app** (the
 `app-compose.tmpl` label is added for you) so the per-node Watchtower pulls a

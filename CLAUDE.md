@@ -41,9 +41,10 @@ Two admin roles:
   **zones**, sees everything. Uses the `hz` CLI and the control-plane's
   platform view.
 - **Zone admin** — one per zone (the team lead). Manages *their* zone only —
-  add/remove users, create repos, restart the runner, watch build/deploy
-  status — through the control-plane's zone view, which proxies that zone's
-  own Forgejo admin API.
+  add/remove users, create repos, **cut releases** (the zone view's *Release*
+  button auto-tags the next `vX.Y.Z` on `main` via the Forgejo API), restart
+  the runner, watch build/deploy status — through the control-plane's zone
+  view, which proxies that zone's own Forgejo admin API.
 
 ## Repo layout
 
@@ -125,9 +126,9 @@ and runs it on the zone's node's real daemon, on `traefik-public`.
 
 **New builds redeploy automatically, two ways.** The CI workflow
 (`examples/deploy.yml`) triggers on a push to `main` **and** on a git tag —
-releases are cut in the Forgejo web UI (Releases → New release, target `main`),
-which is part of the zone-admin role, so tags come from reviewed history rather
-than `git push --tags`. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch
+releases are cut from the zone console — the **Release** button in the zone
+view picks the next `vX.Y.Z` and tags it on `main` via the Forgejo API (no
+local `git tag`, no Releases form), which is part of the zone-admin role. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch
 or tag) and `POST /deploy`s the `:<ref>` one, rolling the app forward
 immediately. Independently, a **per-node Watchtower** (in
 `traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls a new digest for

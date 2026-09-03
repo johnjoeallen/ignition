@@ -18,7 +18,7 @@ flowchart TB
     pa --> zones
     za --> zoneview
     zoneview -->|"proxied Forgejo admin API"| forgejo["the zone's own Forgejo"]
-    za -->|"cut releases (tag main in web UI)"| forgejo
+    za -->|"Release button → auto-tag main"| zoneview
     dev -->|git push / PRs| forgejo
 
     pa -. "never touches" .-> forgejo
@@ -61,7 +61,7 @@ Through the zone view (or Forgejo directly) they manage **their zone only**:
 |---|---|
 | Add / remove team members | zone view "Users", or Forgejo → Site Administration → Users |
 | Create repositories | zone view "Repositories", or Forgejo → New Repository |
-| Ship a build | **Cut a release** — zone view "Repositories" → *cut a release →*, or Forgejo → Releases → New release, target `main`. Tagging off reviewed, pushed history (never `git push --tags` from a laptop) is what starts a build; it runs the same workflow as a push to `main`. |
+| Ship a build | zone view "Repositories" → pick `patch`/`minor`/`major` → **Release**. hz-control tags the next `vX.Y.Z` on `main` for you (via the Forgejo API — no local `git tag`, no Releases form) and that starts the build-and-deploy workflow. A push to `main` deploys the same way. |
 | Manage the zone's apps | zone view "Apps" — list, live status, remove. Deploys come from CI; every app also gets a Watchtower agent wired in automatically, so a re-pushed image redeploys on its own (~60s). |
 | Restart a stuck Actions runner | zone view button (`docker compose -p zone-<slug> restart runner`) |
 | See build / deploy status, the live-app URL | zone view status card |
@@ -75,36 +75,37 @@ other zone.
 
 ### Shipping a release
 
-A team ships a build by **tagging a release in the web UI** — never
-`git push --tags` from a laptop, so the tag always points at reviewed,
-already-pushed history.
+Releases are cut **from the zone console**, not with a local `git tag` and not
+through Forgejo's Releases form — so the tag is always made by hz-control
+against reviewed, already-pushed `main`.
 
 1. Get the change onto `main` (merge the PR).
-2. In the zone view, **Repositories → _cut a release →_** next to the repo
-   (this opens Forgejo's *New release* page; you can also reach it from the
-   repo's **Releases** tab).
-3. **Tag name**: `vMAJOR.MINOR.PATCH` (e.g. `v1.3.0`) — patch for a fix, minor
-   for a feature, major for a breaking change. **Target**: `main`. Add release
-   notes, then **Publish release**.
-4. Publishing creates the tag, which triggers the `build and deploy` workflow.
-   Watch it under the repo's **Actions** tab; on success the app is live at
+2. In the zone view under **Repositories**, each repo shows its current version
+   (e.g. `· v1.2.3`). Pick the bump — `patch` for a fix, `minor` for a feature,
+   `major` for a breaking change — and click **Release**.
+3. hz-control reads the repo's highest `vMAJOR.MINOR.PATCH` tag, computes the
+   next one, and creates it on `main` via the Forgejo API (the first release is
+   `v0.1.0`, or `v1.0.0` for a major). It shows as a normal tag/release in
+   Forgejo.
+4. The new tag fires the `build and deploy` workflow — watch it under the
+   repo's **Actions** tab; on success the app is live at
    `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
 
-A plain push to `main` deploys the same way (useful mid-hack); a tagged release
-is the one to use for anything a judge or stakeholder will look at, because the
+A plain push to `main` deploys the same way (useful mid-hack); a release is the
+one to use for anything a judge or stakeholder will look at, because the
 running image is labelled with the version and it is trivial to redeploy or
 roll back to that exact tag.
 
-Pushing a fix to the **same** tag later (re-publishing, or a base-image
-rebuild) needs no new release: the per-node Watchtower notices the new image
-and rolls the app forward on its own within ~60s.
+Re-pushing an image to the **same** tag later (a base-image rebuild, say) needs
+no new release: the per-node Watchtower notices the new digest and rolls the
+app forward on its own within ~60s.
 
 ## The line between them
 
 - Platform admin: *which* hosts exist, *where* zones run, *whether* a zone
   exists at all.
 - Zone admin: *what happens inside* one zone — people, repos, the runner, and
-  cutting releases (tagging `main` in the web UI to ship a build).
+  shipping releases (the **Release** button auto-tags `main`).
 
 The control plane (`hz-control`) is the single process that holds both sets of
 credentials and enforces the split: it authenticates the caller's token,

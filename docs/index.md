@@ -36,10 +36,10 @@ subdomain:
   zone's CI can never see another zone's images, containers, or network.
 - **Live, shareable apps** — each repo with the deploy workflow puts an app at
   `https://<app-name>.apps.<team>.hackzone.com/`. Builds start when the zone
-  admin **cuts a release** in the web UI (or on a push to `main`), and every
+  admin hits **Release** in the zone console (or pushes to `main`), and every
   deployed app is wired with a Watchtower agent automatically, so a re-pushed
   image also rolls out on its own — nothing to configure in the repo.
-- **A zone admin** — the team lead adds members, creates repos, cuts releases,
+- **A zone admin** — the team lead adds members, creates repos, ships releases,
   manages the zone's apps, and restarts the runner, without a platform ticket.
 
 ```mermaid
@@ -77,9 +77,10 @@ flowchart TB
 
 ## How a zone's apps get deployed
 
-1. The zone admin **cuts a release** in the Forgejo web UI — repo → Releases →
-   New release, tag `vX.Y.Z`, target `main` (or a developer just pushes to
-   `main`). See [Roles → Shipping a release](roles.md#shipping-a-release).
+1. The zone admin picks a bump and hits **Release** in the zone console —
+   hz-control tags the next `vX.Y.Z` on `main` via the Forgejo API (or a
+   developer just pushes to `main`). See
+   [Roles → Shipping a release](roles.md#shipping-a-release).
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.
 3. It pushes the image to the zone's own registry (`git.<zone>.hackzone.com/…`),

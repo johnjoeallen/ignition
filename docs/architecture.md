@@ -103,7 +103,7 @@ bearer token and acts only within that scope:
 | Token | Role | Can do |
 |---|---|---|
 | `HZ_ADMIN_TOKEN` | platform admin | every node, zone, and app (platform view) |
-| `state/zones/<slug>/zone-token` | zone admin | that zone only: Forgejo users, repos, the zone's apps, restart the runner, read status |
+| `state/zones/<slug>/zone-token` | zone admin | that zone only: Forgejo users, repos, cut releases, the zone's apps, restart the runner, read status |
 | `state/zones/<slug>/deploy-token` | CI | `POST /deploy` and `POST /undeploy` for that zone's apps |
 
 Zone-admin actions are either a **proxied call to that zone's Forgejo admin
@@ -178,9 +178,10 @@ sequenceDiagram
 ```
 
 The workflow triggers on a push to `main` and on a git tag. Teams don't tag
-locally — a zone admin cuts a release in the Forgejo web UI (Releases → New
-release, target `main`), so the tag is always made from reviewed, pushed
-history. Each run pushes an immutable `:<sha>` **and** a `:<ref>` tag (the
+locally and don't use Forgejo's Releases form — the **Release** button in the
+zone console has hz-control read the repo's highest `vX.Y.Z` tag, compute the
+next one, and create it on `main` through the Forgejo API, so the tag is always
+made from reviewed, pushed history. Each run pushes an immutable `:<sha>` **and** a `:<ref>` tag (the
 branch or the git tag) and deploys the `:<ref>` one. `POST /deploy` is the
 immediate rollout; after that the per-node **Watchtower** (see below) polls
 that tag and pulls a new digest on its own — so a re-push or a base-image

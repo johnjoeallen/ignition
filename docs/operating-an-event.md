@@ -50,9 +50,10 @@ Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
 **`zone-token`** (sign in at `admin.<slug>.hackzone.com`). They seed each repo they want
 deployed with `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and
 its repo variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
-`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). A push to `main`, or a release cut in the
-Forgejo web UI (Releases → New release, target `main` — this is a zone-admin
-job), builds, pushes, and deploys `APP_NAME.apps.<slug>.hackzone.com`; more
+`DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). A push to `main`, or the
+zone admin hitting **Release** in the zone console (which auto-tags the next
+`vX.Y.Z` on `main`), builds, pushes, and deploys
+`APP_NAME.apps.<slug>.hackzone.com`; more
 repos → more apps. The `POST /deploy`
 rolls the app forward at once, and the per-node Watchtower keeps the deployed
 `:<ref>` tag fresh afterwards (a re-push or base-image rebuild goes live on
@@ -76,8 +77,8 @@ its own, ~60s).
 free their node capacity automatically.
 
 Teams deploy themselves — a team lead publishes a release in the Forgejo web
-UI (repo → Releases → New release, tag `vX.Y.Z`, target `main`) and CI builds
-and ships it; a push to `main` works too. See
+console (Repositories → pick a bump → **Release**, which auto-tags `main`) and
+CI builds and ships it; a push to `main` works too. See
 [Roles → Shipping a release](roles.md#shipping-a-release). You don't run
 deploys for them.
 

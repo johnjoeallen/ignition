@@ -43,6 +43,8 @@ CONTROL_DYNAMIC = STATE / "control" / "dynamic"
 APP_TMPL = REPO / "templates" / "app-compose.tmpl"
 
 _NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
+_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+_SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 
 ADDR = os.environ.get("HZ_CONTROL_ADDR", "127.0.0.1")
 PORT = int(os.environ.get("HZ_CONTROL_PORT", "8790"))
@@ -161,6 +163,48 @@ def forgejo(slug: str, method: str, path: str, body: dict | None = None) -> tupl
             return e.code, {"error": raw.decode("utf-8", "replace")[:400]}
     except urllib.error.URLError as e:
         return 502, {"error": str(e)}
+
+
+# --------------------------------------------------------------------- releases
+def latest_semver(tags: object) -> tuple[int, int, int]:
+    """Highest vMAJOR.MINOR.PATCH among a Forgejo /tags response (else 0.0.0)."""
+    best = (0, 0, 0)
+    for t in tags if isinstance(tags, list) else []:
+        m = _SEMVER_RE.match(t.get("name", "")) if isinstance(t, dict) else None
+        if m:
+            best = max(best, (int(m[1]), int(m[2]), int(m[3])))
+    return best
+
+
+def bump_semver(v: tuple[int, int, int], kind: str) -> str:
+    maj, mnr, pat = v
+    if kind == "major":
+        maj, mnr, pat = maj + 1, 0, 0
+    elif kind == "minor":
+        mnr, pat = mnr + 1, 0
+    else:  # patch
+        pat += 1
+    return f"v{maj}.{mnr}.{pat}"
+
+
+def cut_release(slug: str, owner: str, repo: str, kind: str) -> tuple[int, object, str]:
+    """Tag the next version on `main` via the Forgejo API — no local git, no
+    Forgejo Releases UI. Creating the release creates the tag ref, which fires
+    the repo's `on: push` (tags) workflow."""
+    if not (_REPO_RE.match(owner) and _REPO_RE.match(repo)):
+        raise ValueError("bad owner/repo")
+    if kind not in ("patch", "minor", "major"):
+        kind = "patch"
+    _, tags = forgejo(slug, "GET", f"/repos/{owner}/{repo}/tags?limit=50")
+    cur = latest_semver(tags)
+    # first release: v1.0.0 for a major bump, else v0.1.0
+    tag = bump_semver(cur, kind) if cur != (0, 0, 0) else (
+        "v1.0.0" if kind == "major" else "v0.1.0")
+    code, body = forgejo(slug, "POST", f"/repos/{owner}/{repo}/releases", {
+        "tag_name": tag, "target_commitish": "main", "name": tag,
+        "body": "Released from the zone admin console.",
+    })
+    return code, body, tag
 
 
 # --------------------------------------------------------------------- docker
@@ -340,11 +384,25 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
     ) if code == 200 else f"<tr><td colspan=4>could not list users ({code})</td></tr>"
     code, repos = forgejo(slug, "GET", "/repos/search?limit=50")
     rl = repos.get("data", []) if isinstance(repos, dict) else []
-    rlist = "".join(
-        f"<li><a href='{html.escape(r['html_url'])}'>{html.escape(r['full_name'])}</a>"
-        f" &nbsp;<a href='{html.escape(r['html_url'])}/releases/new'>cut a release &rarr;</a></li>"
-        for r in rl
-    ) or "<li>none yet</li>"
+
+    def _repo_row(r: dict) -> str:
+        owner = r["owner"]["login"] if isinstance(r.get("owner"), dict) else r["full_name"].split("/")[0]
+        name = r["name"]
+        _, tags = forgejo(slug, "GET", f"/repos/{owner}/{name}/tags?limit=50")
+        cur = latest_semver(tags)
+        curs = "v{}.{}.{}".format(*cur) if cur != (0, 0, 0) else "no releases yet"
+        return (
+            f"<li><a href='{html.escape(r['html_url'])}'>{html.escape(r['full_name'])}</a> "
+            f"<span style=color:#777>· {html.escape(curs)}</span> "
+            f"<form method=post action=/ui/repo/release style=display:inline>"
+            f"<input type=hidden name=owner value='{html.escape(owner)}'>"
+            f"<input type=hidden name=repo value='{html.escape(name)}'>"
+            f"<select name=bump><option>patch</option><option>minor</option>"
+            f"<option>major</option></select>"
+            f"<button>Release</button></form></li>"
+        )
+
+    rlist = "".join(_repo_row(r) for r in rl) or "<li>none yet</li>"
     banner = ""
     if msg:
         banner += f"<div class='msg'>{html.escape(msg)}</div>"
@@ -357,8 +415,8 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
         f"<input type=hidden name=name value='{html.escape(a['name'])}'>"
         f"<button>remove</button></form></td></tr>"
         for a in st["apps"]
-    ) or ("<tr><td colspan=4>none yet — cut a release (below) or push to "
-          "<code>main</code> to deploy one</td></tr>")
+    ) or ("<tr><td colspan=4>none yet — hit <b>Release</b> on a repo below "
+          "(or push to <code>main</code>) to deploy one</td></tr>")
     return page(f"zone {slug}", banner + f"""
       <div class=card>
         <b>Forgejo</b> <a href='{html.escape(st['forgejo_url'])}'>{html.escape(st['forgejo_url'])}</a><br>
@@ -368,9 +426,10 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
 
       <h2>Apps <span style=font-weight:normal>· <code>&lt;name&gt;.{html.escape(st['apps_base'])}</code></span></h2>
       <table><tr><th>app<th>state<th>image<th></tr>{applist}</table>
-      <p style=font-size:.85rem;color:#555>Deploys are automatic: cut a release
-      (Repositories, below) and CI builds + ships it. Every app also gets a
-      Watchtower agent wired in automatically, so a re-pushed image rolls out
+      <p style=font-size:.85rem;color:#555>Deploys are automatic: hit
+      <b>Release</b> on a repo (Repositories, below) — that tags the next
+      version on <code>main</code> and CI builds + ships it. Every app also gets
+      a Watchtower agent wired in automatically, so a re-pushed image rolls out
       on its own within ~a minute — no config in your repo.</p>
 
       <h2>Users</h2>
@@ -382,14 +441,15 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
       </form>
       <table><tr><th>login<th>email<th>role<th></tr>{ulist}</table>
 
-      <h2>Repositories <span style=font-weight:normal>· a release tag ships a
-        build; a push to <code>main</code> ships the tip</span></h2>
+      <h2>Repositories <span style=font-weight:normal>· <b>Release</b> tags the
+        next version on <code>main</code> and ships it; a push to
+        <code>main</code> ships the tip</span></h2>
       <form method=post action=/ui/repo/create>
         <label>name<input name=name required></label>
         <label>&nbsp;<span><input type=checkbox name=private> private</span></label>
         <button>Create repo</button>
       </form>
-      <ul>{rlist}</ul>
+      <ul style=line-height:2>{rlist}</ul>
 
       <form method=post action=/ui/logout><button>Sign out</button></form>""")
 
@@ -514,6 +574,11 @@ class H(BaseHTTPRequestHandler):
                         "name": f["name"], "private": f.get("private") == "on", "auto_init": True,
                     })
                     return self._redirect_zone(slug, code, b, f"repo {f['name']} created")
+                if path == "/ui/repo/release":
+                    code, b, tag = cut_release(
+                        slug, f["owner"], f["repo"], f.get("bump", "patch"))
+                    return self._redirect_zone(
+                        slug, code, b, f"released {f['repo']} {tag} - CI is building")
                 if path == "/ui/runner/restart":
                     r = zc(slug, "restart", "runner")
                     ok = r.returncode == 0

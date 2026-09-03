@@ -3,11 +3,12 @@
 # A zone can run this from several repos — each deploys its own app at
 # <APP_NAME>.apps.<slug>.<BASE_DOMAIN>. App names are unique within the zone.
 #
-# Runs on a push to `main` AND when a git tag (e.g. `v1.2.0`) appears. Releases
-# are cut in the Forgejo web UI — Releases -> "New release", target `main` — so
-# the tag is always made from reviewed, already-pushed history, not from a
-# developer's laptop with `git push --tags`. Owning that is part of the zone
-# admin role (see docs/roles.md).
+# Runs on a push to `main` AND when a git tag (e.g. `v1.2.0`) appears. The tag
+# is normally created by the zone admin console's "Release" button — hz-control
+# reads the repo's highest vX.Y.Z tag, bumps it, and creates the tag on `main`
+# via the Forgejo API — so it always points at reviewed, already-pushed history,
+# never a developer's `git push --tags`. See docs/roles.md ("Shipping a
+# release").
 #
 # Each run builds and pushes two image tags — :<sha> (immutable) and :<ref>
 # (the branch or git tag) — then deploys the :<ref> one. POST /deploy rolls it
