@@ -61,8 +61,8 @@ Through the zone view (or Forgejo directly) they manage **their zone only**:
 |---|---|
 | Add / remove team members | zone view "Users", or Forgejo → Site Administration → Users |
 | Create repositories | zone view "Repositories", or Forgejo → New Repository |
-| Manage the zone's apps | zone view "Apps" — list, live status, remove; deploys come from CI |
-| Cut a release | Forgejo → **Releases → New release**, target `main` — tagging off reviewed, pushed history (never `git push --tags` from a laptop). The tag triggers the same build-and-deploy workflow as a push to `main`. |
+| Ship a build | **Cut a release** — zone view "Repositories" → *cut a release →*, or Forgejo → Releases → New release, target `main`. Tagging off reviewed, pushed history (never `git push --tags` from a laptop) is what starts a build; it runs the same workflow as a push to `main`. |
+| Manage the zone's apps | zone view "Apps" — list, live status, remove. Deploys come from CI; every app also gets a Watchtower agent wired in automatically, so a re-pushed image redeploys on its own (~60s). |
 | Restart a stuck Actions runner | zone view button (`docker compose -p zone-<slug> restart runner`) |
 | See build / deploy status, the live-app URL | zone view status card |
 | Manage PRs, issues, Actions, packages | Forgejo, as normal |

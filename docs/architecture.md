@@ -184,9 +184,10 @@ history. Each run pushes an immutable `:<sha>` **and** a `:<ref>` tag (the
 branch or the git tag) and deploys the `:<ref>` one. `POST /deploy` is the
 immediate rollout; after that the per-node **Watchtower** (see below) polls
 that tag and pulls a new digest on its own — so a re-push or a base-image
-rebuild redeploys without another workflow run. Watchtower only manages
-containers labelled `com.centurylinklabs.watchtower.enable=true` (every app
-carries it) and never touches Traefik, Forgejo, DinD or runners.
+rebuild redeploys without another workflow run. `hz-control` stamps
+`com.centurylinklabs.watchtower.enable=true` onto every app it deploys (the
+label is in `app-compose.tmpl` — teams don't opt in); Watchtower manages only
+those containers and never touches Traefik, Forgejo, DinD or runners.
 
 Same shape as any CI-to-orchestrator handoff (GitLab CI → Kubernetes): the
 build sandbox stays isolated, the serving layer does not.

@@ -132,7 +132,8 @@ or tag) and `POST /deploy`s the `:<ref>` one, rolling the app forward
 immediately. Independently, a **per-node Watchtower** (in
 `traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls a new digest for
 any container labelled `com.centurylinklabs.watchtower.enable=true` — which
-every `app-compose.tmpl` container carries — and never touches
+`app-compose.tmpl` sets on every app hz-control deploys, so teams get
+auto-reload without touching their repo — and never touches
 Traefik/Forgejo/DinD/runners.
 
 **One central control plane, not an agent per node.** `hz-control` orchestrates

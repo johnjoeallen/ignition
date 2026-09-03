@@ -23,8 +23,9 @@ services:
       hackzone.app: ${APP_NAME}
       hackzone.zone: ${ZONE_SLUG}
       hackzone.deploy-id: "${DEPLOY_ID}"
-      # the per-node Watchtower (traefik-core-compose.yml) rolls this container
-      # forward when its image tag gets a new digest
+      # hz-control adds this to EVERY deployed app automatically — teams never
+      # opt in. The per-node Watchtower (traefik-core-compose.yml) then rolls
+      # the container forward whenever its image tag gets a new digest.
       com.centurylinklabs.watchtower.enable: "true"
       traefik.enable: "true"
       traefik.docker.network: traefik-public

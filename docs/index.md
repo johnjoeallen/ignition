@@ -35,10 +35,12 @@ subdomain:
 - **A private build sandbox** — a per-zone Docker-in-Docker engine, so one
   zone's CI can never see another zone's images, containers, or network.
 - **Live, shareable apps** — each repo with the deploy workflow puts an app at
-  `https://<app-name>.apps.<team>.hackzone.com/`, redeployed on every push to
-  `main` or pushed git tag.
-- **A zone admin** — the team lead adds members, creates repos, manages the
-  zone's apps, and restarts the runner, without a platform ticket.
+  `https://<app-name>.apps.<team>.hackzone.com/`. Builds start when the zone
+  admin **cuts a release** in the web UI (or on a push to `main`), and every
+  deployed app is wired with a Watchtower agent automatically, so a re-pushed
+  image also rolls out on its own — nothing to configure in the repo.
+- **A zone admin** — the team lead adds members, creates repos, cuts releases,
+  manages the zone's apps, and restarts the runner, without a platform ticket.
 
 ```mermaid
 flowchart TB

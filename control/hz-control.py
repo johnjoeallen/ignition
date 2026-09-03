@@ -340,8 +340,11 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
     ) if code == 200 else f"<tr><td colspan=4>could not list users ({code})</td></tr>"
     code, repos = forgejo(slug, "GET", "/repos/search?limit=50")
     rl = repos.get("data", []) if isinstance(repos, dict) else []
-    rlist = "".join(f"<li><a href='{html.escape(r['html_url'])}'>{html.escape(r['full_name'])}</a></li>"
-                    for r in rl) or "<li>none yet</li>"
+    rlist = "".join(
+        f"<li><a href='{html.escape(r['html_url'])}'>{html.escape(r['full_name'])}</a>"
+        f" &nbsp;<a href='{html.escape(r['html_url'])}/releases/new'>cut a release &rarr;</a></li>"
+        for r in rl
+    ) or "<li>none yet</li>"
     banner = ""
     if msg:
         banner += f"<div class='msg'>{html.escape(msg)}</div>"
@@ -354,7 +357,8 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
         f"<input type=hidden name=name value='{html.escape(a['name'])}'>"
         f"<button>remove</button></form></td></tr>"
         for a in st["apps"]
-    ) or "<tr><td colspan=4>none yet — a push to <code>main</code> deploys one</td></tr>"
+    ) or ("<tr><td colspan=4>none yet — cut a release (below) or push to "
+          "<code>main</code> to deploy one</td></tr>")
     return page(f"zone {slug}", banner + f"""
       <div class=card>
         <b>Forgejo</b> <a href='{html.escape(st['forgejo_url'])}'>{html.escape(st['forgejo_url'])}</a><br>
@@ -364,6 +368,10 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
 
       <h2>Apps <span style=font-weight:normal>· <code>&lt;name&gt;.{html.escape(st['apps_base'])}</code></span></h2>
       <table><tr><th>app<th>state<th>image<th></tr>{applist}</table>
+      <p style=font-size:.85rem;color:#555>Deploys are automatic: cut a release
+      (Repositories, below) and CI builds + ships it. Every app also gets a
+      Watchtower agent wired in automatically, so a re-pushed image rolls out
+      on its own within ~a minute — no config in your repo.</p>
 
       <h2>Users</h2>
       <form method=post action=/ui/user/create>
@@ -374,7 +382,8 @@ def zone_page(slug: str, msg: str, err: str) -> bytes:
       </form>
       <table><tr><th>login<th>email<th>role<th></tr>{ulist}</table>
 
-      <h2>Repositories</h2>
+      <h2>Repositories <span style=font-weight:normal>· a release tag ships a
+        build; a push to <code>main</code> ships the tip</span></h2>
       <form method=post action=/ui/repo/create>
         <label>name<input name=name required></label>
         <label>&nbsp;<span><input type=checkbox name=private> private</span></label>

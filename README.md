@@ -92,12 +92,14 @@ reviewed history, not `git push --tags`) builds, pushes to
 `git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`.
 Several repos → several apps.
 
-New builds roll out automatically two ways: the workflow's `POST /deploy` rolls
-the app forward immediately, and the per-node **Watchtower** watches each
-deployed container's image tag and pulls a new digest on its own (60s poll) —
-so a re-push or a base-image rebuild goes live without another workflow run.
-The sample workflow deploys the `:<ref>` tag (branch name, or the git tag) so
-Watchtower has something to track.
+Builds normally **start from a release** — the zone admin cuts one in the
+Forgejo web UI (the zone view links straight to it) and CI builds + ships that
+tag; a push to `main` works too. After that, rollout is automatic two ways:
+the workflow's `POST /deploy` rolls the app forward immediately, and
+**hz-control wires a Watchtower agent into every deployed app** (the
+`app-compose.tmpl` label is added for you) so the per-node Watchtower pulls a
+new digest for that tag on its own (~60s poll) — a re-push or a base-image
+rebuild goes live without another workflow run.
 
 ## Layout
 
