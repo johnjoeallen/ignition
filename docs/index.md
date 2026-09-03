@@ -77,8 +77,9 @@ flowchart TB
 
 ## How a zone's apps get deployed
 
-1. The zone admin **cuts a release** in the Forgejo web UI (or a developer
-   pushes to `main`) on a repo that has the deploy workflow.
+1. The zone admin **cuts a release** in the Forgejo web UI — repo → Releases →
+   New release, tag `vX.Y.Z`, target `main` (or a developer just pushes to
+   `main`). See [Roles → Shipping a release](roles.md#shipping-a-release).
 2. A **Forgejo Actions** job builds a container image inside the zone's
    **private DinD engine** — isolated from every other zone.
 3. It pushes the image to the zone's own registry (`git.<zone>.hackzone.com/…`),

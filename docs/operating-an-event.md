@@ -75,6 +75,12 @@ its own, ~60s).
 `hz zone create` and every deploy. Cron it (every ~15 min) so abandoned zones
 free their node capacity automatically.
 
+Teams deploy themselves — a team lead publishes a release in the Forgejo web
+UI (repo → Releases → New release, tag `vX.Y.Z`, target `main`) and CI builds
+and ships it; a push to `main` works too. See
+[Roles → Shipping a release](roles.md#shipping-a-release). You don't run
+deploys for them.
+
 ## Capacity
 
 Per-zone quotas have defaults at the top of `provision-zone.sh`:

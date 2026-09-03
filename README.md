@@ -93,8 +93,9 @@ reviewed history, not `git push --tags`) builds, pushes to
 Several repos → several apps.
 
 Builds normally **start from a release** — the zone admin cuts one in the
-Forgejo web UI (the zone view links straight to it) and CI builds + ships that
-tag; a push to `main` works too. After that, rollout is automatic two ways:
+Forgejo web UI (repo → Releases → New release, tag `vX.Y.Z`, target `main`; the
+zone view links straight to it) and CI builds + ships that tag; a push to
+`main` works too. After that, rollout is automatic two ways:
 the workflow's `POST /deploy` rolls the app forward immediately, and
 **hz-control wires a Watchtower agent into every deployed app** (the
 `app-compose.tmpl` label is added for you) so the per-node Watchtower pulls a

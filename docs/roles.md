@@ -73,6 +73,32 @@ command **scoped to a `zone-<slug>` or `app-<slug>-<name>` project the zone owns
 zone admin has no node access, no Docker access, and no visibility into any
 other zone.
 
+### Shipping a release
+
+A team ships a build by **tagging a release in the web UI** — never
+`git push --tags` from a laptop, so the tag always points at reviewed,
+already-pushed history.
+
+1. Get the change onto `main` (merge the PR).
+2. In the zone view, **Repositories → _cut a release →_** next to the repo
+   (this opens Forgejo's *New release* page; you can also reach it from the
+   repo's **Releases** tab).
+3. **Tag name**: `vMAJOR.MINOR.PATCH` (e.g. `v1.3.0`) — patch for a fix, minor
+   for a feature, major for a breaking change. **Target**: `main`. Add release
+   notes, then **Publish release**.
+4. Publishing creates the tag, which triggers the `build and deploy` workflow.
+   Watch it under the repo's **Actions** tab; on success the app is live at
+   `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
+
+A plain push to `main` deploys the same way (useful mid-hack); a tagged release
+is the one to use for anything a judge or stakeholder will look at, because the
+running image is labelled with the version and it is trivial to redeploy or
+roll back to that exact tag.
+
+Pushing a fix to the **same** tag later (re-publishing, or a base-image
+rebuild) needs no new release: the per-node Watchtower notices the new image
+and rolls the app forward on its own within ~60s.
+
 ## The line between them
 
 - Platform admin: *which* hosts exist, *where* zones run, *whether* a zone
