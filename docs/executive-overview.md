@@ -102,11 +102,14 @@ judging. The best ideas leave the event as a running URL and a git repo —
 already deployed, already shareable — instead of a deck that needs a project to
 become real.
 
-A planned **services catalogue** extends this: a team deploys Postgres, a mock
-of an internal system, or a *keyed proxy* to a real corporate or external API
-into its zone with one click. The proxy holds an org-issued credential the
-platform can meter and revoke per zone, so participants build against real
-services without a real key ever landing on a laptop or in a repo.
+A planned **services catalogue** extends this. A team's own infrastructure —
+its database, its cache — ships in its app. The catalogue covers the
+*org-standard* services teams would otherwise fake or wait on: a card-art
+lookup, a rewards engine, a payments sandbox, an internal data API. One click
+adds one to a zone, as a blessed mock or as a *keyed proxy* to the real
+service. The proxy holds an org-issued credential the platform meters and
+revokes per zone, so participants build against real systems without a real key
+ever landing on a laptop or in a repo.
 
 **4. Deterministic teardown.**
 Every resource is namespaced per zone; teardown is a single, complete

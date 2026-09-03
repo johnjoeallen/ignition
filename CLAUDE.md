@@ -206,21 +206,23 @@ as bytes, hex, `8-4-4-4-12` — so we don't parse the register command's stdout.
 4. Zone-level quota requests (zone admin asks, platform admin approves) and
    `ign zone move` that carries the Forgejo data volume.
 5. **A per-zone services catalogue** (`ign svc` / a "Services" section in the
-   console). A curated set of containerised services a zone deploys into itself
-   with one click, so a team doesn't hand-roll its backing infrastructure.
-   Two kinds:
-   - **Backing services** — Postgres, Redis, MinIO, Mailhog, a canned mock of
-     an internal API. Rendered from `catalogue/<name>.compose.tmpl` (same
-     `envsubst` discipline as `app-compose.tmpl`) onto a per-zone `svc-<slug>`
-     network that the zone's own apps also join, with **no Traefik router** —
-     reachable only by that zone's apps, by DNS name.
-   - **Credentialed proxies** — a small proxy container in front of a real
-     internal or external service (the corp LLM gateway, a payments sandbox, an
-     internal data API) that injects an org-held key `ign-control` stores (same
+   console). The line: an app's *own* infrastructure — Postgres, Redis, a
+   cache — lives in that app's Dockerfile / compose, versioned and owned by the
+   team. The catalogue is for **org-standard shared services** a team would
+   otherwise have to fake or beg for: a card-art lookup, a rewards/points
+   engine, a payments sandbox, an internal data API, an LLM gateway. One click
+   adds one to the zone. Two kinds:
+   - **Standard mocks** — a canned, org-blessed implementation of an internal
+     service. Rendered from `catalogue/<name>.compose.tmpl` (same `envsubst`
+     discipline as `app-compose.tmpl`) onto a per-zone `svc-<slug>` network the
+     zone's apps also join, with **no Traefik router** — reachable only by that
+     zone's apps, by DNS name.
+   - **Credentialed proxies** — a small proxy in front of the *real* internal
+     or external service, injecting an org-held key `ign-control` stores (same
      model as `deploy-token` / `zone-admin.txt`). The team gets an endpoint on
      `svc-<slug>`; the real key never reaches their repo or laptop, and the
      platform can meter / rotate / revoke it per zone.
    Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
    entries live in `catalogue/` (or a pinned catalogue repo): compose template
    plus a manifest — ports, env, which secrets it needs from `ign-control`, and
-   whether it's backing-only or routed.
+   whether it's a mock or a proxy.
