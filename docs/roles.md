@@ -18,6 +18,7 @@ flowchart TB
     pa --> zones
     za --> zoneview
     zoneview -->|"proxied Forgejo admin API"| forgejo["the zone's own Forgejo"]
+    za -->|"cut releases (tag main in web UI)"| forgejo
     dev -->|git push / PRs| forgejo
 
     pa -. "never touches" .-> forgejo
@@ -61,6 +62,7 @@ Through the zone view (or Forgejo directly) they manage **their zone only**:
 | Add / remove team members | zone view "Users", or Forgejo → Site Administration → Users |
 | Create repositories | zone view "Repositories", or Forgejo → New Repository |
 | Manage the zone's apps | zone view "Apps" — list, live status, remove; deploys come from CI |
+| Cut a release | Forgejo → **Releases → New release**, target `main` — tagging off reviewed, pushed history (never `git push --tags` from a laptop). The tag triggers the same build-and-deploy workflow as a push to `main`. |
 | Restart a stuck Actions runner | zone view button (`docker compose -p zone-<slug> restart runner`) |
 | See build / deploy status, the live-app URL | zone view status card |
 | Manage PRs, issues, Actions, packages | Forgejo, as normal |
@@ -75,7 +77,8 @@ other zone.
 
 - Platform admin: *which* hosts exist, *where* zones run, *whether* a zone
   exists at all.
-- Zone admin: *what happens inside* one zone — people, repos, the runner.
+- Zone admin: *what happens inside* one zone — people, repos, the runner, and
+  cutting releases (tagging `main` in the web UI to ship a build).
 
 The control plane (`hz-control`) is the single process that holds both sets of
 credentials and enforces the split: it authenticates the caller's token,

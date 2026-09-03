@@ -35,7 +35,8 @@ subdomain:
 - **A private build sandbox** — a per-zone Docker-in-Docker engine, so one
   zone's CI can never see another zone's images, containers, or network.
 - **Live, shareable apps** — each repo with the deploy workflow puts an app at
-  `https://<app-name>.apps.<team>.hackzone.com/`, redeployed on every push to `main`.
+  `https://<app-name>.apps.<team>.hackzone.com/`, redeployed on every push to
+  `main` or pushed git tag.
 - **A zone admin** — the team lead adds members, creates repos, manages the
   zone's apps, and restarts the runner, without a platform ticket.
 

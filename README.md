@@ -74,7 +74,7 @@ HZ_ADMIN_TOKEN=$(openssl rand -hex 32) BASE_DOMAIN=hackzone.com ./hz control &
 BASE_DOMAIN=hackzone.com ./hz zone create alpha
 #   -> Forgejo     https://git.alpha.hackzone.com/
 #   -> zone admin  https://admin.alpha.hackzone.com/
-#   -> apps        https://<name>.apps.alpha.hackzone.com/   (per app CI deploys)
+#   -> apps        https://<name>.apps.alpha.hackzone.com/   (CI deploys on push to main or a git tag)
 #   -> state/zones/alpha/{zone-admin.txt, zone-token, deploy-token}
 
 ./hz zone list
@@ -86,15 +86,18 @@ BASE_DOMAIN=hackzone.com ./hz zone create alpha
 A zone lead then seeds a repo with `.forgejo/workflows/deploy.yml`
 ([`examples/deploy.yml`](examples/deploy.yml)) and its vars/secrets
 (`REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`, `FORGEJO_TOKEN`,
-`DEPLOY_TOKEN`). A push to `main` builds, pushes to `git.alpha.hackzone.com`, and
-deploys `APP_NAME.apps.alpha.hackzone.com`. Several repos → several apps.
+`DEPLOY_TOKEN`). A push to `main` **or a release cut in the Forgejo web UI**
+(Releases → New release, target `main` — a zone-admin task, so tags come from
+reviewed history, not `git push --tags`) builds, pushes to
+`git.alpha.hackzone.com`, and deploys `APP_NAME.apps.alpha.hackzone.com`.
+Several repos → several apps.
 
 New builds roll out automatically two ways: the workflow's `POST /deploy` rolls
 the app forward immediately, and the per-node **Watchtower** watches each
 deployed container's image tag and pulls a new digest on its own (60s poll) —
 so a re-push or a base-image rebuild goes live without another workflow run.
-The sample workflow deploys a floating `:<branch>` tag so Watchtower has
-something to track.
+The sample workflow deploys the `:<ref>` tag (branch name, or the git tag) so
+Watchtower has something to track.
 
 ## Layout
 

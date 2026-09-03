@@ -123,14 +123,17 @@ port}`, per-zone bearer token); the control plane renders `app-compose.tmpl`
 and runs it on the zone's node's real daemon, on `traefik-public`.
 `POST /undeploy` (or `hz app rm`) tears one down.
 
-**New builds redeploy automatically, two ways.** The CI workflow's
-`POST /deploy` rolls the app forward immediately. Independently, a **per-node
-Watchtower** (in `traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls
-a new digest for any container labelled
-`com.centurylinklabs.watchtower.enable=true` — which every `app-compose.tmpl`
-container carries — and never touches Traefik/Forgejo/DinD/runners. This only
-does something when the deployed tag is mutable, so `examples/deploy.yml`
-pushes and deploys a floating `:<branch>` tag alongside the immutable `:<sha>`.
+**New builds redeploy automatically, two ways.** The CI workflow
+(`examples/deploy.yml`) triggers on a push to `main` **and** on a git tag —
+releases are cut in the Forgejo web UI (Releases → New release, target `main`),
+which is part of the zone-admin role, so tags come from reviewed history rather
+than `git push --tags`. Each run pushes `:<sha>` (immutable) + `:<ref>` (branch
+or tag) and `POST /deploy`s the `:<ref>` one, rolling the app forward
+immediately. Independently, a **per-node Watchtower** (in
+`traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls a new digest for
+any container labelled `com.centurylinklabs.watchtower.enable=true` — which
+every `app-compose.tmpl` container carries — and never touches
+Traefik/Forgejo/DinD/runners.
 
 **One central control plane, not an agent per node.** `hz-control` orchestrates
 across nodes: it holds `HZ_ADMIN_TOKEN` (platform), each zone's `zone-token`

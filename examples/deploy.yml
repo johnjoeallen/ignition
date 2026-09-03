@@ -3,10 +3,16 @@
 # A zone can run this from several repos — each deploys its own app at
 # <APP_NAME>.apps.<slug>.<BASE_DOMAIN>. App names are unique within the zone.
 #
-# Each push builds and pushes two tags — :<sha> (immutable) and :<branch>
-# (floating) — then deploys the floating one. The POST /deploy rolls it out
-# now; the per-node Watchtower also watches that tag, so a later re-push (or a
-# base-image rebuild) goes live on its own without another workflow run.
+# Runs on a push to `main` AND when a git tag (e.g. `v1.2.0`) appears. Releases
+# are cut in the Forgejo web UI — Releases -> "New release", target `main` — so
+# the tag is always made from reviewed, already-pushed history, not from a
+# developer's laptop with `git push --tags`. Owning that is part of the zone
+# admin role (see docs/roles.md).
+#
+# Each run builds and pushes two image tags — :<sha> (immutable) and :<ref>
+# (the branch or git tag) — then deploys the :<ref> one. POST /deploy rolls it
+# out now; the per-node Watchtower also watches that tag, so a later re-push
+# (or a base-image rebuild) goes live on its own without another workflow run.
 #
 # Repo variables (Settings -> Actions -> Variables):
 #   REGISTRY     git.<slug>.<BASE_DOMAIN>          e.g. git.alpha.hackzone.com
@@ -22,6 +28,7 @@ name: build and deploy
 on:
   push:
     branches: [main]
+    tags: ["*"]
 
 jobs:
   deploy:
@@ -32,13 +39,13 @@ jobs:
       - name: Build and push
         run: |
           REPO="${{ vars.REGISTRY }}/${{ github.repository }}"
-          BRANCH="${GITHUB_REF_NAME:-main}"
+          REF="${GITHUB_REF_NAME:-main}"          # branch name, or the git tag
           echo "${{ secrets.FORGEJO_TOKEN }}" | docker login "${{ vars.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
-          docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$BRANCH" .
+          docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$REF" .
           docker push "$REPO:${{ github.sha }}"
-          docker push "$REPO:$BRANCH"
-          # deploy the floating tag so the node's Watchtower can keep it fresh
-          echo "IMAGE=$REPO:$BRANCH" >> "$GITHUB_ENV"
+          docker push "$REPO:$REF"
+          # deploy the branch/tag ref so the node's Watchtower can keep it fresh
+          echo "IMAGE=$REPO:$REF" >> "$GITHUB_ENV"
 
       - name: Deploy
         run: |

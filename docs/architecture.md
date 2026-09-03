@@ -177,13 +177,16 @@ sequenceDiagram
     Traefik-->>CI: https://<app>.apps.<slug>.<domain>/ serves the new build
 ```
 
-CI pushes an immutable `:<sha>` **and** a floating `:<branch>` tag and deploys
-the floating one. `POST /deploy` is the immediate rollout; after that the
-per-node **Watchtower** (see below) polls that tag and pulls a new digest on
-its own — so a re-push or a base-image rebuild redeploys without another
-workflow run. Watchtower only manages containers labelled
-`com.centurylinklabs.watchtower.enable=true` (every app carries it) and never
-touches Traefik, Forgejo, DinD or runners.
+The workflow triggers on a push to `main` and on a git tag. Teams don't tag
+locally — a zone admin cuts a release in the Forgejo web UI (Releases → New
+release, target `main`), so the tag is always made from reviewed, pushed
+history. Each run pushes an immutable `:<sha>` **and** a `:<ref>` tag (the
+branch or the git tag) and deploys the `:<ref>` one. `POST /deploy` is the
+immediate rollout; after that the per-node **Watchtower** (see below) polls
+that tag and pulls a new digest on its own — so a re-push or a base-image
+rebuild redeploys without another workflow run. Watchtower only manages
+containers labelled `com.centurylinklabs.watchtower.enable=true` (every app
+carries it) and never touches Traefik, Forgejo, DinD or runners.
 
 Same shape as any CI-to-orchestrator handoff (GitLab CI → Kubernetes): the
 build sandbox stays isolated, the serving layer does not.
