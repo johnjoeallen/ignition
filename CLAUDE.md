@@ -63,7 +63,7 @@ control/
 templates/
   zone-compose.yml.tmpl        # per-zone forgejo + dind + runner (envsubst template)
   app-compose.tmpl             # one deployed app (envsubst template)
-  traefik-core-compose.yml     # per-node Traefik: apex cert + file provider, runs once per node
+  traefik-core-compose.yml     # per-node core: Traefik (apex cert + file provider) + Watchtower, runs once per node
 examples/deploy.yml            # sample workflow to seed into a zone's repo
 state/
   nodes/<name>.env             # node registry (DOCKER_HOST, CPUS, MEM_GB, LABELS, STATE)
@@ -122,6 +122,15 @@ builds + pushes an image, then POSTs `hz-control /deploy` (`{app, image,
 port}`, per-zone bearer token); the control plane renders `app-compose.tmpl`
 and runs it on the zone's node's real daemon, on `traefik-public`.
 `POST /undeploy` (or `hz app rm`) tears one down.
+
+**New builds redeploy automatically, two ways.** The CI workflow's
+`POST /deploy` rolls the app forward immediately. Independently, a **per-node
+Watchtower** (in `traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls
+a new digest for any container labelled
+`com.centurylinklabs.watchtower.enable=true` — which every `app-compose.tmpl`
+container carries — and never touches Traefik/Forgejo/DinD/runners. This only
+does something when the deployed tag is mutable, so `examples/deploy.yml`
+pushes and deploys a floating `:<branch>` tag alongside the immutable `:<sha>`.
 
 **One central control plane, not an agent per node.** `hz-control` orchestrates
 across nodes: it holds `HZ_ADMIN_TOKEN` (platform), each zone's `zone-token`

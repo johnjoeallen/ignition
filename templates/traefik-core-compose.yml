@@ -1,8 +1,17 @@
-# Per-node Traefik. Runs once on every node, before any zone is placed there.
+# Per-node core services — Traefik + Watchtower. Runs once on every node,
+# before any zone is placed there.
 #
 #   export BASE_DOMAIN=example.com ACME_EMAIL=ops@example.com
 #   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the certs
 #   docker compose -f templates/traefik-core-compose.yml up -d
+#
+# Watchtower polls the zone registries and rolls any deployed app container
+# forward when its image tag gets a new digest — so a re-pushed build (or a
+# base-image rebuild) goes live without a fresh CI /deploy call. It only acts
+# on containers labelled com.centurylinklabs.watchtower.enable=true (every
+# app-compose.tmpl container carries it); Traefik, Forgejo, DinD and runners
+# are never touched. Pushing to a floating tag (examples/deploy.yml pushes
+# :<branch> alongside :<sha>) is what makes this useful.
 #
 # BASE_DOMAIN is the apex of the whole hackzone install (e.g. example.com).
 # Traefik owns :80 / :443 on the node.
@@ -77,3 +86,16 @@ services:
       - ../state/control/dynamic:/etc/traefik/dynamic:ro
     networks:
       - traefik-public
+
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    restart: unless-stopped
+    command: --label-enable --cleanup --rolling-restart --interval ${WATCHTOWER_INTERVAL:-60}
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      # Registry auth: `docker login git.<slug>.<BASE_DOMAIN>` on the node so
+      # ~/.docker/config.json below can pull private app images.
+      DOCKER_CONFIG: /config
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_CONFIG_DIR:-/root/.docker}:/config:ro

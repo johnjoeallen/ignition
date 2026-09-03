@@ -23,7 +23,7 @@ A forge needs a whole origin because Docker registry clients hit `/v2/…` at th
 domain *root* and ignore path prefixes. Giving each zone its own subtree keeps
 git, admin, and every app on one clean per-zone namespace. Everything is two
 labels deep, so a `*.<BASE_DOMAIN>` wildcard misses it — see the TLS note under
-[Traefik](#traefik-once-per-node).
+[Core services](#core-services-once-per-node).
 
 ## Nodes, zones, control host
 
@@ -177,6 +177,14 @@ sequenceDiagram
     Traefik-->>CI: https://<app>.apps.<slug>.<domain>/ serves the new build
 ```
 
+CI pushes an immutable `:<sha>` **and** a floating `:<branch>` tag and deploys
+the floating one. `POST /deploy` is the immediate rollout; after that the
+per-node **Watchtower** (see below) polls that tag and pulls a new digest on
+its own — so a re-push or a base-image rebuild redeploys without another
+workflow run. Watchtower only manages containers labelled
+`com.centurylinklabs.watchtower.enable=true` (every app carries it) and never
+touches Traefik, Forgejo, DinD or runners.
+
 Same shape as any CI-to-orchestrator handoff (GitLab CI → Kubernetes): the
 build sandbox stays isolated, the serving layer does not.
 
@@ -210,9 +218,19 @@ chars → bytes → hex → `8-4-4-4-12`). But the secret still has to be regist
 
 Real chicken-and-egg, not accidental complexity.
 
-## Traefik, once per node
+## Core services, once per node
 
-Each node runs one Traefik: owns `:80` / `:443`, watches `traefik-public`, and
+`traefik-core-compose.yml` brings up two per-node services.
+
+**Watchtower** (`--label-enable`, 60s poll, `--cleanup --rolling-restart`)
+rolls any container labelled `com.centurylinklabs.watchtower.enable=true`
+forward when its image tag gets a new digest. Every `app-compose.tmpl`
+container carries the label; nothing else does, so Traefik, Forgejo, DinD and
+runners are never restarted. It reads
+`${DOCKER_CONFIG_DIR:-/root/.docker}/config.json` for registry auth — the same
+`docker login` a node needs for private packages.
+
+**Traefik** owns `:80` / `:443`, watches `traefik-public`, and
 holds certificates via the ACME DNS challenge. The control host's Traefik
 holds the apex cert (`<event-domain>` + `*.<event-domain>`, covering
 `admin.<event-domain>`); **each zone's own Forgejo router** additionally

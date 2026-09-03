@@ -23,7 +23,7 @@ Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 ## Standing up the event
 
 ```sh
-# 1. Traefik — once per node.
+# 1. Core services (Traefik + Watchtower) — once per node.
 export BASE_DOMAIN=hackzone.com ACME_EMAIL=ops@hackzone.com CF_DNS_API_TOKEN=...
 docker compose -f templates/traefik-core-compose.yml up -d
 
@@ -51,7 +51,10 @@ Hand each team lead their zone's **`zone-admin.txt`** (Forgejo admin login) and
 deployed with `.forgejo/workflows/deploy.yml` (from `examples/deploy.yml`) and
 its repo variables/secrets — `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
 `FORGEJO_TOKEN`, `DEPLOY_TOKEN`. A push to `main` builds, pushes, and deploys
-`APP_NAME.apps.<slug>.hackzone.com`; more repos → more apps.
+`APP_NAME.apps.<slug>.hackzone.com`; more repos → more apps. The `POST /deploy`
+rolls the app forward at once, and the per-node Watchtower keeps the deployed
+`:<branch>` tag fresh afterwards (a re-push or base-image rebuild goes live on
+its own, ~60s).
 
 ## During the event
 
@@ -96,6 +99,7 @@ capacity per node.
   instances on a node can reach each other by IP.
 - **`hz-control` runs bare** with Docker access and every token on disk — it
   needs a systemd unit / locked-down container and its own TLS front.
-- **The control plane pulls images anonymously** — private packages need
-  `docker login` / a per-zone `DOCKER_CONFIG` on the node.
+- **The control plane and the per-node Watchtower pull images anonymously** —
+  private packages need `docker login git.<slug>.<BASE_DOMAIN>` on the node
+  (Watchtower reads `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json`).
 - **No repo seeding, no roster loop** — both are top items in `CLAUDE.md`.

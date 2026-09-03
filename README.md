@@ -58,7 +58,7 @@ Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 ## Quickstart
 
 ```sh
-# 1. Traefik — once per node.
+# 1. Core services (Traefik + Watchtower) — once per node.
 export BASE_DOMAIN=hackzone.com ACME_EMAIL=ops@hackzone.com CF_DNS_API_TOKEN=...
 docker compose -f templates/traefik-core-compose.yml up -d
 
@@ -89,13 +89,20 @@ A zone lead then seeds a repo with `.forgejo/workflows/deploy.yml`
 `DEPLOY_TOKEN`). A push to `main` builds, pushes to `git.alpha.hackzone.com`, and
 deploys `APP_NAME.apps.alpha.hackzone.com`. Several repos → several apps.
 
+New builds roll out automatically two ways: the workflow's `POST /deploy` rolls
+the app forward immediately, and the per-node **Watchtower** watches each
+deployed container's image tag and pulls a new digest on its own (60s poll) —
+so a re-push or a base-image rebuild goes live without another workflow run.
+The sample workflow deploys a floating `:<branch>` tag so Watchtower has
+something to track.
+
 ## Layout
 
 | path | what |
 |---|---|
 | `hz` | platform CLI: `hz node \| zone \| app \| sweep \| control` |
 | `control/hz-control.py` | control plane — platform view, zone-admin surface, CI `/deploy` + `/undeploy` |
-| `templates/traefik-core-compose.yml` | per-node Traefik (apex cert + file provider for `admin.*`) |
+| `templates/traefik-core-compose.yml` | per-node core: Traefik (apex cert + file provider for `admin.*`) + Watchtower (auto-rolls deployed apps) |
 | `templates/zone-compose.yml.tmpl` | per-zone Forgejo + DinD + runner |
 | `templates/app-compose.tmpl` | one deployed app |
 | `scripts/{node,zone,app,scheduler,provision-zone,teardown-zone,sweep-idle}.sh` | the CLI internals |
@@ -111,6 +118,7 @@ deploys `APP_NAME.apps.alpha.hackzone.com`. Several repos → several apps.
   containers can reach each other by IP.
 - **`hz-control` runs bare** with Docker access and every token on disk — it
   needs a systemd unit / locked-down container behind `admin.hackzone.com`.
-- **The control plane pulls images anonymously** — private packages need
-  `docker login` / a per-zone `DOCKER_CONFIG` on the node.
+- **The control plane and Watchtower pull images anonymously** — private
+  packages need `docker login git.<slug>.hackzone.com` on the node (Watchtower
+  reads `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json`).
 - **No repo seeding, no roster loop** — both are top next tasks (`CLAUDE.md`).
