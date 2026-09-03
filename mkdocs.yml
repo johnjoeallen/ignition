@@ -1,5 +1,5 @@
 site_name: Ignition
-site_description: Per-team hackathon infrastructure — isolated Forgejo + build sandbox + a live deployed demo app for every team, on one host.
+site_description: Per-team hackathon infrastructure — one Java service; an isolated Forgejo + build sandbox + routed live apps per team, provisioned and reclaimed on demand.
 site_url: https://johnjoeallen.github.io/ignition/
 repo_url: https://github.com/johnjoeallen/ignition
 repo_name: johnjoeallen/ignition

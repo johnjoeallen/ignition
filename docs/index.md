@@ -4,7 +4,8 @@
 (target ~80) across a small pool of hosts. Each team gets a fully isolated
 stack — a **zone**: its own git host, CI, container registry, private build
 engine, and a routed HTTPS origin for whatever it deploys. A zone stands up in
-seconds from one command and tears down in one more, leaving nothing behind.
+seconds from one click in the console and tears down in one more, leaving
+nothing behind.
 
 The point isn't just to satisfy a security review (though it does that too — see
 [Why a zone per team](#why-a-zone-per-team)). Even on infrastructure with no
@@ -88,7 +89,7 @@ flowchart TB
 
 ## How a zone's apps get deployed
 
-1. The zone admin hits **Release** in the zone console — ign-control reads the
+1. The zone admin hits **Release** in the zone console — ignition-control reads the
    commits since the last release, picks the version bump from them
    (Conventional Commits; override available) and tags the next `vX.Y.Z` on
    `main`. That release tag is the only thing that deploys — a plain push to
@@ -139,8 +140,8 @@ team to convince, unlimited budget. A zone per team is *still* the right call.
   reliability and trust problem before it's ever a cost one.
 - **It matches the shape of the work.** A sprint is bursty and short-lived.
   Standing up permanent per-team infrastructure is overkill; a shared permanent
-  box accumulates every problem above. Spin up Monday, gone Friday, keep the
-  scripts.
+  box accumulates every problem above. Spin up Monday, gone Friday. Keep the
+  templates.
 
 And where the environment *does* impose limits — no root Docker on shared hosts
 for unvetted participants, audit or network-policy requirements — the same
@@ -158,15 +159,12 @@ each, **[Roles](roles.md)** for the platform-admin / zone-admin split, and
 
 ## Status
 
-A working scaffold: the `ign` CLI (`node`, `zone`, `app`, scheduler), zone
-provisioning/teardown (two-phase, mints the zone-admin account and tokens), the
-idle sweeper, and the control plane (platform view, zone-admin surface, CI
-`/deploy` + `/undeploy`) are all in place and validate. Rough edges — the
-per-zone (`git.<slug>` / `*.apps.<slug>` / `admin.<slug>`) DNS records, repo
-seeding, hardening the control plane — are tracked in `README` and `CLAUDE.md`.
+Ignition is **one Java (Spring Boot) service, `ignition-control`, deployed as a
+container** on the control host. Both consoles, node registration, zone
+provisioning (the two-phase Forgejo + DinD + runner apply) / move / destroy, the
+scheduler, the roster, the idle sweep, and the CI `/deploy` bridge are all in
+place. There is no CLI — every operation is in the web UI.
 
-**In progress:** the shell CLI and the Python control plane are being replaced
-by a single Java (Spring Boot) service, deployed as a container, with **every**
-platform-admin and zone-admin operation in the web UI — no CLI. The model
-(zones, the domain scheme, roles, release-driven deploys) is unchanged; see
-`DESIGN.md` in the repo.
+Rough edges — creating the `git.<slug>` / `*.apps.<slug>` / `admin.<slug>` DNS
+records, repo seeding, a services catalogue — are tracked in `README` and
+`CLAUDE.md`. The design and the port history are in `DESIGN.md`.

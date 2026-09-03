@@ -87,8 +87,8 @@ without writing eighty exceptions — but the isolation earns its keep even when
 nobody's asking for it.
 
 **2. Self-service, and delegated.**
-Standing up a zone is one command (`ign zone create <slug>`) and takes seconds,
-not a ticket — a scheduler places it on whichever host has room. And the team
+Standing up a zone is one click in the platform console and takes seconds, not
+a ticket — a scheduler places it on whichever host has room. And the team
 lead is their zone's admin: they add teammates and create repos themselves,
 through a scoped surface, without coming back to the platform team. The
 marginal cost of one more team is close to zero.
@@ -121,14 +121,14 @@ from?" six months later.
 
 - **A handful of hosts, one control plane.** Register each host as a *node*;
   zones are scheduled across them by free capacity. No Kubernetes to stand up
-  and staff — shell scripts, compose templates, and one small control service.
+  and staff — one small Java service, compose templates, and a few hosts.
 - **Predictable footprint.** Per-zone CPU and memory quotas are set in one
-  place; `ign node list` shows allocation vs. capacity. Adding a node is one
-  command.
+  place; the console shows allocation vs. capacity per node. Adding a node is
+  one form.
 - **No new vendor.** Forgejo (community-governed, FOSS), Docker, and Traefik —
   all things a platform team can already reason about and audit.
 - **Reversible.** Nothing here is a long-lived commitment. Run an event, tear it
-  down, keep the scripts.
+  down, keep the templates.
 
 ## What it is, and what it is not
 

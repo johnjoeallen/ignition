@@ -1,8 +1,9 @@
 # Ignition control plane — design for the Java rewrite
 
-Status: **in progress** — the Java service is feature-complete and containerised
-(DESIGN.md steps 1–8); cutover (step 9) is pending one real end-to-end
-provision. Supersedes the "stdlib / shell only" convention in `CLAUDE.md`.
+Status: **complete** — the Java service is the implementation. The shell CLI +
+`scripts/` + `control/ign-control.py` were removed at cutover (step 9); a real
+end-to-end provision (Forgejo + DinD + runner, zoneadmin token, teardown) was
+verified against a live node. This document is now the design record.
 
 ## Why
 
@@ -240,12 +241,14 @@ conditionals — the reason it isn't a template today).
    so the file-provider routers reach it. `TraefikDynamicConfig` writes
    `_platform.yml` on startup. Verified: image builds, container is healthy,
    the in-container `docker` talks to the host socket.
-9. **pending a live end-to-end** — the container-orchestration paths
-   (Forgejo health wait, runner registration, `compose cp`, teardown) are only
-   smoke-tested. Run one real `provision` against a live node, then cut over:
-   remove the scripts + `ign-control.py`; rewrite the docs and the
-   `CLAUDE.md` conventions.
-10. `examples/deploy.yml` is untouched — the contract is preserved.
+9. **done** — a real `provision` was run against a live `local` node: Forgejo +
+   DinD + runner up and healthy, the runner registered, the `zoneadmin`
+   account + a real Forgejo API token minted; the zone console then created a
+   repo through the proxied API; `destroy` removed all three containers, all
+   volumes, and the state tree — 0 errors. Then the cutover: `ign`,
+   `scripts/*.sh`, `control/ign-control.py` and the repo-root `*.tmpl`
+   templates deleted; README / CLAUDE.md / all `docs/*.md` rewritten to the
+   console. `examples/deploy.yml` untouched — the contract is preserved.
 
 ## Decisions
 

@@ -8,9 +8,9 @@ flowchart TB
     za["Zone admin<br/>(one per zone / team lead)"]
     dev["Team developers"]
 
-    subgraph cp["Control plane (ign + ign-control)"]
-        nodes["Nodes<br/>register · drain · capacity"]
-        zones["Zones<br/>create · place · move · destroy"]
+    subgraph cp["ignition-control (one service, two consoles)"]
+        nodes["Platform console → Nodes<br/>register · drain · capacity"]
+        zones["Platform console → Zones<br/>provision · place · move · destroy · roster"]
         zoneconsole["Zone console<br/>users · repos · releases · apps · runner · status"]
     end
 
@@ -26,23 +26,22 @@ flowchart TB
 
 ## Platform admin
 
-The person (or two) running the event. Holds `IGN_ADMIN_TOKEN`. Works through
-the **`ign` CLI** and the control plane's **platform view** today; the
-[in-progress rewrite](architecture.md) moves every command below into the
-platform console so there is no CLI.
+The person (or two) running the event. Signs into the **platform console** at
+`https://admin.<event-domain>/` with `IGN_ADMIN_TOKEN`. Every task is a
+console action — there is no CLI.
 
-| Task | How |
+| Task | In the console |
 |---|---|
-| Register a host to run zones | `ign node add <name> <docker-host> --cpus N --mem NNg [--labels …]` |
-| See node capacity / allocation | `ign node list`, `ign node show <name>` |
-| Stop placing new zones on a node | `ign node drain <name>` (then `undrain`) |
-| Create a zone (auto-placed) | `ign zone create <slug>` — the scheduler picks the least-loaded node that fits |
-| Create a zone on a specific node | `ign zone create <slug> --node <name>` |
-| See every zone and its live status | `ign zone list`, `ign zone status <slug>`, or the platform view |
-| Move a zone to another node | `ign zone move <slug> --node <name>` (the stack is rebuilt; data volumes don't follow) |
-| Destroy a zone | `ign zone destroy <slug>` — the stack **and every app it deployed**, complete |
-| See / stop any deployed app | `ign app list`, `ign app show <zone> <name>`, `ign app rm <zone> <name>` |
-| Reclaim idle zones | `ign sweep` / a cron on `scripts/sweep-idle.sh` |
+| Register a host to run zones | **Nodes → Register** — endpoint (`local` / `ssh://…` / `tcp://…`), CPU, memory, optional labels |
+| See node capacity / allocation | **Nodes** table (allocated vs. capacity) |
+| Stop placing new zones on a node | **Nodes → Drain** (then Undrain) |
+| Provision a zone | **Provision a zone** — a slug; the scheduler places it (or pin a node / label) |
+| See every zone and its status | **Zones** table |
+| Move a zone to another node | **Zones → move** (the stack is rebuilt empty; the Forgejo volume doesn't follow) |
+| Destroy a zone | **Zones → destroy** — the stack **and every app it deployed** |
+| Stop a deployed app | **Apps → stop** |
+| Bulk provision / teardown an event | **Roster** — paste a slug list |
+| Reclaim idle zones now | **Roster → Sweep idle zones now** (also runs on a timer) |
 
 The platform admin **never logs into a zone's Forgejo**. Their surface is
 nodes and zones.
@@ -54,7 +53,7 @@ a **zone token** (`state/zones/<slug>/zone-token`) which signs them in at
 `https://admin.<slug>.<event-domain>/` — the **zone console**.
 
 That console is their whole surface. They never touch a Forgejo admin screen;
-the `zoneadmin` Forgejo account exists only as ign-control's service credential
+the `zoneadmin` Forgejo account exists only as ignition-control's service credential
 and stays on the control host. Everything below is a console action:
 
 | Task | In the console |
@@ -79,7 +78,7 @@ like any forge — that's the *developer* surface, separate from this one.
 
 Release versioning is automated — **no one bumps the version**. In the console
 under **Repositories**, each repo shows its current version (e.g. `· v1.2.3`).
-Click **Release** and ign-control:
+Click **Release** and ignition-control:
 
 1. reads the commit messages **since the last release** (it compares the last
    tag to `main`),
@@ -108,6 +107,6 @@ app forward on its own within ~60s.
 - Zone admin: *what happens inside* one zone — people, repos, the runner, and
   shipping releases — all from the zone console, never a Forgejo admin screen.
 
-The control plane (`ign-control`) is the single process that holds both sets of
+The control plane (`ignition-control`) is the single process that holds both sets of
 credentials and enforces the split: it authenticates the caller's token,
 decides platform-vs-zone, and only ever acts within that scope.

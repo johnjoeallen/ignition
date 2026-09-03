@@ -1,18 +1,12 @@
 # Architecture
 
-Ignition is compose templates, shell scripts (`ign`), and one small control
-service. State is a directory per node, per zone, and per app under `state/`.
-This page covers the domain scheme, the shape of a zone's stack, node
-placement, the control plane, and the decisions that aren't obvious.
-
-!!! note "Where this is heading"
-    The `ign` CLI + shell scripts + the Python `ign-control` are being folded
-    into **one Java (Spring Boot) service**, deployed as a container, with
-    every platform-admin and zone-admin action in the web UI — no CLI to run
-    by hand. Everything below (the domain scheme, zone stack, scheduler,
-    auth model, two-phase runner registration) is unchanged; only the
-    implementation and the operator surface move. Design: `DESIGN.md` in the
-    repo.
+Ignition is **one Java (Spring Boot) service, `ignition-control`**, plus two
+compose templates. It runs as a container on the control host, serves both
+admin consoles, and drives every node's Docker daemon over the `docker` CLI.
+State is a directory per node, per zone, and per app under `state/`. This page
+covers the domain scheme, the shape of a zone's stack, node placement, the
+control plane, and the decisions that aren't obvious. Implementation detail is
+in `DESIGN.md` and [`ignition-control/`](https://github.com/johnjoeallen/ignition/tree/main/ignition-control).
 
 ## The domain scheme
 
@@ -23,9 +17,9 @@ under it:
 
 | host | serves |
 |---|---|
-| `admin.ignition.example` | the platform admin control plane (`ign-control`) |
+| `admin.ignition.example` | the platform admin control plane (`ignition-control`) |
 | `git.<slug>.ignition.example` | that zone's Forgejo — one origin for web UI, git, Actions, **and the container registry** |
-| `admin.<slug>.ignition.example` | that zone's admin view (same `ign-control`, zone-scoped) |
+| `admin.<slug>.ignition.example` | that zone's admin view (same `ignition-control`, zone-scoped) |
 | `<app>.apps.<slug>.ignition.example` | one deployed app; a zone can run many, names unique within the zone |
 
 A forge needs a whole origin because Docker registry clients hit `/v2/…` at the
@@ -38,7 +32,7 @@ labels deep, so a `*.<BASE_DOMAIN>` wildcard misses it — see the TLS note unde
 
 ```mermaid
 flowchart TB
-    ch["Control host<br/>ign CLI · ign-control · state/"]
+    ch["Control host<br/>ignition-control container · state/"]
     ch -->|"docker over local / ssh:// / tcp://"| n1
     ch -->|"    "| n2
 
@@ -58,18 +52,18 @@ flowchart TB
   optional `LABELS`, and a `STATE` (`active` / `draining`).
 - A **zone** is `state/zones/<slug>/`: `zone.env` (node, base domain,
   footprint, URLs), the rendered `docker-compose.yml`, `runner-secret`,
-  `zone-admin.txt` (Forgejo admin login + API token — ign-control's service
+  `zone-admin.txt` (Forgejo admin login + API token — ignition-control's service
   credential, never handed to the team lead), `zone-token`,
   `deploy-token`, `last-activity`.
 - An **app** is `state/zones/<slug>/apps/<name>.env`: which node it
   runs on, its image, port, and last deploy id — plus the rendered
   `<name>-compose.yml`.
-- The **control host** runs `ign` and `ign-control` and never runs workloads
+- The **control host** runs `ignition-control` and never runs workloads
   itself — it drives each node's Docker daemon remotely.
 
-`scheduler.sh` places a new zone on the active node with the most free CPU
+The **scheduler** places a new zone on the active node with the most free CPU
 (capacity minus the sum of assigned zones' quota limits) that can fit it and
-carries any `--label`. Quotas are limits not reservations, so nodes
+carries any required label. Quotas are limits not reservations, so nodes
 oversubscribe — but a zone whose limits alone exceed a node is never placed
 there.
 
@@ -92,7 +86,7 @@ flowchart LR
         app2["app-reco-api<br/>on traefik-public"]
     end
 
-    cp["ign-control (control host)"]
+    cp["ignition-control (control host)"]
     traefik -->|"Host(git.&lt;slug&gt;.&lt;domain&gt;)"| forgejo
     runner -->|"push image → forgejo registry<br/>POST /deploy {app,image,port}"| cp
     cp -->|"docker compose -p app-&lt;slug&gt;-&lt;name&gt; up"| app1
@@ -102,12 +96,12 @@ flowchart LR
 ```
 
 The zone stack is prefixed `zone-<slug>`; each app is its own project
-`app-<slug>-<name>`. `ign zone destroy <slug>` tears down the stack **and every app the
-zone deployed**.
+`app-<slug>-<name>`. **Destroy** in the console tears down the stack **and
+every app the zone deployed**.
 
 ## The control plane
 
-`ign-control` is one process on the control host. It authenticates the caller's
+`ignition-control` is one container on the control host. It authenticates the caller's
 bearer token and acts only within that scope:
 
 | Token | Role | Can do |
@@ -123,7 +117,7 @@ provisioning) or a `docker compose` command **scoped to a `zone-<slug>` or
 access. See **[Roles](roles.md)**.
 
 **App names are unique within a zone.** An app is
-`state/zones/<slug>/apps/<name>.env`. `ign-control` only runs an image pulled
+`state/zones/<slug>/apps/<name>.env`. `ignition-control` only runs an image pulled
 from the requesting zone's own registry (`git.<slug>.<domain>/…`).
 
 ## Isolation boundaries
@@ -133,8 +127,8 @@ from the requesting zone's own registry (`git.<slug>.<domain>/…`).
 | Zone ↔ zone (git, CI, builds) | Separate compose project, network, volumes; the DinD engine and runner are on the zone network only, and the DinD engine never bind-mounts a host Docker socket. |
 | CI jobs ↔ node | Jobs run against the zone's **nested** Docker engine (`DOCKER_HOST=tcp://dind:2375`), which cannot see node containers or the node daemon. |
 | Live app ↔ its own zone's internals | The live app runs on `traefik-public`, not the zone network — no path back into that zone's forge or build engine. |
-| Zone admin ↔ platform | `ign-control` never hands a zone admin a node, a Docker endpoint, or another zone's data — only proxied Forgejo calls and project-scoped `docker compose`. |
-| CI ↔ deploy | `ign-control` verifies the deploy token → zone, and only runs an image from *that* zone's own registry. |
+| Zone admin ↔ platform | `ignition-control` never hands a zone admin a node, a Docker endpoint, or another zone's data — only proxied Forgejo calls and project-scoped `docker compose`. |
+| CI ↔ deploy | `ignition-control` verifies the deploy token → zone, and only runs an image from *that* zone's own registry. |
 
 The one seam: the app containers **and** the Forgejo instances share
 `traefik-public` on a node, so they can reach each other by IP. The untrusted
@@ -167,7 +161,7 @@ A container built and run *inside* the zone's nested DinD engine is in that
 engine's own network namespace. Traefik has no route to it.
 
 So the flow splits: CI **builds** in the sandbox and **pushes** an image, then
-POSTs `ign-control`, which **runs** the container on the zone's node, on
+POSTs `ignition-control`, which **runs** the container on the zone's node, on
 `traefik-public` where that node's Traefik can see it.
 
 ```mermaid
@@ -175,7 +169,7 @@ sequenceDiagram
     participant CI as runner (in zone net)
     participant DinD as zone DinD engine
     participant Reg as zone Forgejo registry
-    participant Ctl as ign-control (control host)
+    participant Ctl as ignition-control (control host)
     participant Node as zone's node daemon
     participant Traefik
 
@@ -189,14 +183,14 @@ sequenceDiagram
 
 The workflow triggers **only on a release tag** — a plain push to `main` does
 not deploy. Teams don't tag locally and don't use Forgejo's Releases form: the
-**Release** button in the zone console has ign-control diff the last tag against
+**Release** button in the zone console has ignition-control diff the last tag against
 `main`, pick the semver bump from those commit messages (Conventional Commits;
 the admin can override), and create the next `vX.Y.Z` tag on `main` through the
 Forgejo API — so the tag is always made from reviewed, pushed history. Each run
 pushes an immutable `:<sha>` **and** the `:<tag>` and deploys `:<tag>`.
 `POST /deploy` is the immediate rollout; if CI later re-runs for the same tag
 (a base-image rebuild), the per-node **Watchtower** (see below) picks up the
-new digest without another deploy call. `ign-control` stamps
+new digest without another deploy call. `ignition-control` stamps
 `com.centurylinklabs.watchtower.enable=true` onto every app it deploys (the
 label is in `app-compose.tmpl` — teams don't opt in); Watchtower manages only
 those containers and never touches Traefik, Forgejo, DinD or runners.
@@ -211,11 +205,14 @@ Everything is routed by hostname through each node's Traefik:
 `admin.<slug>.<domain>` → the zone view, `admin.<domain>` → the platform plane. Nothing binds a host port per zone — no
 allocation table, no range to exhaust.
 
-And there is **one** `ign-control`, not an agent per node. It already needs to
+And there is **one** `ignition-control`, not an agent per node. It already needs to
 orchestrate across nodes (place a zone, move a zone, deploy an app to whichever
 node its zone is on), and it is the natural place to hold the platform token,
 every zone and deploy token, and every zone's Forgejo admin token behind one
-auth check. Nodes run only Docker; all decision-making is central.
+auth check. It runs as a container on the control host (socket + `state/` +
+ssh keys mounted; on `traefik-public`) via
+`templates/ignition-control-compose.yml`. Nodes run only Docker; all
+decision-making is central.
 
 ## Runner registration is two-phase
 
@@ -223,7 +220,7 @@ Forgejo registers a runner against a **40-hex-character shared secret** we
 generate ourselves — we even derive the runner's UUID from it locally (first 16
 chars → bytes → hex → `8-4-4-4-12`). But the secret still has to be registered
 *against Forgejo's database*, which only exists after first-run init. So
-`provision-zone.sh`:
+`ProvisioningService`:
 
 1. `docker compose up -d forgejo dind` on the node — wait for Forgejo health.
 2. `forgejo forgejo-cli actions register --secret <secret>` via `docker exec`.
@@ -236,11 +233,12 @@ Real chicken-and-egg, not accidental complexity.
 
 ## Core services, once per node
 
-`traefik-core-compose.yml` brings up two per-node services.
+`traefik-core-compose.yml` brings up two per-node services (on **every** node);
+the control host additionally runs `ignition-control-compose.yml`.
 
 **Watchtower** (`--label-enable`, 60s poll, `--cleanup --rolling-restart`)
 rolls any container labelled `com.centurylinklabs.watchtower.enable=true`
-forward when its image tag gets a new digest. `ign-control` stamps that label on
+forward when its image tag gets a new digest. `ignition-control` stamps that label on
 every app it deploys (teams don't opt in) and nothing else carries it, so
 Traefik, Forgejo, DinD and runners are never restarted. It reads
 `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json` for registry auth — the same
@@ -252,7 +250,7 @@ holds the apex cert (`<event-domain>` + `*.<event-domain>`, covering
 `admin.<event-domain>`); **each zone's own Forgejo router** additionally
 requests `*.<slug>.<event-domain>` + `*.apps.<slug>.<event-domain>`, covering
 that zone's git, admin, and every app with no per-name request.
-`admin.<slug>.<event-domain>` is served by `ign-control` behind the control
+`admin.<slug>.<event-domain>` is served by `ignition-control` behind the control
 host's Traefik via a file-provider snippet
 (`state/control/dynamic/<slug>.yml`).
 
