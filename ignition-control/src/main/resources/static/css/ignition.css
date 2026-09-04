@@ -35,10 +35,17 @@ body { background: var(--ign-bg); }
   color: #fff;
   border: none;
 }
-.ign-sidebar .offcanvas-header { border-bottom: 1px solid rgba(255,255,255,.08); }
+.ign-sidebar-brand { border-bottom: 1px solid rgba(255,255,255,.08); padding: 1.1rem 1rem; }
 .ign-sidebar .brand {
-  display: flex; align-items: center; gap: .6rem;
-  color: #fff; text-decoration: none; font-weight: 600; font-size: 1.1rem;
+  display: flex; align-items: center; gap: .7rem;
+  color: #fff; text-decoration: none; font-weight: 700; font-size: 1.2rem;
+}
+/* the mark's own fill is teal-on-teal against this sidebar — a light backdrop
+   is what actually makes it read as a logo instead of disappearing */
+.ign-brand-mark {
+  display: flex; align-items: center; justify-content: center;
+  width: 2.25rem; height: 2.25rem; border-radius: .6rem;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3);
 }
 .ign-sidebar .nav-link {
   color: rgba(255,255,255,.75);
