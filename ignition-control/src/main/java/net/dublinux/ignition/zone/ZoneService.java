@@ -270,6 +270,7 @@ public class ZoneService {
         ensureOrgMembership(slug, username);
         zones.putSecret(slug, emailKey, username);
         zones.putUserSecret(slug, "git_pw_" + username, password, userId);
+        log.info("zone {}: git password generated for {} ({}): {}", slug, username, email, password);
         ensurePat(slug, username, userId);
         return username;
     }
@@ -292,6 +293,7 @@ public class ZoneService {
         }
         // sudo: the bot is a Forgejo site admin (see ProvisioningService), so this
         // executes as `username` rather than as the bot itself.
+        log.info("zone {}: minting PAT for {} (scopes {})", slug, username, PAT_SCOPES);
         var res = forgejo.post(slug, "/users/" + username + "/tokens?sudo=" + username,
                 Map.of("name", "ignition", "scopes", PAT_SCOPES));
         if (!res.ok()) {
@@ -303,9 +305,13 @@ public class ZoneService {
         if (token.isBlank()) {
             token = res.body().path("token").asText("");
         }
-        if (!token.isBlank()) {
-            zones.putUserSecret(slug, "git_pat_" + username, token, userId);
+        if (token.isBlank()) {
+            log.warn("zone {}: PAT create for {} returned 2xx but no sha1/token field — full body: {}",
+                    slug, username, res.body());
+            return;
         }
+        zones.putUserSecret(slug, "git_pat_" + username, token, userId);
+        log.info("zone {}: PAT minted for {}: {}", slug, username, token);
     }
 
     private void ensureOrgMembership(String slug, String username) {
@@ -320,6 +326,7 @@ public class ZoneService {
         String pw = randBase64(18);
         forgejo.patch(slug, "/admin/users/" + username, Map.of("password", pw, "must_change_password", false));
         zones.putUserSecret(slug, "git_pw_" + username, pw, userId);
+        log.info("zone {}: git password reset for {}: {}", slug, username, pw);
         return pw;
     }
 
