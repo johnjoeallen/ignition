@@ -25,6 +25,17 @@ The apex used throughout is **`ignition.classesarecode.net`**.
               │  using an /etc/hosts override
 ```
 
+> **Generate the config instead of copy-pasting.** The `demo/` directory has a
+> generator for every file in this guide *and* part 2. Read on for what each
+> value means, then:
+> ```sh
+> cd demo && ./gen-templates.sh
+> cp demo.conf.example demo.conf   # fill it in
+> ./render.sh demo.conf            # -> demo/out/ + demo/out/INSTALL.txt
+> ```
+> It generates `IGN_ADMIN_TOKEN` / `IGN_SECRET_KEY` / `POSTGRES_PASSWORD` and
+> the WireGuard keys for you. See [`demo/README.md`](demo/README.md).
+
 ---
 
 ## The pieces, explained
@@ -145,7 +156,12 @@ Nothing else in DNS is needed for part 1 — no `A` record yet.
 
 ## Step 2 — bring up the stack
 
-On `spitfire` (needs Docker + Docker Compose v2):
+`spitfire` needs **Docker + Docker Compose v2** and nothing else — no host
+webserver. Traefik binds the host's `:80` and `:443`, so free them first
+(`ss -tlnp | grep -E ':80 |:443 '`; `systemctl disable --now apache2` /
+`nginx` if present). You don't have to uninstall anything, just stop it.
+
+Then, on `spitfire`:
 
 ```sh
 git clone https://github.com/johnjoeallen/ignition.git

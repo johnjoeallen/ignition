@@ -98,6 +98,11 @@ Two things to know:
 | `<HETZNER_PRIV>` / `<HETZNER_PUB>` | WireGuard keypair generated on `hetzner` | (Step 2) |
 | `<SPITFIRE_PRIV>` / `<SPITFIRE_PUB>` | WireGuard keypair generated on `spitfire` | (Step 2) |
 
+> **Or generate everything.** If you used [`demo/`](demo/README.md) in part 1,
+> `demo/out/` already holds `hetzner-wg0.conf`, `spitfire-wg0.conf`, and
+> `hetzner-nginx-stream.conf` — filled in, keys and all. This guide explains
+> what each one does; `demo/out/INSTALL.txt` says where to put them.
+
 ---
 
 ## What changes on `hetzner`, and what doesn't

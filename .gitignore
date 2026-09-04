@@ -11,6 +11,12 @@ acme.env
 .env.*
 !.env.example
 
+# demo/ generator — everything gen-templates.sh / render.sh produce
+/demo/templates/
+/demo/demo.conf.example
+/demo/demo.conf
+/demo/out/
+
 # Ephemeral work dir — rendered compose / runner config / Traefik snippets
 /work/
 
