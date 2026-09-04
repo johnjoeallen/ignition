@@ -320,14 +320,23 @@ public class ZoneService {
      * it predates per-user encryption. In that case the old token still works
      * fine for git (we just can't show it), so it's deleted and replaced
      * rather than left as silent clutter alongside the new one.
+     *
+     * <p>The delete is unconditional, not gated on us having a stored row —
+     * Forgejo enforces a unique token <em>name</em> per user, so a token
+     * named {@code ignition} can exist on its side from an earlier attempt
+     * that got this far and then failed before we ever stored anything (a
+     * response we couldn't parse, a save that never happened, ...). Trying
+     * to create over that gets a 400 "access token name has been used
+     * already" — seen live — forever, since our own bookkeeping has no
+     * record of it to react to. A delete of a token that isn't there is a
+     * harmless no-op, so it's cheaper to always clear the way than to keep
+     * guessing whether it's needed from state that can't see Forgejo's side.
      */
     private void ensurePat(String slug, String username, java.util.UUID userId) {
         if (!zones.userSecret(slug, "git_pat_" + username, userId).isBlank()) {
             return;
         }
-        if (zones.hasSecret(slug, "git_pat_" + username)) {
-            forgejo.deleteBasicAuth(slug, "/users/" + username + "/tokens/ignition?sudo=" + username);
-        }
+        forgejo.deleteBasicAuth(slug, "/users/" + username + "/tokens/ignition?sudo=" + username);
         // sudo: the bot is a Forgejo site admin (see ProvisioningService), so this
         // executes as `username` rather than as the bot itself. Basic auth, not the
         // bot's usual token — Forgejo refuses token auth on this endpoint outright
