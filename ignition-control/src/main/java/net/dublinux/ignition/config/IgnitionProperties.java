@@ -32,6 +32,17 @@ public class IgnitionProperties {
     /** Skip TLS verification when calling a zone's Forgejo (pre-cert). */
     private boolean insecureTls = false;
 
+    /**
+     * Recreate every zone's stack (compose {@code down} + {@code up -d}, never
+     * {@code -v}) once on startup — how a compose/label/image change (e.g. a
+     * new Traefik router label) reaches zones that are already running,
+     * without a manual per-zone step. Off by default (a routine restart
+     * shouldn't cause zone downtime); {@code update-and-run.sh} turns it on
+     * for its own run. Never touches a volume, so no zone data (Forgejo repos,
+     * its host keys, the DB-stored tokens/PATs) is at risk either way.
+     */
+    private boolean recreateZonesOnStart = false;
+
     private final Sweep sweep = new Sweep();
     private final Quotas quotas = new Quotas();
 
@@ -89,6 +100,8 @@ public class IgnitionProperties {
     public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
     public boolean isInsecureTls() { return insecureTls; }
     public void setInsecureTls(boolean insecureTls) { this.insecureTls = insecureTls; }
+    public boolean isRecreateZonesOnStart() { return recreateZonesOnStart; }
+    public void setRecreateZonesOnStart(boolean v) { this.recreateZonesOnStart = v; }
     public Sweep getSweep() { return sweep; }
     public Quotas getQuotas() { return quotas; }
 

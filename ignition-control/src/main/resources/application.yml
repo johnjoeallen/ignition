@@ -34,6 +34,7 @@ ignition:
   secret-key: ${IGN_SECRET_KEY:}
   public-url: ${IGN_PUBLIC_URL:http://localhost:8790}
   insecure-tls: ${IGN_INSECURE_TLS:false}
+  recreate-zones-on-start: ${IGN_RECREATE_ZONES_ON_START:false}
   smtp:
     host: ${IGN_SMTP_HOST:}
     port: ${IGN_SMTP_PORT:587}

@@ -83,6 +83,12 @@ services:
       IGNITION_CONTROL_PLANE_URL: http://ignition-control:8790
       IGN_INSECURE_TLS: ${IGN_INSECURE_TLS:-false}
       IGN_SWEEP_TTL: ${IGN_SWEEP_TTL:-24h}
+      # Recreate every zone's containers (down + up -d, never -v — no volume
+      # is ever touched) once on this startup, so a compose/label/image
+      # change reaches zones that are already running. Off by default; set
+      # to true for one run when you need it — update-and-run.sh does this
+      # for you on every run, so you don't normally set it here yourself.
+      IGN_RECREATE_ZONES_ON_START: ${IGN_RECREATE_ZONES_ON_START:-false}
     volumes:
       # the local node's daemon
       - /var/run/docker.sock:/var/run/docker.sock

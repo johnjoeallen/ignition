@@ -27,6 +27,8 @@ import net.dublinux.ignition.templates.RenderService;
 import net.dublinux.ignition.traefik.TraefikDynamicConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
@@ -643,5 +645,43 @@ public class ZoneService {
         Zone zone = zones.find(slug).orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
         Path compose = render.zoneCompose(zone);
         return docker.compose(dockerHost(zone), "zone-" + slug, compose.toString(), args);
+    }
+
+    // --- recreate on start (picks up a compose/label/image change) --------
+
+    /**
+     * Recreates every zone's containers from the current template — a
+     * plain {@code down} + {@code up -d}, deliberately never {@code -v} — so
+     * a change to {@code zone-compose.yml.tmpl} (a new Traefik label, an
+     * image bump) reaches zones that are already running. Volumes
+     * (forgejo-data, dind-data, runner-data) are untouched either way, so no
+     * zone data — repos, Forgejo's own host keys, the DB-stored tokens/PATs —
+     * is at risk. Off by default ({@link IgnitionProperties#isRecreateZonesOnStart()});
+     * {@code update-and-run.sh} turns it on for its own restart. Best-effort:
+     * one zone failing doesn't stop the rest.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void recreateZonesOnStart() {
+        if (!props.isRecreateZonesOnStart()) {
+            return;
+        }
+        List<Zone> all = zones.findAll();
+        log.info("recreating {} zone stack(s) on start (IGN_RECREATE_ZONES_ON_START=true)", all.size());
+        for (Zone zone : all) {
+            String slug = zone.slug();
+            try {
+                Path compose = render.zoneCompose(zone);
+                String host = dockerHost(zone);
+                docker.compose(host, "zone-" + slug, compose.toString(), "down", "--remove-orphans");
+                DockerCli.Result up = docker.compose(host, "zone-" + slug, compose.toString(), "up", "-d");
+                if (up.ok()) {
+                    log.info("zone {}: stack recreated", slug);
+                } else {
+                    log.warn("zone {}: recreate failed: {}", slug, up.stderr().isBlank() ? up.stdout() : up.stderr());
+                }
+            } catch (RuntimeException e) {
+                log.warn("zone {}: recreate failed", slug, e);
+            }
+        }
     }
 }

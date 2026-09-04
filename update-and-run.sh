@@ -57,7 +57,13 @@ log "traefik-core down/up"
 
 log "ignition-control down/up"
 "${CONTROL[@]}" down
-"${CONTROL[@]}" up -d
+# IGN_RECREATE_ZONES_ON_START=true for this one run only: on startup,
+# ignition-control also recreates every zone's containers (down + up -d,
+# never -v) so a compose/label/image change (like a Traefik router label
+# fix) reaches zones that are already running, not just new ones. No volume
+# is ever touched, so no zone data (repos, Forgejo's host keys, the
+# DB-stored tokens/PATs) is at risk — only the containers get recreated.
+IGN_RECREATE_ZONES_ON_START=true "${CONTROL[@]}" up -d
 
 log "waiting for ignition-control to answer"
 base_url="$(grep -E '^IGN_PUBLIC_URL=' .env 2>/dev/null | head -1 | cut -d= -f2-)"
