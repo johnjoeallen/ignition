@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -211,7 +212,15 @@ public class ZoneService {
         return out;
     }
 
-    public ForgejoClient.Response createUser(String slug, String username, String email, String password) {
+    /**
+     * Creates a Forgejo user. There's no username field in the console — the
+     * login is derived from the mailbox part of the email (before the
+     * {@code @}), sanitized down to what Forgejo accepts. If that collides
+     * with an existing login, Forgejo's own 422 surfaces to the caller as
+     * normal (no auto-suffixing).
+     */
+    public ForgejoClient.Response createUser(String slug, String email, String password) {
+        String username = usernameFromEmail(email);
         var res = forgejo.post(slug, "/admin/users", Map.of(
                 "username", username, "email", email, "password", password,
                 "must_change_password", false));
@@ -223,6 +232,21 @@ public class ZoneService {
             }
         }
         return res;
+    }
+
+    /**
+     * The mailbox part of an email (before {@code @}), lowercased and
+     * stripped down to what Forgejo accepts in a username (letters, digits,
+     * {@code .-_}), with the domain dropped entirely and leading/trailing/
+     * repeated separators collapsed.
+     */
+    private static String usernameFromEmail(String email) {
+        String mailbox = email.split("@", 2)[0];
+        String cleaned = mailbox.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9._-]", "-")
+                .replaceAll("[._-]{2,}", "-")
+                .replaceAll("^[._-]+|[._-]+$", "");
+        return cleaned.isBlank() ? "user" : cleaned;
     }
 
     public ForgejoClient.Response deleteUser(String slug, String login) {

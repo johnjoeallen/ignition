@@ -85,10 +85,6 @@
       <form method="post" th:action="@{/z/users}" class="row g-2 align-items-end mb-3" autocomplete="off">
         <input type="hidden" name="z" th:value="${zoneSlug}">
         <div class="col-auto">
-          <label class="form-label small mb-1">username</label>
-          <input class="form-control form-control-sm" name="username" autocomplete="off" required>
-        </div>
-        <div class="col-auto">
           <label class="form-label small mb-1">email</label>
           <input class="form-control form-control-sm" name="email" type="email" autocomplete="off" required>
         </div>

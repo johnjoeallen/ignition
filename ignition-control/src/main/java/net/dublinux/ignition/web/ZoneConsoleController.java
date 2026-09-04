@@ -75,10 +75,9 @@ public class ZoneConsoleController {
 
     @PostMapping("/z/users")
     public String createUser(@RequestParam(name = "z") String z,
-                             @RequestParam String username,
                              @RequestParam String email,
                              @RequestParam String password) {
-        return back(z, zones.createUser(require(z), username, email, password), "user " + username + " created");
+        return back(z, zones.createUser(require(z), email, password), "user " + email + " created");
     }
 
     @PostMapping("/z/users/delete")
