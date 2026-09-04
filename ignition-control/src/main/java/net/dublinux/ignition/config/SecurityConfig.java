@@ -40,9 +40,15 @@ public class SecurityConfig {
                         // failed login. PlatformConsoleController itself branches the content by
                         // role (admin Teams list vs. "your teams" for everyone else).
                         .requestMatchers("/").authenticated()
-                        // Any team member reaches /z (their own zone, checked against ?z=<slug> —
-                        // see ZoneAuthorizationManager); a platform admin reaches everything else.
-                        .requestMatchers("/z/**").access(zoneAuthz)
+                        // The team console + its actions — any member reaches their own team
+                        // (checked against the {slug} path variable, see
+                        // ZoneAuthorizationManager); a platform admin reaches everything else.
+                        // Zone-*management* actions (status/destroy/move) stay under /zones/{slug}/...
+                        // too but keep distinct final segments, so they fall through to the
+                        // PLATFORM_ADMIN catch-all below untouched.
+                        .requestMatchers("/zones/{slug}").access(zoneAuthz)
+                        .requestMatchers("/zones/{slug}/members/**", "/zones/{slug}/apps/**",
+                                "/zones/{slug}/repos/**", "/zones/{slug}/runner/**").access(zoneAuthz)
                         .requestMatchers("/roster/**", "/sweep").hasAuthority("PLATFORM_ADMIN")
                         .anyRequest().hasAuthority("PLATFORM_ADMIN"))
                 .formLogin(form -> form

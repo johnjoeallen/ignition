@@ -157,9 +157,9 @@ public class PlatformConsoleController {
     public String stopApp(@PathVariable String zone, @PathVariable String name) {
         try {
             apps.undeploy(zone, name);
-            return "redirect:/z?z=" + enc(zone) + "&m=app+" + name + "+stopped";
+            return "redirect:/zones/" + enc(zone) + "?m=app+" + name + "+stopped";
         } catch (RuntimeException e) {
-            return "redirect:/z?z=" + enc(zone) + "&m=" + enc(e.getMessage());
+            return "redirect:/zones/" + enc(zone) + "?m=" + enc(e.getMessage());
         }
     }
 

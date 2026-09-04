@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
@@ -27,9 +28,9 @@ import org.springframework.web.server.ResponseStatusException;
  * what role — and, not a separate thing, their Forgejo git login, provisioned
  * automatically from their email), Apps (an app <em>is</em> its repo —
  * creating one creates and seeds the repo; Release deploys it), runner
- * restart. The zone is passed as {@code ?z=<slug>} — access is enforced by
- * {@code ZoneAuthorizationManager} (a platform admin, or a
- * {@code MEMBER}/{@code ZONE_ADMIN} of that zone); member-management actions
+ * restart. The team is the {@code {slug}} path variable, {@code /zones/<slug>} —
+ * access is enforced by {@code ZoneAuthorizationManager} (a platform admin, or a
+ * {@code MEMBER}/{@code ZONE_ADMIN} of that team); member-management actions
  * here additionally require {@link CurrentUser#isZoneAdmin}.
  */
 @Controller
@@ -52,16 +53,8 @@ public class ZoneConsoleController {
     public record AppRow(String name, String htmlUrl, String version, boolean deployed,
                          String image, String url, String deployId) {}
 
-    private static String require(String z) {
-        if (z == null || z.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "missing ?z=<zone>");
-        }
-        return z.strip();
-    }
-
-    @GetMapping("/z")
-    public String zone(@RequestParam(name = "z") String z, Model model) {
-        String slug = require(z);
+    @GetMapping("/zones/{slug}")
+    public String zone(@PathVariable String slug, Model model) {
         Zone zone = zones.get(slug)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such zone"));
         Map<String, DeployedApp> deployed = apps.listForZone(slug).stream()
@@ -116,11 +109,11 @@ public class ZoneConsoleController {
         return "zone";
     }
 
-    @PostMapping("/z/members")
-    public String addMember(@RequestParam(name = "z") String z,
+    @PostMapping("/zones/{slug}/members")
+    public String addMember(@PathVariable String slug,
                             @RequestParam String email,
                             @RequestParam ZoneMember.Role role) {
-        String slug = requireZoneAdmin(z);
+        requireZoneAdmin(slug);
         try {
             java.util.UUID memberId = access.addMember(slug, email, role);
             String username = zones.ensureGitAccess(slug, email, memberId);
@@ -131,11 +124,11 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/z/members/role")
-    public String setMemberRole(@RequestParam(name = "z") String z,
+    @PostMapping("/zones/{slug}/members/role")
+    public String setMemberRole(@PathVariable String slug,
                                 @RequestParam java.util.UUID userId,
                                 @RequestParam ZoneMember.Role role) {
-        String slug = requireZoneAdmin(z);
+        requireZoneAdmin(slug);
         try {
             java.util.UUID actingUserId = currentUser.get().map(u -> u.id()).orElse(null);
             access.setRole(slug, userId, role, actingUserId);
@@ -145,9 +138,9 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/z/members/delete")
-    public String removeMember(@RequestParam(name = "z") String z, @RequestParam java.util.UUID userId) {
-        String slug = requireZoneAdmin(z);
+    @PostMapping("/zones/{slug}/members/delete")
+    public String removeMember(@PathVariable String slug, @RequestParam java.util.UUID userId) {
+        requireZoneAdmin(slug);
         try {
             String email = access.emailOf(userId).orElse(null);
             access.removeMember(slug, userId);
@@ -160,9 +153,9 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/z/members/reset-git-password")
-    public String resetGitPassword(@RequestParam(name = "z") String z, @RequestParam java.util.UUID userId) {
-        String slug = requireZoneAdmin(z);
+    @PostMapping("/zones/{slug}/members/reset-git-password")
+    public String resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId) {
+        requireZoneAdmin(slug);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
@@ -172,59 +165,56 @@ public class ZoneConsoleController {
     }
 
     /** Member-management actions need team-admin rights, not just team access. */
-    private String requireZoneAdmin(String z) {
-        String slug = require(z);
+    private void requireZoneAdmin(String slug) {
         if (!currentUser.isZoneAdmin(slug)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can manage members");
         }
-        return slug;
     }
 
-    @PostMapping("/z/apps")
-    public String createApp(@RequestParam(name = "z") String z,
-                            @RequestParam String name) {
-        return back(z, zones.createApp(require(z), name),
+    @PostMapping("/zones/{slug}/apps")
+    public String createApp(@PathVariable String slug, @RequestParam String name) {
+        return back(slug, zones.createApp(slug, name),
                 "app " + name + " created — clone it, push, then Release");
     }
 
-    @PostMapping("/z/repos/release")
-    public String release(@RequestParam(name = "z") String z,
+    @PostMapping("/zones/{slug}/repos/release")
+    public String release(@PathVariable String slug,
                           @RequestParam(name = "repo") String name,
                           @RequestParam(defaultValue = "auto") String bump) {
         try {
-            ReleaseService.Result r = zones.release(require(z), require(z), name, bump);
+            ReleaseService.Result r = zones.release(slug, slug, name, bump);
             String msg = r.ok()
                     ? "released %s %s (%s) — CI is building".formatted(name, r.tag(), r.kind())
                     : "Forgejo said (%d): %s".formatted(r.status(), r.message());
-            return redirect(z, msg);
+            return redirect(slug, msg);
         } catch (IllegalArgumentException e) {
-            return redirect(z, e.getMessage());
+            return redirect(slug, e.getMessage());
         }
     }
 
-    @PostMapping("/z/runner/restart")
-    public String restartRunner(@RequestParam(name = "z") String z) {
-        boolean ok = zones.restartRunner(require(z));
-        return redirect(z, ok ? "runner restarted" : "runner restart failed");
+    @PostMapping("/zones/{slug}/runner/restart")
+    public String restartRunner(@PathVariable String slug) {
+        boolean ok = zones.restartRunner(slug);
+        return redirect(slug, ok ? "runner restarted" : "runner restart failed");
     }
 
-    @PostMapping("/z/apps/delete")
-    public String deleteApp(@RequestParam(name = "z") String z, @RequestParam String name) {
+    @PostMapping("/zones/{slug}/apps/delete")
+    public String deleteApp(@PathVariable String slug, @RequestParam String name) {
         try {
-            apps.undeploy(require(z), name);
-            return redirect(z, "app " + name + " stopped");
+            apps.undeploy(slug, name);
+            return redirect(slug, "app " + name + " stopped");
         } catch (IllegalArgumentException e) {
-            return redirect(z, e.getMessage());
+            return redirect(slug, e.getMessage());
         }
     }
 
-    private String back(String z, ForgejoClient.Response res, String okMsg) {
-        return redirect(z, res.ok() ? okMsg
+    private String back(String slug, ForgejoClient.Response res, String okMsg) {
+        return redirect(slug, res.ok() ? okMsg
                 : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
     }
 
-    private static String redirect(String z, String msg) {
-        return "redirect:/z?z=" + enc(z) + "&m=" + enc(msg);
+    private static String redirect(String slug, String msg) {
+        return "redirect:/zones/" + enc(slug) + "?m=" + enc(msg);
     }
 
     private static String enc(String s) {

@@ -10,11 +10,11 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.stereotype.Component;
 
 /**
- * Gates {@code /z/**} (the team console — every action there is scoped by the
- * {@code ?z=<slug>} request param, not a path variable, so a plain
- * {@code hasAuthority(...)} matcher can't express it). A platform admin gets
- * in everywhere; anyone else needs a {@code MEMBER:<slug>} authority for the
- * zone named in the request, which {@link net.dublinux.ignition.auth.AuthorityService}
+ * Gates the team console + its actions, {@code /zones/{slug}/...} — scoped by
+ * the {@code {slug}} path variable on the matched request pattern, not a
+ * plain {@code hasAuthority(...)} matcher's static path. A platform admin
+ * gets in everywhere; anyone else needs a {@code MEMBER:<slug>} authority for
+ * the team named in the request, which {@link net.dublinux.ignition.auth.AuthorityService}
  * grants to both team roles (a {@code ZONE_ADMIN:<slug>} always also carries
  * {@code MEMBER:<slug>}).
  */
@@ -28,7 +28,7 @@ public class ZoneAuthorizationManager implements AuthorizationManager<RequestAut
         if (platformAdmin.authorize(authentication, null).isGranted()) {
             return new AuthorizationDecision(true);
         }
-        String slug = ctx.getRequest().getParameter("z");
+        String slug = ctx.getVariables().get("slug");
         if (slug == null || slug.isBlank()) {
             return new AuthorizationDecision(false);
         }

@@ -23,7 +23,7 @@
           </thead>
           <tbody>
             <tr th:each="z : ${zones}">
-              <td><a class="fw-semibold" th:href="@{/z(z=${z.slug})}" th:text="${z.slug}">quantum-badgers</a></td>
+              <td><a class="fw-semibold" th:href="@{/zones/{slug}(slug=${z.slug})}" th:text="${z.slug}">quantum-badgers</a></td>
               <td>
                 <span class="badge" th:if="${myRoles.get(z.slug) != null}"
                       th:classappend="${myRoles.get(z.slug).name() == 'ZONE_ADMIN'} ? 'text-bg-success' : 'text-bg-secondary'"
