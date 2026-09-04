@@ -4,15 +4,26 @@ The Ignition control plane — one Spring Boot service that replaces the `ign`
 bash CLI, the `scripts/*.sh`, and `control/ign-control.py`. See
 [`../DESIGN.md`](../DESIGN.md).
 
-Status: **in progress** (DESIGN.md through step 8 — feature-complete + containerised). Working now:
+Status: **in progress**. The control-plane feature set is complete; auth and
+persistence are being reworked per [`../AUTH-DESIGN.md`](../AUTH-DESIGN.md).
+
+**Persistence: PostgreSQL** (AUTH-DESIGN step 2, done). Nodes, zones, apps,
+provisioning status, and encrypted zone secrets are rows; Flyway owns the
+schema (`resources/db/migration`). The `state/` file tree is gone — the compose
+files, runner config, and Traefik snippets external tools read are re-rendered
+from the DB into an ephemeral `IGN_WORK_DIR` (`RenderService`, and
+`TraefikDynamicConfig` rebuilds `control/dynamic` on startup). `zone_secret`
+values are AES-GCM with `IGN_SECRET_KEY` (`SecretCipher`).
+
+Working now:
 
 - health at `/actuator/health`
-- token auth: platform (`ignition.admin-token`), zone (`state/zones/<slug>/zone-token`),
-  CI deploy (`state/zones/<slug>/deploy-token`) → session cookie or `Authorization: Bearer`
-- **platform console** (`/`) — live views of nodes / zones / apps from the
-  existing `state/` tree; **register / drain / remove a node**; **provision / move /
-  destroy a zone**, **stop an app**, and a **roster** page (bulk apply /
-  teardown a slug list) + **sweep idle zones now**
+- token auth: platform (`ignition.admin-token`), zone / CI deploy
+  (`zone_secret` rows) → session cookie or `Authorization: Bearer`
+  *(replaced by accounts in AUTH-DESIGN steps 3–7)*
+- **platform console** (`/`) — live views of nodes / zones / apps;
+  **register / drain / remove a node**; **provision / move / destroy a zone**,
+  **stop an app**, a **roster** page + **sweep idle zones now**
 - **zone console** (`/z`) — ported 1:1 from `ign-control.py`: status + apps,
   Users (create / delete), Repositories (create), per-repo **Release**
   (auto / patch / minor / major, via `ForgejoClient` + `ReleaseService`),
@@ -25,8 +36,11 @@ Status: **in progress** (DESIGN.md through step 8 — feature-complete + contain
 
 ```sh
 cd ignition-control
+docker run -d --name ignition-pg -e POSTGRES_DB=ignition -e POSTGRES_USER=ignition \
+  -e POSTGRES_PASSWORD=ignition -p 5432:5432 postgres:16-alpine
+
 IGN_ADMIN_TOKEN=$(openssl rand -hex 32) \
-IGN_STATE_DIR=../state \
+IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64) \
 BASE_DOMAIN=ignition.example \
 ./mvnw spring-boot:run
 ```
@@ -46,15 +60,15 @@ docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
 |---|---|
 | `config` | `IgnitionProperties`, `SecurityConfig` |
 | `security` | token → `IgnitionPrincipal`, the auth filter |
-| `state` | `EnvFile` — the `KEY=value` on-disk format |
-| `node` / `zone` / `app` | records + file-tree repositories + services |
+| `node` / `zone` / `app` | JPA entities + repositories + services; `zone.SecretCipher` |
+| `db/migration` | Flyway schema (`V1__infra.sql`) |
 | `forgejo` | `ForgejoClient` — per-zone REST wrapper (Jackson 3 / `java.net.http`) |
 | `release` | `ReleaseService` — Conventional-Commits bump + `cut` via Forgejo |
 | `scheduler` | `Scheduler` — CPU-headroom node placement |
 | `provisioning` | `ProvisioningService` — port of `provision-zone.sh` |
-| `traefik` | `TraefikDynamicConfig` — the `state/control/dynamic/*` snippets |
+| `traefik` | `TraefikDynamicConfig` — the `control/dynamic/*` snippets, rebuilt from the DB on startup |
 | `docker` | `DockerCli` — `docker -H <endpoint> compose …` |
-| `templates` | `ComposeTemplate` — explicit `${VAR}` render of the compose files |
+| `templates` | `ComposeTemplate` (explicit `${VAR}` render) + `RenderService` (DB rows → work-dir files) |
 | `web` | `PlatformConsoleController`, `ZoneConsoleController`, `RosterController`, `LoginController`, `DeployController` |
 | `sweep` | `IdleSweeper` (`@Scheduled`) |
 | `resources/compose` | `zone-compose.yml.tmpl`, `app-compose.tmpl` (moved from repo `templates/`) |

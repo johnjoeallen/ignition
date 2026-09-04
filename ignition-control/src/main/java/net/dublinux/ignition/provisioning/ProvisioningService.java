@@ -1,17 +1,11 @@
 package net.dublinux.ignition.provisioning;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
@@ -22,8 +16,7 @@ import net.dublinux.ignition.docker.DockerCli;
 import net.dublinux.ignition.node.Node;
 import net.dublinux.ignition.node.NodeRepository;
 import net.dublinux.ignition.scheduler.Scheduler;
-import net.dublinux.ignition.state.EnvFile;
-import net.dublinux.ignition.templates.ComposeTemplate;
+import net.dublinux.ignition.templates.RenderService;
 import net.dublinux.ignition.traefik.TraefikDynamicConfig;
 import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
@@ -34,11 +27,11 @@ import org.springframework.stereotype.Service;
 /**
  * Stands up one zone's stack on a node — Forgejo + private DinD + Actions
  * runner, a zone-admin account, and the tokens the control plane and CI need.
- * A faithful port of {@code provision-zone.sh}: the two-phase apply (bring up
- * forgejo+dind, wait healthy, register the runner secret, push the config in
- * with {@code compose cp}, bring up the runner). Idempotent.
+ * The two-phase apply (bring up forgejo+dind, wait healthy, register the runner
+ * secret, push the config in with {@code compose cp}, bring up the runner).
+ * Idempotent.
  *
- * <p>Runs off-request on a single-thread executor; the console polls
+ * <p>Runs off-request on a small executor; the console polls
  * {@link #status(String)}.
  */
 @Service
@@ -52,16 +45,17 @@ public class ProvisioningService {
     private final ZoneRepository zones;
     private final NodeRepository nodes;
     private final Scheduler scheduler;
-    private final ComposeTemplate templates;
+    private final RenderService render;
     private final TraefikDynamicConfig traefik;
     private final DockerCli docker;
+    private final ProvisioningStatusRepository statuses;
 
     private final ExecutorService pool;
-    private final Map<String, Status> statuses = new ConcurrentHashMap<>();
 
     public ProvisioningService(IgnitionProperties props, ZoneRepository zones, NodeRepository nodes,
-                               Scheduler scheduler, ComposeTemplate templates,
+                               Scheduler scheduler, RenderService render,
                                TraefikDynamicConfig traefik, DockerCli docker,
+                               ProvisioningStatusRepository statuses,
                                @org.springframework.beans.factory.annotation.Value(
                                        "${ignition.provisioning.concurrency:3}") int concurrency) {
         java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger();
@@ -74,9 +68,10 @@ public class ProvisioningService {
         this.zones = zones;
         this.nodes = nodes;
         this.scheduler = scheduler;
-        this.templates = templates;
+        this.render = render;
         this.traefik = traefik;
         this.docker = docker;
+        this.statuses = statuses;
     }
 
     public enum State { RUNNING, DONE, FAILED }
@@ -84,7 +79,15 @@ public class ProvisioningService {
     public record Status(State state, String message, Instant at) {}
 
     public Optional<Status> status(String slug) {
-        return Optional.ofNullable(statuses.get(slug));
+        return statuses.findById(slug)
+                .map(e -> new Status(e.state(), e.message(), e.updatedAt()));
+    }
+
+    private void setStatus(String slug, State state, String message) {
+        ProvisioningStatusEntity e = statuses.findById(slug)
+                .orElseGet(() -> new ProvisioningStatusEntity(slug, state, message));
+        e.set(state, message);
+        statuses.save(e);
     }
 
     /** Queue a provision. Returns immediately; watch {@link #status(String)}. */
@@ -92,18 +95,19 @@ public class ProvisioningService {
         if (!SLUG.matcher(slug).matches()) {
             throw new IllegalArgumentException("slug must be [a-z0-9-], 2–40 chars, no leading/trailing dash");
         }
-        Status existing = statuses.get(slug);
-        if (existing != null && existing.state() == State.RUNNING) {
-            throw new IllegalStateException("zone " + slug + " is already being provisioned");
-        }
-        statuses.put(slug, new Status(State.RUNNING, "queued", Instant.now()));
+        status(slug).ifPresent(s -> {
+            if (s.state() == State.RUNNING) {
+                throw new IllegalStateException("zone " + slug + " is already being provisioned");
+            }
+        });
+        setStatus(slug, State.RUNNING, "queued");
         pool.submit(() -> {
             try {
                 String node = provision(slug, nodeOverride, label);
-                statuses.put(slug, new Status(State.DONE, "provisioned on " + node, Instant.now()));
+                setStatus(slug, State.DONE, "provisioned on " + node);
             } catch (RuntimeException e) {
                 log.warn("provisioning zone {} failed", slug, e);
-                statuses.put(slug, new Status(State.FAILED, e.getMessage(), Instant.now()));
+                setStatus(slug, State.FAILED, e.getMessage());
             }
         });
     }
@@ -116,72 +120,76 @@ public class ProvisioningService {
         double zoneMemGb = gb(q.getMemForgejo()) + gb(q.getMemDind()) + gb(q.getMemRunner()) + gb(q.getMemApp());
 
         String node = pickNode(slug, nodeOverride, label, zoneCpus, zoneMemGb);
-        String dockerHost = nodes.find(node).map(Node::dockerHost).orElse("local");
+        String dockerHost = nodes.findById(node).map(Node::dockerHost).orElse("local");
 
         String base = props.getBaseDomain();
         String gitHost = "git." + slug + "." + base;
         String zadminHost = "admin." + slug + "." + base;
 
-        Path dir = zones.dir(slug);
-        mkdirs(dir);
-        writeZoneEnv(slug, node, base, zoneCpus, zoneMemGb, gitHost, zadminHost);
+        Zone zone = zones.find(slug).orElse(null);
+        if (zone == null) {
+            zone = new Zone(slug, node, base, zoneCpus, zoneMemGb, gitHost, zadminHost,
+                    "https://" + gitHost + "/", "https://" + zadminHost + "/",
+                    "apps." + slug + "." + base);
+        } else {
+            zone.setNode(node);
+        }
+        zone.touch();
+        zone = zones.save(zone);
 
         traefik.writePlatformRouter();
-        traefik.writeZoneRouter(slug);
+        traefik.writeZoneRouter(zone);
 
-        Map<String, String> vars = new LinkedHashMap<>();
-        vars.put("ZONE_SLUG", slug);
-        vars.put("BASE_DOMAIN", base);
-        vars.put("CPU_FORGEJO", num(q.getCpuForgejo()));
-        vars.put("MEM_FORGEJO", q.getMemForgejo());
-        vars.put("CPU_DIND", num(q.getCpuDind()));
-        vars.put("MEM_DIND", q.getMemDind());
-        vars.put("CPU_RUNNER", num(q.getCpuRunner()));
-        vars.put("MEM_RUNNER", q.getMemRunner());
-        writeString(dir.resolve("docker-compose.yml"), templates.renderZone(vars));
+        Path compose = render.zoneCompose(zone);
 
         // --- phase 1: forgejo + dind, wait healthy ---
-        must(zc(slug, dockerHost, "up", "-d", "forgejo", "dind"), "compose up forgejo+dind");
-        awaitForgejoHealthy(slug, dockerHost);
+        must(zc(slug, dockerHost, compose, "up", "-d", "forgejo", "dind"), "compose up forgejo+dind");
+        awaitForgejoHealthy(slug, dockerHost, compose);
 
         // --- runner registration (two-phase) ---
-        String secret = secretFile(dir.resolve("runner-secret"), 20);
+        String secret = zones.hasSecret(slug, "runner-secret")
+                ? zones.secret(slug, "runner-secret")
+                : putRandomHex(slug, "runner-secret", 20);
         String uuid = forgejoUuid(secret);
-        must(forgejoCli(slug, dockerHost,
+        must(forgejoCli(slug, dockerHost, compose,
                 "forgejo", "forgejo-cli", "actions", "register",
                 "--keep-labels", "--name", "zone-" + slug, "--secret", secret),
                 "register runner secret");
-        writeString(dir.resolve("runner-config.yml"), runnerConfig(q.getRunnerCapacity(), uuid, secret));
+        Path runnerConfig = render.runnerConfig(slug, q.getRunnerCapacity(), uuid, secret);
 
         // --- phase 2: runner up, push its config into the volume ---
-        must(zc(slug, dockerHost, "up", "-d"), "compose up (runner)");
-        must(zc(slug, dockerHost, "cp", dir.resolve("runner-config.yml").toString(), "runner:/data/config.yml"),
+        must(zc(slug, dockerHost, compose, "up", "-d"), "compose up (runner)");
+        must(zc(slug, dockerHost, compose, "cp", runnerConfig.toString(), "runner:/data/config.yml"),
                 "compose cp runner config");
-        must(zc(slug, dockerHost, "restart", "runner"), "restart runner");
+        must(zc(slug, dockerHost, compose, "restart", "runner"), "restart runner");
 
         // --- zone-admin account + Forgejo API token ---
-        if (!Files.isRegularFile(dir.resolve("zone-admin.txt"))) {
+        if (!zones.hasSecret(slug, "forgejo_token")) {
             String adminPw = randBase64(18);
-            must(forgejoCli(slug, dockerHost,
+            must(forgejoCli(slug, dockerHost, compose,
                     "forgejo", "admin", "user", "create", "--admin", "--username", "zoneadmin",
                     "--password", adminPw, "--email", "zoneadmin@" + gitHost, "--must-change-password=false"),
                     "create zoneadmin");
-            DockerCli.Result tok = forgejoCli(slug, dockerHost,
+            DockerCli.Result tok = forgejoCli(slug, dockerHost, compose,
                     "forgejo", "admin", "user", "generate-access-token",
                     "--username", "zoneadmin", "--scopes", "all", "--raw");
             must(tok, "mint zoneadmin token");
-            Map<String, String> adminFile = new LinkedHashMap<>();
-            adminFile.put("username", "zoneadmin");
-            adminFile.put("password", adminPw);
-            adminFile.put("forgejo_url", "https://" + gitHost + "/");
-            adminFile.put("forgejo_token", tok.stdout().replaceAll("\\s", ""));
-            EnvFile.write(dir.resolve("zone-admin.txt"), adminFile);
+            zones.putSecret(slug, "forgejo_username", "zoneadmin");
+            zones.putSecret(slug, "forgejo_password", adminPw);
+            zones.putSecret(slug, "forgejo_url", "https://" + gitHost + "/");
+            zones.putSecret(slug, "forgejo_token", tok.stdout().replaceAll("\\s", ""));
         }
 
-        // --- tokens + activity marker ---
-        secretFileIfMissing(dir.resolve("zone-token"), 32);
-        secretFileIfMissing(dir.resolve("deploy-token"), 32);
-        writeString(dir.resolve("last-activity"), Long.toString(Instant.now().getEpochSecond()));
+        // --- tokens ---
+        if (!zones.hasSecret(slug, "zone-token")) {
+            putRandomHex(slug, "zone-token", 32);
+        }
+        if (!zones.hasSecret(slug, "deploy-token")) {
+            putRandomHex(slug, "deploy-token", 32);
+        }
+
+        zone.touch();
+        zones.save(zone);
 
         log.info("provisioned zone {} on node {} ({})", slug, node, gitHost);
         return node;
@@ -194,7 +202,7 @@ public class ProvisioningService {
             return zones.find(slug).map(Zone::node).orElseThrow();
         }
         if (override != null && !override.isBlank()) {
-            if (nodes.find(override).isEmpty()) {
+            if (nodes.findById(override).isEmpty()) {
                 throw new IllegalArgumentException("no such node: " + override);
             }
             return override;
@@ -202,40 +210,21 @@ public class ProvisioningService {
         return scheduler.place(cpu, mem, label);
     }
 
-    private void writeZoneEnv(String slug, String node, String base, double cpus, double memGb,
-                              String gitHost, String zadminHost) {
-        Map<String, String> env = new LinkedHashMap<>();
-        env.put("ZONE_SLUG", slug);
-        env.put("NODE", node);
-        env.put("BASE_DOMAIN", base);
-        env.put("ZONE_CPUS", num(cpus));
-        env.put("ZONE_MEM_GB", num(memGb));
-        env.put("APP_PORT", "8080");
-        env.put("GIT_HOST", gitHost);
-        env.put("ZADMIN_HOST", zadminHost);
-        env.put("REGISTRY", gitHost);
-        env.put("FORGEJO_URL", "https://" + gitHost + "/");
-        env.put("ZADMIN_URL", "https://" + zadminHost + "/");
-        env.put("APPS_BASE", "apps." + slug + "." + base);
-        zones.saveEnv(slug, env);
-    }
-
-    private DockerCli.Result zc(String slug, String dockerHost, String... args) {
-        String composeFile = zones.dir(slug).resolve("docker-compose.yml").toString();
-        return docker.compose(dockerHost, "zone-" + slug, composeFile, args);
+    private DockerCli.Result zc(String slug, String dockerHost, Path compose, String... args) {
+        return docker.compose(dockerHost, "zone-" + slug, compose.toString(), args);
     }
 
     /** {@code docker … compose exec -T -u git forgejo <cmd…>} */
-    private DockerCli.Result forgejoCli(String slug, String dockerHost, String... cmd) {
+    private DockerCli.Result forgejoCli(String slug, String dockerHost, Path compose, String... cmd) {
         String[] a = new String[cmd.length + 5];
         a[0] = "exec"; a[1] = "-T"; a[2] = "-u"; a[3] = "git"; a[4] = "forgejo";
         System.arraycopy(cmd, 0, a, 5, cmd.length);
-        return zc(slug, dockerHost, a);
+        return zc(slug, dockerHost, compose, a);
     }
 
-    private void awaitForgejoHealthy(String slug, String dockerHost) {
+    private void awaitForgejoHealthy(String slug, String dockerHost, Path compose) {
         for (int i = 0; i < 60; i++) {
-            DockerCli.Result r = zc(slug, dockerHost, "ps", "--format", "{{.Service}} {{.Health}}");
+            DockerCli.Result r = zc(slug, dockerHost, compose, "ps", "--format", "{{.Service}} {{.Health}}");
             for (String line : r.stdout().split("\n")) {
                 String[] parts = line.strip().split("\\s+");
                 if (parts.length >= 2 && parts[0].equals("forgejo") && parts[1].equals("healthy")) {
@@ -245,6 +234,12 @@ public class ProvisioningService {
             sleep(2000);
         }
         throw new IllegalStateException("forgejo did not become healthy");
+    }
+
+    private String putRandomHex(String slug, String name, int bytes) {
+        String hex = randHex(bytes);
+        zones.putSecret(slug, name, hex);
+        return hex;
     }
 
     private static void must(DockerCli.Result r, String what) {
@@ -260,40 +255,6 @@ public class ProvisioningService {
         return "%s-%s-%s-%s-%s".formatted(
                 h.substring(0, 8), h.substring(8, 12), h.substring(12, 16),
                 h.substring(16, 20), h.substring(20, 32));
-    }
-
-    private static String runnerConfig(int capacity, String uuid, String secret) {
-        return """
-                log: { level: info }
-                runner:
-                  file: /data/.runner
-                  capacity: %d
-                  timeout: 3h
-                  envs:
-                    DOCKER_HOST: tcp://dind:2375
-                  labels:
-                    - "ubuntu-latest:docker://code.forgejo.org/oci/node:22-bookworm"
-                    - "docker-cli:docker://code.forgejo.org/oci/docker:cli"
-                container: { network: host, valid_volumes: [] }
-                server:
-                  connections:
-                    default: { url: "http://forgejo:3000", uuid: "%s", token: "%s" }
-                """.formatted(capacity, uuid, secret);
-    }
-
-    private String secretFile(Path p, int bytes) {
-        if (isNonEmpty(p)) {
-            return read(p).strip();
-        }
-        String hex = randHex(bytes);
-        writeString(p, hex + "\n");
-        return hex;
-    }
-
-    private void secretFileIfMissing(Path p, int bytes) {
-        if (!isNonEmpty(p)) {
-            writeString(p, randHex(bytes) + "\n");
-        }
     }
 
     private static String randHex(int bytes) {
@@ -320,10 +281,6 @@ public class ProvisioningService {
         }
     }
 
-    private static String num(double d) {
-        return d == Math.floor(d) ? "%.1f".formatted(d) : Double.toString(d);
-    }
-
     private static String firstLine(String s) {
         return s == null ? "" : s.lines().findFirst().orElse("").strip();
     }
@@ -333,39 +290,6 @@ public class ProvisioningService {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-    }
-
-    private static boolean isNonEmpty(Path p) {
-        try {
-            return Files.isRegularFile(p) && Files.size(p) > 0;
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private static void mkdirs(Path p) {
-        try {
-            Files.createDirectories(p);
-        } catch (IOException e) {
-            throw new UncheckedIOException("mkdir " + p, e);
-        }
-    }
-
-    private static void writeString(Path p, String content) {
-        try {
-            Files.createDirectories(p.getParent());
-            Files.writeString(p, content);
-        } catch (IOException e) {
-            throw new UncheckedIOException("writing " + p, e);
-        }
-    }
-
-    private static String read(Path p) {
-        try {
-            return Files.readString(p);
-        } catch (IOException e) {
-            throw new UncheckedIOException("reading " + p, e);
         }
     }
 }

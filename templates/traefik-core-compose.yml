@@ -48,6 +48,11 @@ networks:
 
 volumes:
   acme:
+  # created by ignition-control-compose.yml; on a worker node that has no
+  # control plane, `docker volume create ignition-dynamic` once.
+  ignition-dynamic:
+    name: ignition-dynamic
+    external: true
 
 services:
   traefik:
@@ -93,7 +98,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - acme:/acme
-      - ../state/control/dynamic:/etc/traefik/dynamic:ro
+      # written by ignition-control (ignition-control-compose.yml)
+      - ignition-dynamic:/etc/traefik/dynamic:ro
     networks:
       - traefik-public
 

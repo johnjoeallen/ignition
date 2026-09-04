@@ -15,14 +15,14 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import net.dublinux.ignition.config.IgnitionProperties;
-import net.dublinux.ignition.state.EnvFile;
+import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
 import org.springframework.stereotype.Component;
 
 /**
  * Per-zone Forgejo REST wrapper. Uses the {@code zoneadmin} token minted at
- * provisioning (read from {@code state/zones/<slug>/zone-admin.txt}) — the zone
- * admin never sees it. Mirrors {@code forgejo()} in {@code ign-control.py}.
+ * provisioning (the encrypted {@code forgejo_token} / {@code forgejo_url}
+ * {@code zone_secret} rows) — the zone admin never sees it.
  */
 @Component
 public class ForgejoClient {
@@ -66,10 +66,12 @@ public class ForgejoClient {
     }
 
     private Response send(String slug, String method, String path, Map<String, ?> body) {
-        Map<String, String> admin = EnvFile.read(zones.dir(slug).resolve("zone-admin.txt"));
-        String base = admin.getOrDefault("forgejo_url",
-                zones.find(slug).map(z -> z.forgejoUrl()).orElse("")).replaceAll("/+$", "");
-        String token = admin.getOrDefault("forgejo_token", "");
+        String base = zones.secret(slug, "forgejo_url");
+        if (base.isBlank()) {
+            base = zones.find(slug).map(Zone::forgejoUrl).orElse("");
+        }
+        base = base.replaceAll("/+$", "");
+        String token = zones.secret(slug, "forgejo_token");
         if (base.isBlank() || token.isBlank()) {
             return new Response(503, error("zone has no Forgejo admin token yet"));
         }

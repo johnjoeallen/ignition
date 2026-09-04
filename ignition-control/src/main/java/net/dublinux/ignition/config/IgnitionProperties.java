@@ -19,8 +19,15 @@ public class IgnitionProperties {
     /** Platform-admin bearer token. Empty disables the platform console. */
     private String adminToken = "";
 
-    /** Root of the generated state tree (nodes/, zones/, control/). */
-    private Path stateDir = Path.of("../state");
+    /**
+     * Ephemeral scratch dir for files external tools read (rendered compose,
+     * runner config, Traefik dynamic snippets). Regenerated from the DB; safe
+     * to wipe.
+     */
+    private Path workDir = Path.of("../work");
+
+    /** 32 bytes base64 — AES-GCM key for {@code zone_secret} values. */
+    private String secretKey = "";
 
     /** Skip TLS verification when calling a zone's Forgejo (pre-cert). */
     private boolean insecureTls = false;
@@ -76,14 +83,16 @@ public class IgnitionProperties {
     public void setBaseDomain(String baseDomain) { this.baseDomain = baseDomain; }
     public String getAdminToken() { return adminToken; }
     public void setAdminToken(String adminToken) { this.adminToken = adminToken; }
-    public Path getStateDir() { return stateDir; }
-    public void setStateDir(Path stateDir) { this.stateDir = stateDir; }
+    public Path getWorkDir() { return workDir; }
+    public void setWorkDir(Path workDir) { this.workDir = workDir; }
+    public String getSecretKey() { return secretKey; }
+    public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
     public boolean isInsecureTls() { return insecureTls; }
     public void setInsecureTls(boolean insecureTls) { this.insecureTls = insecureTls; }
     public Sweep getSweep() { return sweep; }
     public Quotas getQuotas() { return quotas; }
 
-    public Path nodesDir() { return stateDir.resolve("nodes"); }
-    public Path zonesDir() { return stateDir.resolve("zones"); }
-    public Path controlDynamicDir() { return stateDir.resolve("control").resolve("dynamic"); }
+    public Path zoneWorkDir(String slug) { return workDir.resolve("zones").resolve(slug); }
+    public Path appWorkDir(String slug) { return zoneWorkDir(slug).resolve("apps"); }
+    public Path controlDynamicDir() { return workDir.resolve("control").resolve("dynamic"); }
 }

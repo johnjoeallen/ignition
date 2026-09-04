@@ -3,7 +3,9 @@ package net.dublinux.ignition.node;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,7 +25,7 @@ public class NodeService {
     }
 
     public List<Node> list() {
-        return nodes.findAll();
+        return nodes.findAll(Sort.by("name"));
     }
 
     public Node register(String name, String dockerHost, double cpus, double memGb, List<String> labels) {
@@ -36,14 +38,15 @@ public class NodeService {
         if (cpus <= 0 || memGb <= 0) {
             throw new IllegalArgumentException("cpus and mem must be > 0");
         }
-        Node node = new Node(name, dockerHost, cpus, memGb, labels == null ? List.of() : labels, Node.State.ACTIVE);
-        nodes.save(node);
-        return node;
+        Node node = new Node(name, dockerHost, cpus, memGb,
+                labels == null ? List.of() : labels, Node.State.ACTIVE);
+        return nodes.save(node);
     }
 
     public void setState(String name, Node.State state) {
-        Node n = nodes.find(name).orElseThrow(() -> new IllegalArgumentException("no such node: " + name));
-        nodes.save(new Node(n.name(), n.dockerHost(), n.cpus(), n.memGb(), n.labels(), state));
+        Node n = nodes.findById(name).orElseThrow(() -> new IllegalArgumentException("no such node: " + name));
+        n.setState(state);
+        nodes.save(n);
     }
 
     public void remove(String name) {
@@ -51,7 +54,7 @@ public class NodeService {
         if (assigned > 0) {
             throw new IllegalStateException(assigned + " zone(s) still assigned to " + name);
         }
-        nodes.delete(name);
+        nodes.deleteById(name);
     }
 
     /** CPU / memory / zone-count currently committed to a node (limits, not reservations). */
@@ -59,7 +62,7 @@ public class NodeService {
         double cpu = 0;
         double mem = 0;
         int count = 0;
-        for (var z : zones.findAll()) {
+        for (Zone z : zones.findAll()) {
             if (name.equals(z.node())) {
                 cpu += z.zoneCpus();
                 mem += z.zoneMemGb();

@@ -5,17 +5,22 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import tools.jackson.databind.JsonNode;
 import net.dublinux.ignition.app.AppRepository;
 import net.dublinux.ignition.app.DeployedApp;
+import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.docker.DockerCli;
 import net.dublinux.ignition.forgejo.ForgejoClient;
 import net.dublinux.ignition.node.NodeRepository;
+import net.dublinux.ignition.provisioning.ProvisioningStatusRepository;
 import net.dublinux.ignition.release.ReleaseService;
+import net.dublinux.ignition.templates.RenderService;
 import net.dublinux.ignition.traefik.TraefikDynamicConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,18 +43,25 @@ public class ZoneService {
     private final ForgejoClient forgejo;
     private final ReleaseService releases;
     private final DockerCli docker;
+    private final RenderService render;
     private final TraefikDynamicConfig traefik;
+    private final ProvisioningStatusRepository statuses;
+    private final IgnitionProperties props;
 
     public ZoneService(ZoneRepository zones, NodeRepository nodes, AppRepository apps,
                        ForgejoClient forgejo, ReleaseService releases, DockerCli docker,
-                       TraefikDynamicConfig traefik) {
+                       RenderService render, TraefikDynamicConfig traefik,
+                       ProvisioningStatusRepository statuses, IgnitionProperties props) {
         this.zones = zones;
         this.nodes = nodes;
         this.apps = apps;
         this.forgejo = forgejo;
         this.releases = releases;
         this.docker = docker;
+        this.render = render;
         this.traefik = traefik;
+        this.statuses = statuses;
+        this.props = props;
     }
 
     public List<Zone> list() {
@@ -72,24 +84,21 @@ public class ZoneService {
 
     /**
      * Tear down a zone's stack and every app it deployed, on its node. With
-     * {@code keepState} the {@code state/zones/<slug>/} tree and the Traefik
-     * router snippet are left in place (used by {@link #prepareMove}). Port of
-     * {@code teardown-zone.sh}.
+     * {@code keepState} the {@code zone} row and its Traefik router are left in
+     * place (used by {@link #prepareMove}).
      */
     public void destroy(String slug, boolean keepState) {
-        if (zones.find(slug).isEmpty() && !Files.isDirectory(zones.dir(slug))) {
-            throw new IllegalArgumentException("no such zone: " + slug);
-        }
-        String dockerHost = zoneDockerHost(slug);
-        Path dir = zones.dir(slug);
+        Zone zone = zones.find(slug)
+                .orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
+        String dockerHost = dockerHost(zone);
 
         for (DeployedApp app : apps.findByZone(slug)) {
-            docker.compose(dockerHost, "app-" + slug + "-" + app.name(),
-                    fileOrNull(apps.dir(slug).resolve(app.name() + "-compose.yml")),
+            Path composeFile = render.appCompose(slug, app.name(), zone.baseDomain(),
+                    app.image(), app.port(), app.deployId());
+            docker.compose(dockerHost, "app-" + slug + "-" + app.name(), composeFile.toString(),
                     "down", "-v", "--remove-orphans");
             if (!keepState) {
-                deleteQuietly(apps.dir(slug).resolve(app.name() + ".env"));
-                deleteQuietly(apps.dir(slug).resolve(app.name() + "-compose.yml"));
+                apps.deleteByZoneAndName(slug, app.name());
             }
         }
 
@@ -97,11 +106,10 @@ public class ZoneService {
             traefik.removeZoneRouter(slug);
         }
 
-        Path compose = dir.resolve("docker-compose.yml");
-        if (Files.isRegularFile(compose)) {
-            docker.compose(dockerHost, "zone-" + slug, compose.toString(),
-                    "down", "-v", "--remove-orphans");
-        } else {
+        Path compose = render.zoneCompose(zone);
+        DockerCli.Result down = docker.compose(dockerHost, "zone-" + slug, compose.toString(),
+                "down", "-v", "--remove-orphans");
+        if (!down.ok()) {
             DockerCli.Result ps = docker.docker(dockerHost, List.of(
                     "ps", "-aq", "--filter", "name=^zone-" + slug + "-"));
             for (String id : ps.stdout().split("\\s+")) {
@@ -114,52 +122,56 @@ public class ZoneService {
         if (keepState) {
             log.info("zone {} torn down (state kept)", slug);
         } else {
-            zones.delete(slug);
+            zones.delete(slug);                    // cascades zone_secret + app rows
+            statuses.deleteById(slug);
+            wipeWorkDir(slug);
             log.info("zone {} destroyed", slug);
         }
     }
 
     /**
-     * Teardown-keep-state, drop the per-node artefacts, and point {@code NODE}
-     * at the target. The caller then re-provisions on the target. Port of
-     * {@code cmd_move} in {@code zone.sh}.
+     * Teardown-keep-state, drop the per-node credentials, and point the zone at
+     * the target node. The caller then re-provisions on the target.
      */
     public void prepareMove(String slug, String targetNode) {
         Zone z = zones.find(slug)
                 .orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
-        if (nodes.find(targetNode).isEmpty()) {
+        if (nodes.findById(targetNode).isEmpty()) {
             throw new IllegalArgumentException("no such node: " + targetNode);
         }
         if (targetNode.equals(z.node())) {
             throw new IllegalStateException("zone " + slug + " is already on " + targetNode);
         }
         destroy(slug, true);
-        Path dir = zones.dir(slug);
-        deleteQuietly(dir.resolve("docker-compose.yml"));
-        deleteQuietly(dir.resolve("runner-secret"));
-        deleteQuietly(dir.resolve("zone-admin.txt"));
-
-        Map<String, String> env = new java.util.LinkedHashMap<>(
-                net.dublinux.ignition.state.EnvFile.read(dir.resolve("zone.env")));
-        env.put("NODE", targetNode);
-        zones.saveEnv(slug, env);
-        log.info("zone {} prepared to move {} -> {}", slug, z.node(), targetNode);
+        for (String s : List.of("runner-secret",
+                "forgejo_username", "forgejo_password", "forgejo_url", "forgejo_token")) {
+            zones.deleteSecret(slug, s);
+        }
+        wipeWorkDir(slug);
+        z.setNode(targetNode);
+        zones.save(z);
+        log.info("zone {} prepared to move -> {}", slug, targetNode);
     }
 
-    private String zoneDockerHost(String slug) {
-        String node = zones.find(slug).map(Zone::node).orElse("");
-        return nodes.find(node).map(n -> n.dockerHost()).orElse("local");
+    private String dockerHost(Zone zone) {
+        return nodes.findById(zone.node()).map(n -> n.dockerHost()).orElse("local");
     }
 
-    private static String fileOrNull(Path p) {
-        return Files.isRegularFile(p) ? p.toString() : null;
-    }
-
-    private static void deleteQuietly(Path p) {
-        try {
-            Files.deleteIfExists(p);
+    private void wipeWorkDir(String slug) {
+        Path dir = props.zoneWorkDir(slug);
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (IOException e) {
+                    throw new UncheckedIOException("deleting " + p, e);
+                }
+            });
         } catch (IOException e) {
-            throw new UncheckedIOException("deleting " + p, e);
+            throw new UncheckedIOException("removing " + dir, e);
         }
     }
 
@@ -234,9 +246,8 @@ public class ZoneService {
     }
 
     private DockerCli.Result compose(String slug, String... args) {
-        String node = zones.find(slug).map(Zone::node).orElse("");
-        String dockerHost = nodes.find(node).map(n -> n.dockerHost()).orElse("local");
-        String composeFile = zones.dir(slug).resolve("docker-compose.yml").toString();
-        return docker.compose(dockerHost, "zone-" + slug, composeFile, args);
+        Zone zone = zones.find(slug).orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
+        Path compose = render.zoneCompose(zone);
+        return docker.compose(dockerHost(zone), "zone-" + slug, compose.toString(), args);
     }
 }

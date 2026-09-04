@@ -29,7 +29,7 @@ RUN set -eux; \
 WORKDIR /app
 COPY --from=build /ignition-control.jar /app/ignition-control.jar
 
-ENV IGN_STATE_DIR=/state IGN_CONTROL_ADDR=0.0.0.0 IGN_CONTROL_PORT=8790
+ENV IGN_WORK_DIR=/work IGN_CONTROL_ADDR=0.0.0.0 IGN_CONTROL_PORT=8790
 EXPOSE 8790
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s \
   CMD curl -fsS http://localhost:8790/actuator/health || exit 1

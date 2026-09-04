@@ -1,58 +1,86 @@
 package net.dublinux.ignition.node;
 
-import java.util.LinkedHashMap;
+import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
-/**
- * A host that runs zone stacks. Persisted as {@code state/nodes/<name>.env}
- * with keys {@code DOCKER_HOST, CPUS, MEM_GB, LABELS, STATE}.
- */
-public record Node(
-        String name,
-        String dockerHost,
-        double cpus,
-        double memGb,
-        List<String> labels,
-        State state) {
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+/** A host that runs zone stacks. Row in {@code node}. */
+@Entity
+@Table(name = "node")
+public class Node {
 
     public enum State { ACTIVE, DRAINING }
 
-    public static Node fromEnv(String name, Map<String, String> env) {
-        String labels = env.getOrDefault("LABELS", "").strip();
-        return new Node(
-                name,
-                env.getOrDefault("DOCKER_HOST", "local"),
-                parseDouble(env.get("CPUS"), 0),
-                parseDouble(env.get("MEM_GB"), 0),
-                labels.isEmpty() ? List.of() : List.of(labels.split("\\s*,\\s*")),
-                "draining".equalsIgnoreCase(env.getOrDefault("STATE", "active"))
-                        ? State.DRAINING : State.ACTIVE);
+    @Id
+    private String name;
+
+    @Column(name = "docker_host", nullable = false)
+    private String dockerHost;
+
+    private double cpus;
+
+    @Column(name = "mem_gb", nullable = false)
+    private double memGb;
+
+    /** Comma-joined in the column; exposed as a list. */
+    @Column(nullable = false)
+    private String labels = "";
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private State state = State.ACTIVE;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt = Instant.now();
+
+    protected Node() {
     }
 
-    public Map<String, String> toEnv() {
-        Map<String, String> m = new LinkedHashMap<>();
-        m.put("DOCKER_HOST", dockerHost);
-        m.put("CPUS", trim(cpus));
-        m.put("MEM_GB", trim(memGb));
-        m.put("LABELS", String.join(",", labels));
-        m.put("STATE", state.name().toLowerCase());
-        return m;
+    public Node(String name, String dockerHost, double cpus, double memGb,
+                List<String> labels, State state) {
+        this.name = name;
+        this.dockerHost = dockerHost;
+        this.cpus = cpus;
+        this.memGb = memGb;
+        this.labels = labels == null ? "" : String.join(",", labels);
+        this.state = state == null ? State.ACTIVE : state;
+    }
+
+    public String name() {
+        return name;
+    }
+
+    public String dockerHost() {
+        return dockerHost;
+    }
+
+    public double cpus() {
+        return cpus;
+    }
+
+    public double memGb() {
+        return memGb;
+    }
+
+    public List<String> labels() {
+        return labels == null || labels.isBlank() ? List.of() : List.of(labels.split("\\s*,\\s*"));
+    }
+
+    public State state() {
+        return state;
+    }
+
+    public void setState(State state) {
+        this.state = state;
     }
 
     public boolean hasLabel(String label) {
-        return label == null || label.isBlank() || labels.contains(label);
-    }
-
-    private static double parseDouble(String s, double fallback) {
-        try {
-            return s == null || s.isBlank() ? fallback : Double.parseDouble(s.strip());
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
-    }
-
-    private static String trim(double d) {
-        return d == Math.floor(d) ? Long.toString((long) d) : Double.toString(d);
+        return label == null || label.isBlank() || labels().contains(label);
     }
 }

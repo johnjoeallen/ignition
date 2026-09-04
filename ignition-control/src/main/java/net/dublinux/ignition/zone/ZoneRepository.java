@@ -1,92 +1,78 @@
 package net.dublinux.ignition.zone;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
-import net.dublinux.ignition.config.IgnitionProperties;
-import net.dublinux.ignition.state.EnvFile;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-/** Zones live as {@code state/zones/<slug>/} directories. Read-only for now. */
-@Repository
+/**
+ * Zone persistence facade — the {@code zone} table plus its encrypted
+ * {@code zone_secret} rows. Services depend on this, not on Spring Data
+ * directly, so the storage move stayed a small diff.
+ */
+@Component
 public class ZoneRepository {
 
-    private final IgnitionProperties props;
+    private final ZoneEntityRepository zoneRepo;
+    private final ZoneSecretRepository secretRepo;
+    private final SecretCipher cipher;
 
-    public ZoneRepository(IgnitionProperties props) {
-        this.props = props;
+    public ZoneRepository(ZoneEntityRepository zoneRepo, ZoneSecretRepository secretRepo, SecretCipher cipher) {
+        this.zoneRepo = zoneRepo;
+        this.secretRepo = secretRepo;
+        this.cipher = cipher;
     }
 
     public List<Zone> findAll() {
-        Path dir = props.zonesDir();
-        if (!Files.isDirectory(dir)) {
-            return List.of();
-        }
-        try (Stream<Path> dirs = Files.list(dir)) {
-            List<Zone> zones = new ArrayList<>();
-            dirs.filter(Files::isDirectory)
-                    .filter(p -> Files.isRegularFile(p.resolve("zone.env")))
-                    .sorted()
-                    .forEach(p -> {
-                        String slug = p.getFileName().toString();
-                        zones.add(Zone.fromEnv(slug, EnvFile.read(p.resolve("zone.env"))));
-                    });
-            return zones;
-        } catch (IOException e) {
-            throw new UncheckedIOException("listing " + dir, e);
-        }
+        return zoneRepo.findAll(Sort.by("slug"));
     }
 
     public Optional<Zone> find(String slug) {
-        Path env = props.zonesDir().resolve(slug).resolve("zone.env");
-        return Files.isRegularFile(env) ? Optional.of(Zone.fromEnv(slug, EnvFile.read(env))) : Optional.empty();
+        return zoneRepo.findById(slug);
     }
 
     public boolean exists(String slug) {
-        return Files.isRegularFile(props.zonesDir().resolve(slug).resolve("zone.env"));
+        return zoneRepo.existsById(slug);
     }
 
-    public Path dir(String slug) {
-        return props.zonesDir().resolve(slug);
+    public Zone save(Zone zone) {
+        return zoneRepo.save(zone);
     }
 
-    /** Write {@code state/zones/<slug>/zone.env} from a full key/value map. */
-    public void saveEnv(String slug, java.util.Map<String, String> env) {
-        EnvFile.write(dir(slug).resolve("zone.env"), env);
-    }
-
-    /** Remove the whole {@code state/zones/<slug>/} tree. */
+    /** Removes the zone row; {@code zone_secret} and {@code app} rows cascade. */
+    @Transactional
     public void delete(String slug) {
-        Path dir = dir(slug);
-        if (!Files.isDirectory(dir)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(dir)) {
-            walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
-                try {
-                    Files.deleteIfExists(p);
-                } catch (IOException e) {
-                    throw new UncheckedIOException("deleting " + p, e);
-                }
-            });
-        } catch (IOException e) {
-            throw new UncheckedIOException("removing " + dir, e);
-        }
+        zoneRepo.deleteById(slug);
     }
 
-    /** A one-line secret file under the zone dir ({@code zone-token}, {@code deploy-token}, …). */
+    // --- secrets ---------------------------------------------------------------
+
+    /** Decrypted secret, or {@code ""} if unset. */
     public String secret(String slug, String name) {
-        Path p = dir(slug).resolve(name);
-        try {
-            return Files.isRegularFile(p) ? Files.readString(p).strip() : "";
-        } catch (IOException e) {
-            return "";
-        }
+        return secretRepo.findByZoneSlugAndName(slug, name)
+                .map(s -> cipher.decrypt(s.value()))
+                .orElse("");
+    }
+
+    @Transactional
+    public void putSecret(String slug, String name, String plaintext) {
+        String ct = cipher.encrypt(plaintext);
+        secretRepo.findByZoneSlugAndName(slug, name).ifPresentOrElse(
+                s -> {
+                    s.setValue(ct);
+                    secretRepo.save(s);
+                },
+                () -> secretRepo.save(new ZoneSecret(slug, name, ct)));
+    }
+
+    public boolean hasSecret(String slug, String name) {
+        return secretRepo.findByZoneSlugAndName(slug, name).isPresent();
+    }
+
+    @Transactional
+    public void deleteSecret(String slug, String name) {
+        secretRepo.findByZoneSlugAndName(slug, name).ifPresent(secretRepo::delete);
     }
 }

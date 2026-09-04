@@ -1,7 +1,5 @@
 package net.dublinux.ignition.sweep;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,10 +16,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Reclaims zones idle past {@code ignition.sweep.ttl}. Idle = the zone's
- * {@code last-activity} epoch (bumped by provisioning and every deploy) is
- * older than the TTL. Port of {@code sweep-idle.sh}. Set
- * {@code ignition.sweep.dry-run=true} to only report.
+ * Reclaims zones idle past {@code ignition.sweep.ttl} — the zone's
+ * {@code last_activity} (bumped by provisioning and every deploy) older than the
+ * TTL. Set {@code ignition.sweep.dry-run=true} to only report.
  */
 @Component
 public class IdleSweeper {
@@ -52,7 +49,7 @@ public class IdleSweeper {
         Instant cutoff = Instant.now().minus(ttl);
         List<String> actions = new ArrayList<>();
         for (Zone z : zones.findAll()) {
-            Instant last = lastActivity(z.slug());
+            Instant last = z.lastActivity();
             if (last == null || !last.isBefore(cutoff)) {
                 continue;
             }
@@ -71,17 +68,5 @@ public class IdleSweeper {
             }
         }
         return actions;
-    }
-
-    private Instant lastActivity(String slug) {
-        try {
-            var p = zones.dir(slug).resolve("last-activity");
-            if (!Files.isRegularFile(p)) {
-                return null;
-            }
-            return Instant.ofEpochSecond(Long.parseLong(Files.readString(p).strip()));
-        } catch (IOException | NumberFormatException e) {
-            return null;
-        }
     }
 }

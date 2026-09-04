@@ -2,34 +2,29 @@ package net.dublinux.ignition.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import java.nio.file.Path;
 import java.util.List;
 
-import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.node.Node;
-import net.dublinux.ignition.node.NodeRepository;
 import net.dublinux.ignition.node.NodeService;
-import net.dublinux.ignition.zone.ZoneRepository;
+import net.dublinux.ignition.node.NodeService.Allocation;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 class SchedulerTest {
 
-    private Scheduler scheduler(Path state, Node... nodes) {
-        IgnitionProperties props = new IgnitionProperties();
-        props.setStateDir(state);
-        NodeRepository nodeRepo = new NodeRepository(props);
-        for (Node n : nodes) {
-            nodeRepo.save(n);
-        }
-        NodeService nodeService = new NodeService(nodeRepo, new ZoneRepository(props));
-        return new Scheduler(nodeService);
+    private Scheduler scheduler(Node... nodes) {
+        NodeService svc = mock(NodeService.class);
+        when(svc.list()).thenReturn(List.of(nodes));
+        when(svc.allocation(anyString())).thenReturn(new Allocation(0, 0, 0));
+        return new Scheduler(svc);
     }
 
     @Test
-    void picksTheActiveNodeWithMostFreeCpu(@TempDir Path state) {
-        var s = scheduler(state,
+    void picksTheActiveNodeWithMostFreeCpu() {
+        var s = scheduler(
                 new Node("big", "local", 32, 128, List.of(), Node.State.ACTIVE),
                 new Node("small", "local", 4, 8, List.of(), Node.State.ACTIVE),
                 new Node("drained", "local", 64, 256, List.of(), Node.State.DRAINING));
@@ -37,8 +32,8 @@ class SchedulerTest {
     }
 
     @Test
-    void honoursLabelsAndCapacity(@TempDir Path state) {
-        var s = scheduler(state,
+    void honoursLabelsAndCapacity() {
+        var s = scheduler(
                 new Node("plain", "local", 32, 128, List.of(), Node.State.ACTIVE),
                 new Node("fast", "local", 8, 16, List.of("fast"), Node.State.ACTIVE));
         assertThat(s.place(4, 8, "fast")).isEqualTo("fast");

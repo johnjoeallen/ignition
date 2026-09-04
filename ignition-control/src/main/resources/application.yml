@@ -3,6 +3,16 @@ spring:
     name: ignition-control
   thymeleaf:
     cache: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ignition}
+    username: ${SPRING_DATASOURCE_USERNAME:ignition}
+    password: ${SPRING_DATASOURCE_PASSWORD:ignition}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
 
 server:
   port: ${IGN_CONTROL_PORT:8790}
@@ -21,7 +31,8 @@ management:
 ignition:
   base-domain: ${IGN_BASE_DOMAIN:${BASE_DOMAIN:ignition.example}}
   admin-token: ${IGN_ADMIN_TOKEN:}
-  state-dir: ${IGN_STATE_DIR:../state}
+  work-dir: ${IGN_WORK_DIR:../work}
+  secret-key: ${IGN_SECRET_KEY:}
   insecure-tls: ${IGN_INSECURE_TLS:false}
   sweep:
     ttl: ${IGN_SWEEP_TTL:24h}

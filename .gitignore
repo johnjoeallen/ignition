@@ -11,13 +11,8 @@ acme.env
 .env.*
 !.env.example
 
-# Runtime state — generated per node/zone, never source
-/state/nodes/*
-/state/zones/*
-/state/control/*
-!/state/nodes/.gitkeep
-!/state/zones/.gitkeep
-!/state/control/.gitkeep
+# Ephemeral work dir — rendered compose / runner config / Traefik snippets
+/work/
 
 # Rendered compose files / logs / temp
 *.rendered.yml

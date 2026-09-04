@@ -1,42 +1,92 @@
 package net.dublinux.ignition.zone;
 
-import java.util.Map;
+import java.time.Instant;
 
-/**
- * One team's isolated stack, assigned 1:1 to a node. Persisted as
- * {@code state/zones/<slug>/zone.env}.
- */
-public record Zone(
-        String slug,
-        String node,
-        String baseDomain,
-        double zoneCpus,
-        double zoneMemGb,
-        String gitHost,
-        String zadminHost,
-        String forgejoUrl,
-        String zadminUrl,
-        String appsBase) {
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
-    public static Zone fromEnv(String slug, Map<String, String> env) {
-        return new Zone(
-                slug,
-                env.getOrDefault("NODE", ""),
-                env.getOrDefault("BASE_DOMAIN", ""),
-                parseDouble(env.get("ZONE_CPUS")),
-                parseDouble(env.get("ZONE_MEM_GB")),
-                env.getOrDefault("GIT_HOST", ""),
-                env.getOrDefault("ZADMIN_HOST", ""),
-                env.getOrDefault("FORGEJO_URL", ""),
-                env.getOrDefault("ZADMIN_URL", ""),
-                env.getOrDefault("APPS_BASE", ""));
+/** One team's isolated stack, assigned 1:1 to a node. Row in {@code zone}. */
+@Entity
+@Table(name = "zone")
+public class Zone {
+
+    public enum Visibility { PUBLIC, PRIVATE }
+
+    @Id
+    private String slug;
+
+    @Column(name = "node_name", nullable = false)
+    private String node;
+
+    @Column(name = "base_domain", nullable = false)
+    private String baseDomain;
+
+    @Column(name = "zone_cpus", nullable = false)
+    private double zoneCpus;
+
+    @Column(name = "zone_mem_gb", nullable = false)
+    private double zoneMemGb;
+
+    @Column(name = "git_host", nullable = false)
+    private String gitHost;
+
+    @Column(name = "zadmin_host", nullable = false)
+    private String zadminHost;
+
+    @Column(name = "forgejo_url", nullable = false)
+    private String forgejoUrl;
+
+    @Column(name = "zadmin_url", nullable = false)
+    private String zadminUrl;
+
+    @Column(name = "apps_base", nullable = false)
+    private String appsBase;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Visibility visibility = Visibility.PUBLIC;
+
+    @Column(name = "last_activity", nullable = false)
+    private Instant lastActivity = Instant.now();
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt = Instant.now();
+
+    protected Zone() {
     }
 
-    private static double parseDouble(String s) {
-        try {
-            return s == null || s.isBlank() ? 0 : Double.parseDouble(s.strip());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+    public Zone(String slug, String node, String baseDomain, double zoneCpus, double zoneMemGb,
+               String gitHost, String zadminHost, String forgejoUrl, String zadminUrl, String appsBase) {
+        this.slug = slug;
+        this.node = node;
+        this.baseDomain = baseDomain;
+        this.zoneCpus = zoneCpus;
+        this.zoneMemGb = zoneMemGb;
+        this.gitHost = gitHost;
+        this.zadminHost = zadminHost;
+        this.forgejoUrl = forgejoUrl;
+        this.zadminUrl = zadminUrl;
+        this.appsBase = appsBase;
     }
+
+    public String slug() { return slug; }
+    public String node() { return node; }
+    public String baseDomain() { return baseDomain; }
+    public double zoneCpus() { return zoneCpus; }
+    public double zoneMemGb() { return zoneMemGb; }
+    public String gitHost() { return gitHost; }
+    public String zadminHost() { return zadminHost; }
+    public String forgejoUrl() { return forgejoUrl; }
+    public String zadminUrl() { return zadminUrl; }
+    public String appsBase() { return appsBase; }
+    public Visibility visibility() { return visibility; }
+    public Instant lastActivity() { return lastActivity; }
+
+    public void setNode(String node) { this.node = node; }
+    public void setVisibility(Visibility visibility) { this.visibility = visibility; }
+    public void touch() { this.lastActivity = Instant.now(); }
 }
