@@ -48,6 +48,7 @@ networks:
   # each zone's live app container here, and each zone's Forgejo joins it too.
   traefik-public:
     name: traefik-public
+    external: true
 
 volumes:
   acme:

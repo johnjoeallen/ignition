@@ -35,6 +35,7 @@ volumes:
   # traefik reads them.
   ignition-dynamic:
     name: ignition-dynamic
+    external: true
 
 services:
   postgres:
