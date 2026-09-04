@@ -48,7 +48,7 @@
   <table>
     <tr><th>zone</th><th>node</th><th>footprint</th><th>status</th><th>forge</th><th></th></tr>
     <tr th:each="z : ${zones}">
-      <td th:text="${z.slug}">quantum-badgers</td>
+      <td><a th:href="@{/z(z=${z.slug})}" th:text="${z.slug}">quantum-badgers</a></td>
       <td th:text="${z.node}">node-1</td>
       <td th:text="|${z.zoneCpus}cpu / ${z.zoneMemGb}g|">5cpu/8g</td>
       <td th:with="p=${provisioning.get(z.slug)}">
