@@ -65,6 +65,8 @@ services:
       IGN_SECRET_KEY: ${IGN_SECRET_KEY:?set IGN_SECRET_KEY}
       IGN_PUBLIC_URL: ${IGN_PUBLIC_URL:?set IGN_PUBLIC_URL}
       IGN_WORK_DIR: /work
+      # the bundled docker CLI usually negotiates, but pin it for a very new daemon
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.44}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ignition
       SPRING_DATASOURCE_USERNAME: ignition
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}

@@ -91,6 +91,11 @@ services:
     extra_hosts:
       # so a file-provider router can reach ignition-control on the control host's loopback
       - "host.docker.internal:host-gateway"
+    environment:
+      # Traefik's docker client can fail to negotiate with a very new daemon
+      # ("client version 1.24 is too old"). Pin a version the daemon accepts;
+      # 1.44 works on Docker 25+. Lower it only for an older daemon.
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.44}
     env_file:
       # the DNS-provider credential vars for ACME_DNS_PROVIDER (e.g.
       # AWS_ACCESS_KEY_ID / HETZNER_API_KEY / RFC2136_* …). Create it:
@@ -111,6 +116,7 @@ services:
     command: --label-enable --cleanup --rolling-restart --interval ${WATCHTOWER_INTERVAL:-60}
     environment:
       WATCHTOWER_LABEL_ENABLE: "true"
+      DOCKER_API_VERSION: ${DOCKER_API_VERSION:-1.44}
       # Registry auth: `docker login git.<slug>.<BASE_DOMAIN>` on the node so
       # ~/.docker/config.json below can pull private app images.
       DOCKER_CONFIG: /config
