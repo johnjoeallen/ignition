@@ -335,7 +335,7 @@ In the platform console (`https://admin.ignition.classesarecode.net/`):
 
 1. **Zones → Provision** — a slug, e.g. `quantum-badgers`. The scheduler places
    it on `spitfire` (the only node): Forgejo + a private build engine + a
-   runner + a `zoneadmin` account + two tokens (~1–2 min). Bulk: **Roster**.
+   runner + a `ignition-bot` account + two tokens (~1–2 min). Bulk: **Roster**.
 2. Copy the zone's **zone token** (team-lead console sign-in at
    `https://admin.quantum-badgers.ignition.classesarecode.net/`) and **deploy
    token** (CI).

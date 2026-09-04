@@ -84,7 +84,7 @@
         <form method="post" th:action="@{/z/users/delete}" class="inline">
           <input type="hidden" name="z" th:value="${zoneSlug}">
           <input type="hidden" name="login" th:value="${u.login}">
-          <button th:disabled="${u.login == 'zoneadmin'}">remove</button>
+          <button th:disabled="${u.login == botUser}">remove</button>
         </form>
       </td>
     </tr>

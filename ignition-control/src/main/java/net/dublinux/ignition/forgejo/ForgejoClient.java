@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Per-zone Forgejo REST wrapper. Uses the {@code zoneadmin} token minted at
+ * Per-zone Forgejo REST wrapper. Uses the bot service account's token minted at
  * provisioning (the encrypted {@code forgejo_token} / {@code forgejo_url}
  * {@code zone_secret} rows) — the zone admin never sees it.
  */

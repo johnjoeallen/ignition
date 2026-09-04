@@ -57,7 +57,7 @@ password to create the platform admin. Then sign in and:
    `tcp://host:2376`, with its CPU / memory and any labels.
 4. **Provision a zone** — a slug per team. The scheduler places it on the
    least-loaded node that fits (or pin a node / require a label). It stands up
-   Forgejo + DinD + a runner, creates the `zoneadmin` account, and mints the
+   Forgejo + DinD + a runner, creates the `ignition-bot` account, and mints the
    tokens. For a whole roster at once use **Roster** and paste the slug list.
 
 Each zone's page shows its **zone token** and **deploy token**. Hand the team

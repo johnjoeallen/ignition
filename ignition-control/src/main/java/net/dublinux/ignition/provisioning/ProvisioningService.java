@@ -41,6 +41,14 @@ public class ProvisioningService {
     private static final Pattern SLUG = Pattern.compile("^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$");
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    /**
+     * The Forgejo service account ignition-control acts as for every zone-admin
+     * action. Not a login for humans — its password is random and never shown.
+     * (Was {@code zoneadmin}; renamed to stop it being confused with the
+     * Ignition "zone admin" role, which is a different thing entirely.)
+     */
+    public static final String BOT_USER = "ignition-bot";
+
     private final IgnitionProperties props;
     private final ZoneRepository zones;
     private final NodeRepository nodes;
@@ -163,18 +171,20 @@ public class ProvisioningService {
                 "compose cp runner config");
         must(zc(slug, dockerHost, compose, "restart", "runner"), "restart runner");
 
-        // --- zone-admin account + Forgejo API token ---
+        // --- Forgejo API service account + token (drives every zone-admin
+        // action on the caller's behalf; nobody signs in as it — its password
+        // is random and never shown) ---
         if (!zones.hasSecret(slug, "forgejo_token")) {
             String adminPw = randBase64(18);
             must(forgejoCli(slug, dockerHost, compose,
-                    "forgejo", "admin", "user", "create", "--admin", "--username", "zoneadmin",
-                    "--password", adminPw, "--email", "zoneadmin@" + gitHost, "--must-change-password=false"),
-                    "create zoneadmin");
+                    "forgejo", "admin", "user", "create", "--admin", "--username", BOT_USER,
+                    "--password", adminPw, "--email", BOT_USER + "@" + gitHost, "--must-change-password=false"),
+                    "create " + BOT_USER);
             DockerCli.Result tok = forgejoCli(slug, dockerHost, compose,
                     "forgejo", "admin", "user", "generate-access-token",
-                    "--username", "zoneadmin", "--scopes", "all", "--raw");
-            must(tok, "mint zoneadmin token");
-            zones.putSecret(slug, "forgejo_username", "zoneadmin");
+                    "--username", BOT_USER, "--scopes", "all", "--raw");
+            must(tok, "mint " + BOT_USER + " token");
+            zones.putSecret(slug, "forgejo_username", BOT_USER);
             zones.putSecret(slug, "forgejo_password", adminPw);
             zones.putSecret(slug, "forgejo_url", "https://" + gitHost + "/");
             zones.putSecret(slug, "forgejo_token", tok.stdout().replaceAll("\\s", ""));

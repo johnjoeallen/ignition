@@ -69,6 +69,7 @@ public class ZoneConsoleController {
         model.addAttribute("stack", zones.stack(slug));
         model.addAttribute("apps", rows);
         model.addAttribute("users", zones.users(slug));
+        model.addAttribute("botUser", zones.botUser(slug));
         return "zone";
     }
 

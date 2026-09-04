@@ -67,7 +67,7 @@ ignition-control/                # the control plane — one Spring Boot service
     node/ zone/ app/   records + file-tree repositories + services
     scheduler/     Scheduler — CPU-headroom node placement
     provisioning/  ProvisioningService — the two-phase Forgejo+DinD+runner apply
-    forgejo/       ForgejoClient — per-zone REST wrapper (zoneadmin token)
+    forgejo/       ForgejoClient — per-zone REST wrapper (ignition-bot token)
     release/       ReleaseService — Conventional-Commits bump + cut via Forgejo
     docker/        DockerCli — docker -H <endpoint> compose ...
     traefik/       TraefikDynamicConfig — writes state/control/dynamic/*

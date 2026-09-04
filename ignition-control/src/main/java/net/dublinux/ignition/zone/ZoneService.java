@@ -82,6 +82,11 @@ public class ZoneService {
         return zones.secret(slug, "deploy-token");
     }
 
+    /** The Forgejo bot account's username for this zone — not a real login. */
+    public String botUser(String slug) {
+        return zones.secret(slug, "forgejo_username");
+    }
+
     // --- destroy / move ----------------------------------------------------
 
     /**
@@ -194,10 +199,11 @@ public class ZoneService {
         // failed) never got put in the Owners team. Re-assert membership for
         // everyone on every page load — PUT is idempotent, so this is a no-op
         // once it's caught up.
+        String bot = zones.secret(slug, "forgejo_username");
         int owners = ensureOrg(slug);
         if (owners > 0) {
             for (ForgejoUser u : out) {
-                if (!"zoneadmin".equals(u.login())) {
+                if (!u.login().equals(bot)) {
                     forgejo.put(slug, "/teams/" + owners + "/members/" + u.login(), Map.of());
                 }
             }
@@ -224,14 +230,14 @@ public class ZoneService {
     }
 
     // --- the zone's org — one org per zone (name = slug) so every zone user
-    // can see every repo, instead of everything piling up under zoneadmin ---
+    // can see every repo, instead of everything piling up under the bot account ---
 
     private static final String OWNERS_TEAM = "Owners";
 
     /**
-     * Create the zone's org if it doesn't exist yet (idempotent — zoneadmin,
-     * who owns every zone, already owns it after the first call). Returns the
-     * {@code Owners} team id, or -1 if it couldn't be found.
+     * Create the zone's org if it doesn't exist yet (idempotent — the bot
+     * account, which owns every zone, already owns it after the first call).
+     * Returns the {@code Owners} team id, or -1 if it couldn't be found.
      */
     private int ensureOrg(String slug) {
         var created = forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "public"));
@@ -241,7 +247,13 @@ public class ZoneService {
         }
         // idempotent — also fixes an org created before this was "public"
         var patched = forgejo.patch(slug, "/orgs/" + slug, Map.of("visibility", "public"));
-        if (!patched.ok()) {
+        if (patched.ok()) {
+            String actual = patched.body() == null ? "" : patched.body().path("visibility").asText("");
+            if (!"public".equals(actual)) {
+                log.warn("zone {}: PATCH visibility=public returned 200 but org now reports '{}'"
+                        + " — full body: {}", slug, actual, patched.body());
+            }
+        } else {
             log.warn("zone {}: could not set org visibility to public ({}): {}",
                     slug, patched.status(), patched.message());
         }
@@ -258,14 +270,18 @@ public class ZoneService {
 
     /**
      * Repos created before org support existed (or by any direct API use)
-     * still belong to the {@code zoneadmin} service account. Transfer them
-     * into the org — zoneadmin owns the org it created, so Forgejo transfers
-     * immediately, no acceptance step. {@code zoneadmin} has no password
-     * anyone knows (by design), so this is the only way those repos become
-     * visible to the team without an operator doing it by hand in Forgejo.
+     * still belong to the bot service account. Transfer them into the org —
+     * the bot owns the org it created, so Forgejo transfers immediately, no
+     * acceptance step. The bot has no password anyone knows (by design), so
+     * this is the only way those repos become visible to the team without an
+     * operator doing it by hand in Forgejo.
      */
-    private void migrateZoneadminRepos(String slug) {
-        var res = forgejo.get(slug, "/users/zoneadmin/repos?limit=50");
+    private void migrateBotRepos(String slug) {
+        String bot = zones.secret(slug, "forgejo_username");
+        if (bot.isBlank()) {
+            return;
+        }
+        var res = forgejo.get(slug, "/users/" + bot + "/repos?limit=50");
         if (!res.ok() || res.body() == null || !res.body().isArray()) {
             return;
         }
@@ -274,10 +290,33 @@ public class ZoneService {
             if (name.isBlank()) {
                 continue;
             }
-            var transfer = forgejo.post(slug, "/repos/zoneadmin/" + name + "/transfer",
+            var transfer = forgejo.post(slug, "/repos/" + bot + "/" + name + "/transfer",
                     Map.of("new_owner", slug));
             if (transfer.ok()) {
-                log.info("zone {}: moved repo {} from zoneadmin to org {}", slug, name, slug);
+                log.info("zone {}: moved repo {} from {} to org {}", slug, name, bot, slug);
+            }
+        }
+    }
+
+    /**
+     * No SSO in this demo, so a private repo just hides work from the rest of
+     * the team for no benefit — force every repo in the org public, including
+     * ones created some other way (self-heals like the org visibility above).
+     */
+    private void unprivateRepos(String slug, JsonNode repoList) {
+        if (repoList == null || !repoList.isArray()) {
+            return;
+        }
+        for (JsonNode r : repoList) {
+            if (r.path("private").asBoolean(false)) {
+                String name = r.path("name").asText("");
+                var patched = forgejo.patch(slug, "/repos/" + slug + "/" + name, Map.of("private", false));
+                if (patched.ok()) {
+                    log.info("zone {}: repo {} was private, made public", slug, name);
+                } else {
+                    log.warn("zone {}: could not make repo {} public ({}): {}",
+                            slug, name, patched.status(), patched.message());
+                }
             }
         }
     }
@@ -289,8 +328,9 @@ public class ZoneService {
     /** Every repo in the zone's org — all repos are org-owned, so every zone user can see them. */
     public List<RepoView> repos(String slug) {
         ensureOrg(slug);
-        migrateZoneadminRepos(slug);
+        migrateBotRepos(slug);
         var res = forgejo.get(slug, "/orgs/" + slug + "/repos?limit=50");
+        unprivateRepos(slug, res.body());
         List<RepoView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode r : res.body()) {
@@ -308,7 +348,7 @@ public class ZoneService {
     }
 
     /**
-     * New repos always belong to the zone's org, not the zoneadmin user, and
+     * New repos always belong to the zone's org, not the bot user, and
      * are always public — this demo has no SSO, and a private repo/org just
      * hides work from the rest of the team for no benefit.
      */

@@ -53,7 +53,7 @@ a **zone token** (`state/zones/<slug>/zone-token`) which signs them in at
 `https://admin.<slug>.<event-domain>/` — the **zone console**.
 
 That console is their whole surface. They never touch a Forgejo admin screen;
-the `zoneadmin` Forgejo account exists only as ignition-control's service credential
+the `ignition-bot` Forgejo account exists only as ignition-control's service credential
 and stays on the controller. Everything below is a console action:
 
 | Task | In the console |

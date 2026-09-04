@@ -2,7 +2,7 @@
 
 Status: **complete** — the Java service is the implementation. The shell CLI +
 `scripts/` + `control/ign-control.py` were removed at cutover (step 9); a real
-end-to-end provision (Forgejo + DinD + runner, zoneadmin token, teardown) was
+end-to-end provision (Forgejo + DinD + runner, ignition-bot token, teardown) was
 verified against a live node. This document is now the design record.
 
 ## Why
@@ -171,7 +171,7 @@ only if the UI later needs richer history than the audit log gives.
   `admin.<slug>.<BASE_DOMAIN>` → session scoped to that zone.
 - **CI** — per-zone `deploy-token`, bearer only, only `POST /deploy|/undeploy`.
 - A Spring Security filter resolves the token → `IgnitionPrincipal(kind, slug)`;
-  URL / method rules enforce the split. The `zoneadmin` Forgejo account + API
+  URL / method rules enforce the split. The `ignition-bot` Forgejo account + API
   token stay a server-held service credential.
 
 ## Templates
@@ -206,7 +206,7 @@ conditionals — the reason it isn't a template today).
 3. **done** — read paths live (platform console renders nodes / zones / apps
    from `state/`). Node register / drain / remove works. The **zone console is
    ported 1:1** from `ign-control.py`: `ForgejoClient` (per-zone REST via the
-   `zoneadmin` token), `ReleaseService` (`latestSemver` / `bump` /
+   `ignition-bot` token), `ReleaseService` (`latestSemver` / `bump` /
    `classifyBump` / `cut`, unit-tested), Users create/delete, Repositories
    create + per-repo **Release** (auto / patch / minor / major), runner restart
    and stack status via a `DockerCli` (`docker -H <endpoint> compose …`).
@@ -219,7 +219,7 @@ conditionals — the reason it isn't a template today).
 5. **mostly done** — `Scheduler` (CPU-headroom, unit-tested), `ProvisioningService`
    (full port of `provision-zone.sh`: footprint + placement, `zone.env`,
    `TraefikDynamicConfig` snippets, render `zone-compose.yml.tmpl`, two-phase
-   apply, `forgejoUuid` derivation unit-tested, runner-config, zoneadmin +
+   apply, `forgejoUuid` derivation unit-tested, runner-config, ignition-bot +
    tokens) running off-request with a status the console polls; platform
    console gains a **Provision a zone** form. The container-orchestration steps
    are faithful command translations — full end-to-end needs a real daemon.
@@ -242,7 +242,7 @@ conditionals — the reason it isn't a template today).
    `_platform.yml` on startup. Verified: image builds, container is healthy,
    the in-container `docker` talks to the host socket.
 9. **done** — a real `provision` was run against a live `local` node: Forgejo +
-   DinD + runner up and healthy, the runner registered, the `zoneadmin`
+   DinD + runner up and healthy, the runner registered, the `ignition-bot`
    account + a real Forgejo API token minted; the zone console then created a
    repo through the proxied API; `destroy` removed all three containers, all
    volumes, and the state tree — 0 errors. Then the cutover: `ign`,
