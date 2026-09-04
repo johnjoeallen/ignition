@@ -80,6 +80,22 @@ public class Node {
         this.state = state;
     }
 
+    public void setDockerHost(String dockerHost) {
+        this.dockerHost = dockerHost;
+    }
+
+    public void setCpus(double cpus) {
+        this.cpus = cpus;
+    }
+
+    public void setMemGb(double memGb) {
+        this.memGb = memGb;
+    }
+
+    public void setLabels(List<String> labels) {
+        this.labels = labels == null ? "" : String.join(",", labels);
+    }
+
     public boolean hasLabel(String label) {
         return label == null || label.isBlank() || labels().contains(label);
     }

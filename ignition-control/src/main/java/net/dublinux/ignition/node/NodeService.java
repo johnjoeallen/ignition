@@ -43,6 +43,26 @@ public class NodeService {
         return nodes.save(node);
     }
 
+    public Node get(String name) {
+        return nodes.findById(name).orElseThrow(() -> new IllegalArgumentException("no such node: " + name));
+    }
+
+    /** Everything but the name (its id) is reconfigurable in place. */
+    public Node update(String name, String dockerHost, double cpus, double memGb, List<String> labels) {
+        Node n = get(name);
+        if (!ENDPOINT.matcher(dockerHost).matches()) {
+            throw new IllegalArgumentException("docker host must be local, unix://, ssh:// or tcp://");
+        }
+        if (cpus <= 0 || memGb <= 0) {
+            throw new IllegalArgumentException("cpus and mem must be > 0");
+        }
+        n.setDockerHost(dockerHost);
+        n.setCpus(cpus);
+        n.setMemGb(memGb);
+        n.setLabels(labels == null ? List.of() : labels);
+        return nodes.save(n);
+    }
+
     public void setState(String name, Node.State state) {
         Node n = nodes.findById(name).orElseThrow(() -> new IllegalArgumentException("no such node: " + name));
         n.setState(state);

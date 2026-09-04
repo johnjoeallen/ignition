@@ -152,6 +152,30 @@ public class PlatformConsoleController {
         }
     }
 
+    @GetMapping("/nodes/{name}/edit")
+    public String editNode(@PathVariable String name, Model model) {
+        model.addAttribute("node", nodes.get(name));
+        return "node-edit";
+    }
+
+    @PostMapping("/nodes/{name}")
+    public String updateNode(@PathVariable String name,
+                             @RequestParam String dockerHost,
+                             @RequestParam double cpus,
+                             @RequestParam double memGb,
+                             @RequestParam(required = false, defaultValue = "") String labels,
+                             Model model) {
+        try {
+            List<String> labelList = labels.isBlank() ? List.of() : List.of(labels.split("\\s*,\\s*"));
+            nodes.update(name, dockerHost, cpus, memGb, labelList);
+            return "redirect:/?m=node+" + name + "+updated";
+        } catch (RuntimeException e) {
+            model.addAttribute("node", nodes.get(name));
+            model.addAttribute("error", e.getMessage());
+            return "node-edit";
+        }
+    }
+
     @PostMapping("/nodes/{name}/drain")
     public String drain(@PathVariable String name) {
         nodes.setState(name, Node.State.DRAINING);

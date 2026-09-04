@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('Ignition · users')}"></head>
+<body>
+  <div th:replace="~{fragments/shell :: shell('users', ~{::main})}">
+    <main>
+      <h1 class="h4 page-title"><i class="bi bi-person-gear"></i> Users</h1>
+      <p class="text-body-secondary small">Everyone with an Ignition login, platform-wide. Team membership
+        (who's a member or admin of a given team) is managed on that team's own console instead.</p>
+      <div class="alert alert-success" th:if="${param.m != null}" th:text="${#strings.replace(param.m[0],'+',' ')}">ok</div>
+
+      <form method="post" th:action="@{/users/invite}" class="row g-2 align-items-end mb-3">
+        <div class="col-auto">
+          <label class="form-label small mb-1">email</label>
+          <input class="form-control form-control-sm" name="email" type="email" required placeholder="name@example.com">
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-envelope-plus"></i> Invite</button>
+        </div>
+      </form>
+      <p class="text-body-secondary small">An invite is pre-approved — activation lands them straight in
+        <b>active</b>, no approval step. A self-signup (<code>/signup</code>) instead needs approving below.</p>
+
+      <div class="table-card">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>email</th><th>status</th><th></th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="u : ${users}">
+              <td th:text="${u.email}">alice@example.com</td>
+              <td>
+                <span class="badge"
+                      th:classappend="${u.status.name() == 'ACTIVE'} ? 'text-bg-success'
+                                      : (${u.status.name() == 'DISABLED'} ? 'text-bg-danger' : 'text-bg-secondary')"
+                      th:text="${#strings.replace(u.status.name(),'_',' ').toLowerCase()}">active</span>
+                <span th:if="${u.platformAdmin}" class="badge text-bg-primary">platform admin</span>
+              </td>
+              <td class="text-nowrap">
+                <form th:if="${u.status.name() == 'PENDING_APPROVAL'}" method="post"
+                      th:action="@{'/users/' + ${u.id} + '/approve'}" class="d-inline">
+                  <button class="btn btn-sm btn-accent">approve</button>
+                </form>
+                <form method="post" th:action="@{'/users/' + ${u.id} + '/admin'}" class="d-inline">
+                  <input type="hidden" name="value" th:value="${!u.platformAdmin}">
+                  <button class="btn btn-sm btn-outline-secondary"
+                          th:text="${u.platformAdmin} ? 'revoke admin' : 'make admin'">admin</button>
+                </form>
+              </td>
+              <td class="text-end">
+                <form method="post" th:action="@{'/users/' + ${u.id} + '/disable'}" class="d-inline">
+                  <input type="hidden" name="value" th:value="${u.status.name() != 'DISABLED'}">
+                  <button class="btn btn-sm btn-outline-danger"
+                          th:text="${u.status.name() == 'DISABLED'} ? 're-enable' : 'disable'">disable</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${users.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">no users yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
