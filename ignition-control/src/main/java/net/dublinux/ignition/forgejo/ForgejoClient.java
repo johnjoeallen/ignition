@@ -15,7 +15,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import net.dublinux.ignition.config.IgnitionProperties;
-import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
 import org.springframework.stereotype.Component;
 
@@ -66,13 +65,13 @@ public class ForgejoClient {
     }
 
     private Response send(String slug, String method, String path, Map<String, ?> body) {
-        String base = zones.secret(slug, "forgejo_url");
-        if (base.isBlank()) {
-            base = zones.find(slug).map(Zone::forgejoUrl).orElse("");
-        }
-        base = base.replaceAll("/+$", "");
+        // Reach the zone's Forgejo directly over the shared docker network — the
+        // public git.<slug>.<domain> name isn't resolvable from in here, and this
+        // avoids a hairpin through the edge. Matches container_name in
+        // zone-compose.yml.tmpl.
+        String base = "http://zone-" + slug + "-forgejo:3000";
         String token = zones.secret(slug, "forgejo_token");
-        if (base.isBlank() || token.isBlank()) {
+        if (token.isBlank()) {
             return new Response(503, error("zone has no Forgejo admin token yet"));
         }
         try {

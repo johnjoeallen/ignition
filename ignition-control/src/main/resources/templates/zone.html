@@ -19,6 +19,7 @@
     <b>Node</b> <span th:text="${zone.node} ?: '?'">node-1</span> &nbsp;
     <b>Stack</b> <code th:text="${stack}">—</code>
     <form method="post" th:action="@{/z/runner/restart}" style="margin-top:.6rem">
+      <input type="hidden" name="z" th:value="${zoneSlug}">
       <button>Restart runner</button>
     </form>
   </div>
@@ -32,6 +33,7 @@
       <td th:text="${a.deployId}">—</td>
       <td>
         <form method="post" th:action="@{/z/apps/delete}" class="inline">
+          <input type="hidden" name="z" th:value="${zoneSlug}">
           <input type="hidden" name="name" th:value="${a.name}">
           <button>remove</button>
         </form>
@@ -43,6 +45,7 @@
 
   <h2>Users</h2>
   <form method="post" th:action="@{/z/users}" class="stack">
+    <input type="hidden" name="z" th:value="${zoneSlug}">
     <label>username<input name="username" required></label>
     <label>email<input name="email" type="email" required></label>
     <label>password<input name="password" type="password" required></label>
@@ -56,6 +59,7 @@
       <td th:text="${u.admin} ? 'admin' : ''"></td>
       <td>
         <form method="post" th:action="@{/z/users/delete}" class="inline">
+          <input type="hidden" name="z" th:value="${zoneSlug}">
           <input type="hidden" name="login" th:value="${u.login}">
           <button th:disabled="${u.login == 'zoneadmin'}">remove</button>
         </form>
@@ -67,6 +71,7 @@
   <h2>Repositories <span class="muted">· <b>Release</b> reads the commits since the last
     release and tags the next <code>vX.Y.Z</code> on <code>main</code></span></h2>
   <form method="post" th:action="@{/z/repos}" class="stack">
+    <input type="hidden" name="z" th:value="${zoneSlug}">
     <label>name<input name="name" required></label>
     <label>&nbsp;<span><input type="checkbox" name="priv"> private</span></label>
     <button>Create repo</button>
@@ -76,6 +81,7 @@
       <a th:href="${r.htmlUrl}" th:text="${r.fullName}">owner/repo</a>
       <span class="muted" th:text="|· ${r.version}|">· v1.2.3</span>
       <form method="post" th:action="@{/z/repos/release}" class="inline">
+        <input type="hidden" name="z" th:value="${zoneSlug}">
         <input type="hidden" name="owner" th:value="${r.owner}">
         <input type="hidden" name="repo" th:value="${r.name}">
         <select name="bump">
