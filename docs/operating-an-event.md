@@ -22,6 +22,11 @@ Everything an operator does is in the **platform console** at
 
 Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
+The above is the **`public`** exposure profile — direct inbound + DNS-01
+wildcard certs. If the cluster has no inbound, or the audience is corporate
+only, or you can't get trusted certs, see **[Exposure & access](exposure.md)**
+for reverse tunnels, internal-CA certs, plain-HTTP fallback, and SSO gating.
+
 ## Standing up the event
 
 ```sh

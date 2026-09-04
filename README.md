@@ -133,6 +133,10 @@ The compose templates the service renders (`zone-compose.yml.tmpl`,
   daemon — it needs a locked-down deployment behind `admin.ignition.example`.
 - **The control plane and Watchtower pull images anonymously** — private
   packages need `docker login git.<slug>.ignition.example` on the node.
+- **Only the `public` exposure profile is built** — direct inbound + DNS-01
+  wildcard certs. Reverse tunnels, internal-CA certs, plain HTTP, and SSO
+  gating are designed in [`docs/exposure.md`](docs/exposure.md), not yet
+  implemented.
 - **No repo seeding** — the starter repo + repo vars/secrets are still set by
   hand per zone.
 - **No services catalogue yet** — an app's own infra (Postgres, Redis) belongs

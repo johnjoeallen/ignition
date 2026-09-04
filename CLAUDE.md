@@ -207,6 +207,9 @@ command's stdout.
 - **No services catalogue.** A team that needs Postgres, a mock of an internal
   API, or a keyed proxy to an external one stands it up by hand. See task 3.
 - **`move` rebuilds the zone empty** — the Forgejo data volume doesn't follow.
+- **Only the `public` exposure profile exists** — direct inbound + DNS-01
+  wildcard certs. Reverse tunnels, corp-internal CA, plain-HTTP fallback, and
+  SSO gating are designed (`docs/exposure.md`) but not built. See task 4.
 
 ## Likely next tasks
 
@@ -235,3 +238,15 @@ command's stdout.
    Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
+4. **Exposure profiles** (`docs/exposure.md`). A cluster-level
+   `ignition.exposure.profile` — `public` (today) / `public-http01` /
+   `cloudflare-tunnel` / `tailscale` / `frp` / `corp-ca` / `http-only` — plus an
+   optional `corp-sso` layer. It decides the Traefik entrypoint (`websecure` vs
+   `web`), cert resolver (`le-dns` / `le-http` / `corp` / none), and whether a
+   `forward-auth` middleware is attached. `traefik-core-compose.yml` gains
+   optional `cloudflared` / `tailscale` / `oauth2-proxy` services enabled by the
+   profile. `ComposeTemplate` renders the app / zone Traefik labels from
+   `profile × visibility`, where `visibility` (`public` / `corp` / `private`) is
+   a per-app field in the `/deploy` payload and the zone console.
+   `ignition-control` records the effective scheme + host so the console and
+   `/info` show the right URL.

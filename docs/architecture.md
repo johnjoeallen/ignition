@@ -260,3 +260,8 @@ zone; `admin.<slug>.<event-domain>` and `admin.<event-domain>` at the control
 host. On a single host, one `*.<slug>.<event-domain>` record per zone covers
 it; across nodes, split git/apps from admin (automating this via the
 DNS-provider API is the top next task).
+
+This is the `public` exposure profile. A cluster with no inbound, a
+corp-internal audience, or no trusted-cert path uses a reverse tunnel, an
+internal CA, or plain HTTP instead — and app access can be gated by corporate
+SSO. See **[Exposure & access](exposure.md)**.
