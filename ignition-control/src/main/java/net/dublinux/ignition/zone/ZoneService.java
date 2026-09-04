@@ -2,9 +2,11 @@ package net.dublinux.ignition.zone;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -220,9 +222,17 @@ public class ZoneService {
      * {@code Owners} team id, or -1 if it couldn't be found.
      */
     private int ensureOrg(String slug) {
-        forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "public"));
+        var created = forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "public"));
+        if (!created.ok()) {
+            log.debug("zone {}: org create said ({}): {} — fine if it already exists",
+                    slug, created.status(), created.message());
+        }
         // idempotent — also fixes an org created before this was "public"
-        forgejo.patch(slug, "/orgs/" + slug, Map.of("visibility", "public"));
+        var patched = forgejo.patch(slug, "/orgs/" + slug, Map.of("visibility", "public"));
+        if (!patched.ok()) {
+            log.warn("zone {}: could not set org visibility to public ({}): {}",
+                    slug, patched.status(), patched.message());
+        }
         var teams = forgejo.get(slug, "/orgs/" + slug + "/teams?limit=50");
         if (teams.ok() && teams.body() != null && teams.body().isArray()) {
             for (JsonNode t : teams.body()) {
@@ -263,10 +273,74 @@ public class ZoneService {
      * are always public — this demo has no SSO, and a private repo/org just
      * hides work from the rest of the team for no benefit.
      */
-    public ForgejoClient.Response createRepo(String slug, String name) {
+    /**
+     * "Create an app" — an app <em>is</em> its repo. Creates the repo in the
+     * zone's org (always public: no SSO, so a private repo just hides work
+     * from teammates), then seeds it with a starter {@code Dockerfile} +
+     * page and the deploy workflow, and sets the repo variables/secrets that
+     * workflow needs — so the team can clone, push, and hit Release with
+     * nothing to configure by hand.
+     */
+    public ForgejoClient.Response createApp(String slug, String name, int port) {
         ensureOrg(slug);
-        return forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
+        ForgejoClient.Response repo = forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
                 "name", name, "private", false, "auto_init", true));
+        if (!repo.ok()) {
+            return repo;
+        }
+        Zone zone = zones.find(slug).orElseThrow(() -> new IllegalStateException("no such zone: " + slug));
+
+        putFile(slug, name, ".forgejo/workflows/deploy.yml", scaffold("deploy.yml"),
+                "ignition: add the deploy workflow");
+        putFile(slug, name, "Dockerfile", scaffold("Dockerfile"), "ignition: starter Dockerfile");
+        putFile(slug, name, "index.html", scaffold("index.html"), "ignition: starter page");
+
+        setVar(slug, name, "REGISTRY", zone.gitHost());
+        setVar(slug, name, "CONTROL_URL", zone.zadminUrl().replaceAll("/+$", ""));
+        setVar(slug, name, "APP_NAME", name);
+        setVar(slug, name, "APP_PORT", Integer.toString(port));
+        setSecret(slug, name, "DEPLOY_TOKEN", zones.secret(slug, "deploy-token"));
+
+        return repo;
+    }
+
+    private void putFile(String slug, String repo, String path, String content, String message) {
+        var res = forgejo.post(slug, "/repos/" + slug + "/" + repo + "/contents/" + path, Map.of(
+                "content", Base64.getEncoder().encodeToString(content.getBytes(StandardCharsets.UTF_8)),
+                "message", message,
+                "branch", "main"));
+        if (!res.ok()) {
+            log.warn("zone {}: seeding {} in {} failed ({}): {}", slug, path, repo, res.status(), res.message());
+        }
+    }
+
+    private void setVar(String slug, String repo, String key, String value) {
+        var res = forgejo.put(slug, "/repos/" + slug + "/" + repo + "/actions/variables/" + key,
+                Map.of("value", value));
+        if (!res.ok()) {
+            log.warn("zone {}: setting variable {} on {} failed ({}): {}",
+                    slug, key, repo, res.status(), res.message());
+        }
+    }
+
+    private void setSecret(String slug, String repo, String key, String value) {
+        var res = forgejo.put(slug, "/repos/" + slug + "/" + repo + "/actions/secrets/" + key,
+                Map.of("data", value));
+        if (!res.ok()) {
+            log.warn("zone {}: setting secret {} on {} failed ({}): {}",
+                    slug, key, repo, res.status(), res.message());
+        }
+    }
+
+    private static String scaffold(String name) {
+        try (var in = ZoneService.class.getResourceAsStream("/scaffold/" + name)) {
+            if (in == null) {
+                throw new IllegalStateException("missing scaffold resource " + name);
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public ReleaseService.Result release(String slug, String owner, String repo, String kind) {

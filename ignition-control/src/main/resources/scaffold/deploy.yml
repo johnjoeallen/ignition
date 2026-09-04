@@ -1,0 +1,74 @@
+# Seed this into a zone's repo as .forgejo/workflows/deploy.yml
+#
+# A zone can run this from several repos — each deploys its own app at
+# <APP_NAME>.apps.<slug>.<BASE_DOMAIN>. App names are unique within the zone.
+#
+# Deploys happen ONLY on a release tag (e.g. `v1.2.0`) — never on a plain push
+# to `main`. The tag is created by the zone console's "Release" button:
+# ignition-control diffs the last tag against `main`, picks the semver bump from those
+# commit messages (Conventional Commits; the admin can override), and creates
+# the next vX.Y.Z tag on `main` via the Forgejo API — always from reviewed,
+# already-pushed history, never `git push --tags`. See docs/roles.md
+# ("Shipping a release").
+#
+# Each run builds and pushes :<sha> (immutable) and :<tag>, then deploys :<tag>.
+# If CI ever re-runs for the same tag (e.g. a base-image rebuild), the per-node
+# Watchtower rolls the running app forward without a manual redeploy.
+#
+# Assumes a Dockerfile at the repo root. The runner's config forwards
+# DOCKER_HOST=tcp://dind:2375, so `docker` here talks to the zone's private
+# build engine.
+#
+# Repo variables (Settings -> Actions -> Variables):
+#   REGISTRY     git.<slug>.<BASE_DOMAIN>            e.g. git.quantum-badgers.ignition.example
+#                (must match the zone's registry exactly — ignition-control checks it)
+#   CONTROL_URL  https://admin.<slug>.<BASE_DOMAIN>  the zone's control endpoint
+#   APP_NAME     my-app                              -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
+#   APP_PORT     8080                                the port your app listens on
+# Repo secrets (Settings -> Actions -> Secrets):
+#   DEPLOY_TOKEN   the zone's CI token (state/zones/<slug>/deploy-token)
+#   FORGEJO_TOKEN  optional — a token with package:write for the registry. If
+#                  unset, the automatic per-run Actions token is used (its user
+#                  always matches github.actor, and `permissions:` below grants
+#                  it package writes).
+
+name: build and deploy
+
+on:
+  push:
+    tags: ["*"]
+
+permissions:
+  contents: read
+  packages: write
+
+# one deploy at a time per repo; a newer run waits rather than clobbering
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: docker-cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and push
+        run: |
+          REPO="${{ vars.REGISTRY }}/${{ github.repository }}"
+          # the release tag, '/' -> '-' for a valid image tag (POSIX sh: the
+          # job image is Alpine, no bash)
+          TAG=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
+          echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
+            | docker login "${{ vars.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+          docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$TAG" .
+          docker push "$REPO:${{ github.sha }}"
+          docker push "$REPO:$TAG"
+          echo "IMAGE=$REPO:$TAG" >> "$GITHUB_ENV"
+
+      - name: Deploy
+        run: |
+          curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H 'content-type: application/json' \
+            -d "{\"app\": \"${{ vars.APP_NAME }}\", \"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}}"

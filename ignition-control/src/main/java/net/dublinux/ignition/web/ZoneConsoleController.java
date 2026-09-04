@@ -2,8 +2,11 @@ package net.dublinux.ignition.web;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 import net.dublinux.ignition.app.AppService;
+import net.dublinux.ignition.app.DeployedApp;
 import net.dublinux.ignition.forgejo.ForgejoClient;
 import net.dublinux.ignition.release.ReleaseService;
 import net.dublinux.ignition.zone.Zone;
@@ -17,9 +20,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * The zone console: Users, Repositories, per-repo Release, runner restart,
- * apps. The zone is passed as {@code ?z=<slug>} (a platform admin picks it;
- * AUTH-DESIGN step 6 will scope this to the caller's zone memberships).
+ * The zone console: Users, Apps (an app <em>is</em> its repo — creating one
+ * creates and seeds the repo; Release deploys it), runner restart. The zone is
+ * passed as {@code ?z=<slug>} (a platform admin picks it; AUTH-DESIGN step 6
+ * will scope this to the caller's zone memberships).
  */
 @Controller
 public class ZoneConsoleController {
@@ -31,6 +35,10 @@ public class ZoneConsoleController {
         this.zones = zones;
         this.apps = apps;
     }
+
+    /** One row in the Apps table — a repo, plus its live deployment if any. */
+    public record AppRow(String name, String htmlUrl, String version, boolean deployed,
+                         String image, String url, String deployId) {}
 
     private static String require(String z) {
         if (z == null || z.isBlank()) {
@@ -44,12 +52,23 @@ public class ZoneConsoleController {
         String slug = require(z);
         Zone zone = zones.get(slug)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such zone"));
+        Map<String, DeployedApp> deployed = apps.listForZone(slug).stream()
+                .collect(java.util.stream.Collectors.toMap(DeployedApp::name, a -> a));
+        List<AppRow> rows = zones.repos(slug).stream()
+                .map(r -> {
+                    DeployedApp d = deployed.get(r.name());
+                    return new AppRow(r.name(), r.htmlUrl(), r.version(), d != null,
+                            d == null ? null : d.image(),
+                            d == null ? null : d.url(zone.baseDomain()),
+                            d == null ? null : d.deployId());
+                })
+                .toList();
+
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("zone", zone);
         model.addAttribute("stack", zones.stack(slug));
-        model.addAttribute("apps", apps.listForZone(slug));
+        model.addAttribute("apps", rows);
         model.addAttribute("users", zones.users(slug));
-        model.addAttribute("repos", zones.repos(slug));
         return "zone";
     }
 
@@ -66,21 +85,22 @@ public class ZoneConsoleController {
         return back(z, zones.deleteUser(require(z), login), "user " + login + " removed");
     }
 
-    @PostMapping("/z/repos")
-    public String createRepo(@RequestParam(name = "z") String z,
-                             @RequestParam String name) {
-        return back(z, zones.createRepo(require(z), name), "repo " + name + " created");
+    @PostMapping("/z/apps")
+    public String createApp(@RequestParam(name = "z") String z,
+                            @RequestParam String name,
+                            @RequestParam(defaultValue = "8080") int port) {
+        return back(z, zones.createApp(require(z), name, port),
+                "app " + name + " created — clone it, push, then Release");
     }
 
     @PostMapping("/z/repos/release")
     public String release(@RequestParam(name = "z") String z,
-                          @RequestParam String owner,
-                          @RequestParam String repo,
+                          @RequestParam(name = "repo") String name,
                           @RequestParam(defaultValue = "auto") String bump) {
         try {
-            ReleaseService.Result r = zones.release(require(z), owner, repo, bump);
+            ReleaseService.Result r = zones.release(require(z), require(z), name, bump);
             String msg = r.ok()
-                    ? "released %s %s (%s) — CI is building".formatted(repo, r.tag(), r.kind())
+                    ? "released %s %s (%s) — CI is building".formatted(name, r.tag(), r.kind())
                     : "Forgejo said (%d): %s".formatted(r.status(), r.message());
             return redirect(z, msg);
         } catch (IllegalArgumentException e) {
@@ -98,7 +118,7 @@ public class ZoneConsoleController {
     public String deleteApp(@RequestParam(name = "z") String z, @RequestParam String name) {
         try {
             apps.undeploy(require(z), name);
-            return redirect(z, "app " + name + " removed");
+            return redirect(z, "app " + name + " stopped");
         } catch (IllegalArgumentException e) {
             return redirect(z, e.getMessage());
         }

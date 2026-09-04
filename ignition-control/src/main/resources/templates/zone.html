@@ -25,23 +25,46 @@
   </div>
 
   <h2>Apps <span class="muted" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span></h2>
+  <p class="muted">An app <b>is</b> its repo — creating one creates the repo (in this
+    zone's org) and seeds it with a starter <code>Dockerfile</code> + page and the
+    deploy workflow, already wired with this zone's registry and deploy token.
+    Clone it, push, then <b>Release</b>. A plain push to <code>main</code> never
+    deploys — only a release does.</p>
+  <form method="post" th:action="@{/z/apps}" class="stack">
+    <input type="hidden" name="z" th:value="${zoneSlug}">
+    <label>name<input name="name" required></label>
+    <label>port<input name="port" type="number" value="8080" min="1" max="65535" required></label>
+    <button>Create app</button>
+  </form>
   <table>
-    <tr><th>app</th><th>image</th><th>deploy</th><th></th></tr>
+    <tr><th>app</th><th>repo</th><th>version</th><th>live</th><th></th></tr>
     <tr th:each="a : ${apps}">
-      <td><a th:href="${a.url(baseDomain)}" th:text="${a.name}">web</a></td>
-      <td><code th:text="${a.image}">img</code></td>
-      <td th:text="${a.deployId}">—</td>
+      <td><a th:href="${a.htmlUrl}" th:text="${a.name}">flora</a></td>
+      <td><code th:text="|${zoneSlug}/${a.name}|">org/repo</code></td>
+      <td th:text="${a.version}">v1.2.3</td>
       <td>
-        <form method="post" th:action="@{/z/apps/delete}" class="inline">
+        <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.image}">image</a>
+        <span th:unless="${a.deployed}" class="muted">not deployed yet</span>
+      </td>
+      <td style="white-space:nowrap">
+        <form method="post" th:action="@{/z/repos/release}" class="inline">
+          <input type="hidden" name="z" th:value="${zoneSlug}">
+          <input type="hidden" name="repo" th:value="${a.name}">
+          <select name="bump">
+            <option value="auto">auto (from commits)</option>
+            <option>patch</option><option>minor</option><option>major</option>
+          </select>
+          <button>Release</button>
+        </form>
+        <form th:if="${a.deployed}" method="post" th:action="@{/z/apps/delete}" class="inline">
           <input type="hidden" name="z" th:value="${zoneSlug}">
           <input type="hidden" name="name" th:value="${a.name}">
-          <button>remove</button>
+          <button>stop</button>
         </form>
       </td>
     </tr>
-    <tr th:if="${apps.isEmpty()}"><td colspan="4" class="muted">none yet — hit Release on a repo below</td></tr>
+    <tr th:if="${apps.isEmpty()}"><td colspan="5" class="muted">no apps yet — create one above</td></tr>
   </table>
-  <p class="muted">Deploys come only from a release. A plain push to <code>main</code> does not deploy.</p>
 
   <h2>Users</h2>
   <form method="post" th:action="@{/z/users}" class="stack">
@@ -67,30 +90,5 @@
     </tr>
     <tr th:if="${users.isEmpty()}"><td colspan="4" class="muted">could not list users</td></tr>
   </table>
-
-  <h2>Repositories <span class="muted">· <b>Release</b> reads the commits since the last
-    release and tags the next <code>vX.Y.Z</code> on <code>main</code></span></h2>
-  <form method="post" th:action="@{/z/repos}" class="stack">
-    <input type="hidden" name="z" th:value="${zoneSlug}">
-    <label>name<input name="name" required></label>
-    <button>Create repo</button>
-  </form>
-  <ul style="line-height:2.2">
-    <li th:each="r : ${repos}">
-      <a th:href="${r.htmlUrl}" th:text="${r.fullName}">owner/repo</a>
-      <span class="muted" th:text="|· ${r.version}|">· v1.2.3</span>
-      <form method="post" th:action="@{/z/repos/release}" class="inline">
-        <input type="hidden" name="z" th:value="${zoneSlug}">
-        <input type="hidden" name="owner" th:value="${r.owner}">
-        <input type="hidden" name="repo" th:value="${r.name}">
-        <select name="bump">
-          <option value="auto">auto (from commits)</option>
-          <option>patch</option><option>minor</option><option>major</option>
-        </select>
-        <button>Release</button>
-      </form>
-    </li>
-    <li th:if="${repos.isEmpty()}" class="muted">none yet</li>
-  </ul>
 </body>
 </html>
