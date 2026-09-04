@@ -81,14 +81,14 @@ everything is plain HTTP — no `insecure-registries` entry is needed.
 ```sh
 # 1. Core services (internal Traefik + Watchtower) — once per node, on the
 #    private network. No public ports, no certs here.
-docker compose -f templates/traefik-core-compose.yml up -d
+docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 
 # 2. The controller — once, the only public machine. Runs the edge (owns :443,
 #    all TLS/ACME), the SSO gateway, and the control plane.
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env      # DNS API creds for the ACME challenge
 export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)   # the platform key — keep it
-docker compose -f templates/ignition-control-compose.yml up -d
+docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 ```
 
 Then open **`https://admin.ignition.example/`**, sign in with `IGN_ADMIN_TOKEN`,

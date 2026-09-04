@@ -112,11 +112,14 @@ chmod 600 "$out"/acme.env "$out"/*wg0.conf 2>/dev/null || true
 cat > "$out/INSTALL.txt" <<EOF
 Generated $(date -u +%FT%TZ). Put each file where it belongs:
 
-PART 1 — spitfire  (in a clone of the ignition repo)
-  ignition.env  ->  .env            (compose auto-loads it)
+PART 1 — spitfire  (run from the repo root of your ignition clone)
+  ignition.env  ->  .env            (chmod 600)
   acme.env      ->  acme.env        (chmod 600)
-  then: docker compose -f templates/traefik-core-compose.yml up -d
-        docker compose -f templates/ignition-control-compose.yml up -d
+  mkdir -p ssh-empty
+  docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
+  docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
+  ( --project-directory . makes compose read .env / acme.env / ssh-empty from
+    the repo root, not templates/ )
 
 PART 2 — hetzner
   hetzner-wg0.conf           -> /etc/wireguard/wg0.conf   (chmod 600)

@@ -10,7 +10,7 @@
 #   export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 #   # SMTP is required — the service will not start without it:
 #   export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
-#   docker compose -f templates/ignition-control-compose.yml up -d
+#   docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 #
 # PostgreSQL is the source of truth (nodes, zones, apps, secrets, identity).
 # Back it up with `pg_dump`; the AES key is a separate secret. The control plane

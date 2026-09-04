@@ -167,16 +167,19 @@ The generator (from the callout at the top) has produced `demo/out/ignition.env`
 and `demo/out/acme.env`, filled in. On `spitfire`, in the clone:
 
 ```sh
-cd ignition
-cp demo/out/ignition.env .env            # compose auto-loads it
-cp demo/out/acme.env    acme.env && chmod 600 acme.env
+cd ignition                               # repo root
+cp demo/out/ignition.env .env      && chmod 600 .env
+cp demo/out/acme.env    acme.env   && chmod 600 acme.env
 
 docker network create traefik-public
 mkdir -p ssh-empty                        # node is 'local'; no remote-node SSH keys
 
-docker compose -f templates/traefik-core-compose.yml up -d
-docker compose -f templates/ignition-control-compose.yml up -d
+docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
+docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 ```
+
+`--project-directory .` matters: without it Compose reads `.env` / `acme.env`
+next to the compose file (`templates/`), not from the repo root.
 
 `.env` carries `BASE_DOMAIN`, `ACME_EMAIL`, `ACME_DNS_PROVIDER`, the SMTP block,
 `IGN_PUBLIC_URL`, and the generated `IGN_ADMIN_TOKEN` / `IGN_SECRET_KEY` /
@@ -200,7 +203,7 @@ Watch the first certificate get issued — DNS-01 can take a few minutes while
 the `_acme-challenge` `TXT` record propagates (Joker/SVC especially):
 
 ```sh
-docker compose -f templates/traefik-core-compose.yml logs -f traefik | grep -i acme
+docker compose --project-directory . -f templates/traefik-core-compose.yml logs -f traefik | grep -i acme
 ```
 
 You want a line about a certificate obtained for `ignition.classesarecode.net` /
@@ -261,8 +264,8 @@ name — both need the public path that part 2 builds.
 
 ```sh
 cd ignition
-docker compose -f templates/ignition-control-compose.yml down
-docker compose -f templates/traefik-core-compose.yml down -v      # -v also drops the ACME cert volume
+docker compose --project-directory . -f templates/ignition-control-compose.yml down
+docker compose --project-directory . -f templates/traefik-core-compose.yml down -v      # -v also drops the ACME cert volume
 docker network rm traefik-public
 ```
 

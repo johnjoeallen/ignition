@@ -383,8 +383,8 @@ tag (~60s).
 ```sh
 # spitfire — destroy every zone from the console first (Roster → Teardown), then:
 cd ignition
-docker compose -f templates/ignition-control-compose.yml down
-docker compose -f templates/traefik-core-compose.yml down -v
+docker compose --project-directory . -f templates/ignition-control-compose.yml down
+docker compose --project-directory . -f templates/traefik-core-compose.yml down -v
 docker network rm traefik-public
 systemctl disable --now wg-quick@wg0
 

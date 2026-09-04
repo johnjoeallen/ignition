@@ -30,7 +30,7 @@ one file to back up — it has every generated token and key.
 
 | file | goes to | part |
 |---|---|---|
-| `ignition.env` | `ignition/.env` (compose auto-loads it) | 1 |
+| `ignition.env` | `ignition/.env` — run compose with `--project-directory .` | 1 |
 | `acme.env` | `ignition/acme.env` | 1 |
 | `hetzner-wg0.conf` | `hetzner:/etc/wireguard/wg0.conf` | 2 |
 | `spitfire-wg0.conf` | `spitfire:/etc/wireguard/wg0.conf` | 2 |
