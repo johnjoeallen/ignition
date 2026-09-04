@@ -4,7 +4,7 @@
 <body>
   <div th:replace="~{fragments/shell :: shell('teams', ~{::main})}">
     <main>
-      <p class="mb-3"><a href="/teams"><i class="bi bi-arrow-left"></i> Teams</a></p>
+      <p class="mb-3"><a href="/"><i class="bi bi-arrow-left"></i> Teams</a></p>
       <h1 class="h4 page-title"><i class="bi bi-people"></i> <span th:text="${zone.slug}">team</span></h1>
       <div class="alert alert-success" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
 

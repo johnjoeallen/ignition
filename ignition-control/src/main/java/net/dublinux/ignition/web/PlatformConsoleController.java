@@ -42,7 +42,7 @@ public class PlatformConsoleController {
         this.currentUser = currentUser;
     }
 
-    @GetMapping("/")
+    @GetMapping("/nodes")
     public String nodes(Model model) {
         List<NodeRow> nodeRows = nodes.list().stream().map(n -> {
             var a = nodes.allocation(n.name());
@@ -52,7 +52,8 @@ public class PlatformConsoleController {
         return "nodes";
     }
 
-    @GetMapping("/teams")
+    /** Teams is the default landing page. */
+    @GetMapping("/")
     public String teams(Model model) {
         List<NodeRow> nodeRows = nodes.list().stream().map(n -> {
             var a = nodes.allocation(n.name());
@@ -80,7 +81,7 @@ public class PlatformConsoleController {
         try {
             var creator = currentUser.get().map(u -> u.id()).orElse(null);
             provisioning.submit(slug.strip(), node.strip(), label.strip(), creator);
-            return "redirect:/teams?m=provisioning+" + slug.strip();
+            return "redirect:/?m=provisioning+" + slug.strip();
         } catch (RuntimeException e) {
             model.addAttribute("error", e.getMessage());
             return "zone-form";
@@ -99,9 +100,9 @@ public class PlatformConsoleController {
     public String destroyZone(@PathVariable String slug) {
         try {
             zones.destroy(slug, false);
-            return "redirect:/teams?m=" + slug + "+destroyed";
+            return "redirect:/?m=" + slug + "+destroyed";
         } catch (RuntimeException e) {
-            return "redirect:/teams?m=" + enc(e.getMessage());
+            return "redirect:/?m=" + enc(e.getMessage());
         }
     }
 
@@ -110,9 +111,9 @@ public class PlatformConsoleController {
         try {
             zones.prepareMove(slug, node.strip());
             provisioning.submit(slug, node.strip(), "", null);
-            return "redirect:/teams?m=moving+" + slug + "+to+" + node.strip();
+            return "redirect:/?m=moving+" + slug + "+to+" + node.strip();
         } catch (RuntimeException e) {
-            return "redirect:/teams?m=" + enc(e.getMessage());
+            return "redirect:/?m=" + enc(e.getMessage());
         }
     }
 
@@ -145,7 +146,7 @@ public class PlatformConsoleController {
         try {
             List<String> labelList = labels.isBlank() ? List.of() : List.of(labels.split("\\s*,\\s*"));
             nodes.register(name, dockerHost, cpus, memGb, labelList);
-            return "redirect:/?m=node+" + name + "+registered";
+            return "redirect:/nodes?m=node+" + name + "+registered";
         } catch (RuntimeException e) {
             model.addAttribute("error", e.getMessage());
             return "node-form";
@@ -168,7 +169,7 @@ public class PlatformConsoleController {
         try {
             List<String> labelList = labels.isBlank() ? List.of() : List.of(labels.split("\\s*,\\s*"));
             nodes.update(name, dockerHost, cpus, memGb, labelList);
-            return "redirect:/?m=node+" + name + "+updated";
+            return "redirect:/nodes?m=node+" + name + "+updated";
         } catch (RuntimeException e) {
             model.addAttribute("node", nodes.get(name));
             model.addAttribute("error", e.getMessage());
@@ -179,22 +180,22 @@ public class PlatformConsoleController {
     @PostMapping("/nodes/{name}/drain")
     public String drain(@PathVariable String name) {
         nodes.setState(name, Node.State.DRAINING);
-        return "redirect:/?m=" + name + "+draining";
+        return "redirect:/nodes?m=" + name + "+draining";
     }
 
     @PostMapping("/nodes/{name}/undrain")
     public String undrain(@PathVariable String name) {
         nodes.setState(name, Node.State.ACTIVE);
-        return "redirect:/?m=" + name + "+active";
+        return "redirect:/nodes?m=" + name + "+active";
     }
 
     @PostMapping("/nodes/{name}/delete")
     public String delete(@PathVariable String name, Model model) {
         try {
             nodes.remove(name);
-            return "redirect:/?m=" + name + "+removed";
+            return "redirect:/nodes?m=" + name + "+removed";
         } catch (RuntimeException e) {
-            return "redirect:/?m=" + java.net.URLEncoder.encode(e.getMessage(),
+            return "redirect:/nodes?m=" + java.net.URLEncoder.encode(e.getMessage(),
                     java.nio.charset.StandardCharsets.UTF_8);
         }
     }

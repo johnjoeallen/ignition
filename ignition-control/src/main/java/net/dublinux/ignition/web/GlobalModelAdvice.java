@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
 @ControllerAdvice(assignableTypes = {PlatformConsoleController.class, ZoneConsoleController.class,
-        RosterController.class, UsersController.class})
+        RosterController.class, UsersController.class, LogsController.class})
 public class GlobalModelAdvice {
 
     private final IgnitionProperties props;
