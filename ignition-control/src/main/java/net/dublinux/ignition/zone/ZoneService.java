@@ -256,6 +256,32 @@ public class ZoneService {
         return -1;
     }
 
+    /**
+     * Repos created before org support existed (or by any direct API use)
+     * still belong to the {@code zoneadmin} service account. Transfer them
+     * into the org — zoneadmin owns the org it created, so Forgejo transfers
+     * immediately, no acceptance step. {@code zoneadmin} has no password
+     * anyone knows (by design), so this is the only way those repos become
+     * visible to the team without an operator doing it by hand in Forgejo.
+     */
+    private void migrateZoneadminRepos(String slug) {
+        var res = forgejo.get(slug, "/users/zoneadmin/repos?limit=50");
+        if (!res.ok() || res.body() == null || !res.body().isArray()) {
+            return;
+        }
+        for (JsonNode r : res.body()) {
+            String name = r.path("name").asText("");
+            if (name.isBlank()) {
+                continue;
+            }
+            var transfer = forgejo.post(slug, "/repos/zoneadmin/" + name + "/transfer",
+                    Map.of("new_owner", slug));
+            if (transfer.ok()) {
+                log.info("zone {}: moved repo {} from zoneadmin to org {}", slug, name, slug);
+            }
+        }
+    }
+
     // --- Forgejo repos -----------------------------------------------------
 
     public record RepoView(String owner, String name, String fullName, String htmlUrl, String version) {}
@@ -263,6 +289,7 @@ public class ZoneService {
     /** Every repo in the zone's org — all repos are org-owned, so every zone user can see them. */
     public List<RepoView> repos(String slug) {
         ensureOrg(slug);
+        migrateZoneadminRepos(slug);
         var res = forgejo.get(slug, "/orgs/" + slug + "/repos?limit=50");
         List<RepoView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
