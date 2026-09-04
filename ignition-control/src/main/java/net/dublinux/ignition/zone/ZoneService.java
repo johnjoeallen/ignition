@@ -183,55 +183,72 @@ public class ZoneService {
         }
     }
 
-    // --- Forgejo users -------------------------------------------------------
+    // --- git access — not a separate concept from team membership. Every
+    // team member's Forgejo login is their sanitized email, provisioned (and
+    // torn down) automatically alongside their Ignition membership; there's
+    // no separate "add a Forgejo user" step or password to hand out. ---
 
-    public record ForgejoUser(String login, String email, boolean admin) {}
+    private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
 
-    public List<ForgejoUser> users(String slug) {
-        var res = forgejo.get(slug, "/admin/users?limit=50");
-        List<ForgejoUser> out = new ArrayList<>();
-        if (res.ok() && res.body() != null && res.body().isArray()) {
-            for (JsonNode u : res.body()) {
-                out.add(new ForgejoUser(u.path("login").asText(""), u.path("email").asText(""),
-                        u.path("is_admin").asBoolean(false)));
-            }
-        }
-        // self-heal: users added before org support existed (or if a PUT ever
-        // failed) never got put in the Owners team. Re-assert membership for
-        // everyone on every page load — PUT is idempotent, so this is a no-op
-        // once it's caught up.
-        String bot = zones.secret(slug, "forgejo_username");
-        int owners = ensureOrg(slug);
-        if (owners > 0) {
-            for (ForgejoUser u : out) {
-                if (!u.login().equals(bot)) {
-                    forgejo.put(slug, "/teams/" + owners + "/members/" + u.login(), Map.of());
-                }
-            }
-        }
-        return out;
+    /** The Forgejo login a member's email maps to — for display, or to look them up. */
+    public String gitUsername(String email) {
+        return usernameFromEmail(email);
     }
 
     /**
-     * Creates a Forgejo user. There's no username field in the console — the
-     * login is derived from the mailbox part of the email (before the
-     * {@code @}), sanitized down to what Forgejo accepts. If that collides
-     * with an existing login, Forgejo's own 422 surfaces to the caller as
-     * normal (no auto-suffixing).
+     * Ensures a Forgejo account exists for this member, in the zone's org.
+     * Idempotent — safe to call every time someone's added, or re-added.
+     * A username collision (two different emails sanitizing to the same
+     * login) is resolved by appending {@code -2}, {@code -3}, ….
      */
-    public ForgejoClient.Response createUser(String slug, String email, String password) {
-        String username = usernameFromEmail(email);
+    public String ensureGitAccess(String slug, String email) {
+        String base = usernameFromEmail(email);
+        String username = base;
+        for (int suffix = 2; suffix <= 5; suffix++) {
+            var existing = forgejo.get(slug, "/users/" + username);
+            if (!existing.ok()) {
+                break; // free to use
+            }
+            if (email.equalsIgnoreCase(existing.body().path("email").asText(""))) {
+                ensureOrgMembership(slug, username);
+                return username; // already provisioned, from an earlier call
+            }
+            username = base + "-" + suffix;
+        }
         var res = forgejo.post(slug, "/admin/users", Map.of(
-                "username", username, "email", email, "password", password,
+                "username", username, "email", email, "password", randBase64(18),
                 "must_change_password", false));
         if (res.ok()) {
-            // membership in the zone's org, so the new user can see its repos
-            int owners = ensureOrg(slug);
-            if (owners > 0) {
-                forgejo.put(slug, "/teams/" + owners + "/members/" + username, Map.of());
-            }
+            ensureOrgMembership(slug, username);
+        } else {
+            log.warn("zone {}: could not create Forgejo account {} for {} ({}): {}",
+                    slug, username, email, res.status(), res.message());
         }
-        return res;
+        return username;
+    }
+
+    private void ensureOrgMembership(String slug, String username) {
+        int owners = ensureOrg(slug);
+        if (owners > 0) {
+            forgejo.put(slug, "/teams/" + owners + "/members/" + username, Map.of());
+        }
+    }
+
+    /** A fresh random git password for a member — returned once; Forgejo doesn't keep the old one readable either. */
+    public String resetGitPassword(String slug, String username) {
+        String pw = randBase64(18);
+        forgejo.patch(slug, "/admin/users/" + username, Map.of("password", pw, "must_change_password", false));
+        return pw;
+    }
+
+    public void removeGitAccess(String slug, String username) {
+        forgejo.delete(slug, "/admin/users/" + username);
+    }
+
+    private static String randBase64(int bytes) {
+        byte[] b = new byte[bytes];
+        RANDOM.nextBytes(b);
+        return Base64.getEncoder().encodeToString(b);
     }
 
     /**
@@ -247,10 +264,6 @@ public class ZoneService {
                 .replaceAll("[._-]{2,}", "-")
                 .replaceAll("^[._-]+|[._-]+$", "");
         return cleaned.isBlank() ? "user" : cleaned;
-    }
-
-    public ForgejoClient.Response deleteUser(String slug, String login) {
-        return forgejo.delete(slug, "/admin/users/" + login);
     }
 
     // --- the zone's org — one org per zone (name = slug) so every zone user

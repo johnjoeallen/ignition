@@ -54,12 +54,13 @@ can do is entirely by role, not by which URL they hit.
   runs the roster, sees every zone and app, manages every Ignition account.
   Implicitly a team admin of every zone too.
 - **Team admin** — the team lead(s), one or more per zone. Adds/removes team
-  members and their roles, adds Forgejo users, creates repos, cuts releases
-  (automated semver bumps), manages the zone's apps, restarts the runner — for
-  *their* zone only, at `/z?z=<slug>` on the console. They never touch a
-  Forgejo admin screen.
+  members and their roles, creates repos, cuts releases (automated semver
+  bumps), manages the zone's apps, restarts the runner — for *their* zone
+  only, at `/z?z=<slug>` on the console. Git access isn't a separate step:
+  adding someone as a member provisions their Forgejo login too, as their
+  sanitized email. They never touch a Forgejo admin screen.
 - **Team member** — the rest of the team. Same zone console, everything but
-  member/user management.
+  member management.
 
 **Forgejo, not Gitea:** community-governed (Codeberg e.V.), FOSS-first, no
 open-core drift. Server `codeberg.org/forgejo/forgejo:11` (LTS), runner

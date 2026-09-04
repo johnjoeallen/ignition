@@ -23,11 +23,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * The team console: Members (who has Ignition console access to this team,
- * and at what role), Users (Forgejo git accounts), Apps (an app <em>is</em>
- * its repo — creating one creates and seeds the repo; Release deploys it),
- * runner restart. The zone is passed as {@code ?z=<slug>} — access is
- * enforced by {@code ZoneAuthorizationManager} (a platform admin, or a
+ * The team console: Members (who has Ignition console access to this team, at
+ * what role — and, not a separate thing, their Forgejo git login, provisioned
+ * automatically from their email), Apps (an app <em>is</em> its repo —
+ * creating one creates and seeds the repo; Release deploys it), runner
+ * restart. The zone is passed as {@code ?z=<slug>} — access is enforced by
+ * {@code ZoneAuthorizationManager} (a platform admin, or a
  * {@code MEMBER}/{@code ZONE_ADMIN} of that zone); member-management actions
  * here additionally require {@link CurrentUser#isZoneAdmin}.
  */
@@ -75,13 +76,17 @@ public class ZoneConsoleController {
                 })
                 .toList();
 
+        List<ZoneAccessService.MemberView> members = access.membersOf(slug);
+        Map<String, String> gitUsernames = members.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ZoneAccessService.MemberView::email, m -> zones.gitUsername(m.email())));
+
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("zone", zone);
         model.addAttribute("stack", zones.stack(slug));
         model.addAttribute("apps", rows);
-        model.addAttribute("users", zones.users(slug));
-        model.addAttribute("botUser", zones.botUser(slug));
-        model.addAttribute("members", access.membersOf(slug));
+        model.addAttribute("members", members);
+        model.addAttribute("gitUsernames", gitUsernames);
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
         model.addAttribute("currentUserId", currentUser.get().map(u -> u.id()).orElse(null));
         return "zone";
@@ -94,7 +99,9 @@ public class ZoneConsoleController {
         String slug = requireZoneAdmin(z);
         try {
             access.addMember(slug, email, role);
-            return redirect(slug, email + " added as " + role.name().toLowerCase());
+            String username = zones.ensureGitAccess(slug, email);
+            return redirect(slug, email + " added as " + role.name().toLowerCase()
+                    + " — git access as " + username);
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }
@@ -118,11 +125,26 @@ public class ZoneConsoleController {
     public String removeMember(@RequestParam(name = "z") String z, @RequestParam java.util.UUID userId) {
         String slug = requireZoneAdmin(z);
         try {
+            String email = access.emailOf(userId).orElse(null);
             access.removeMember(slug, userId);
-            return redirect(slug, "member removed");
+            if (email != null) {
+                zones.removeGitAccess(slug, zones.gitUsername(email));
+            }
+            return redirect(slug, "member and their git access removed");
         } catch (IllegalArgumentException | IllegalStateException e) {
             return redirect(slug, e.getMessage());
         }
+    }
+
+    @PostMapping("/z/members/reset-git-password")
+    public String resetGitPassword(@RequestParam(name = "z") String z, @RequestParam java.util.UUID userId) {
+        String slug = requireZoneAdmin(z);
+        String email = access.emailOf(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
+        String username = zones.gitUsername(email);
+        String newPassword = zones.resetGitPassword(slug, username);
+        return redirect(slug, "git password for " + username + " reset to: " + newPassword
+                + " — copy it now, it won't be shown again");
     }
 
     /** Member-management actions need team-admin rights, not just team access. */
@@ -132,20 +154,6 @@ public class ZoneConsoleController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can manage members");
         }
         return slug;
-    }
-
-    @PostMapping("/z/users")
-    public String createUser(@RequestParam(name = "z") String z,
-                             @RequestParam String email,
-                             @RequestParam String password) {
-        String slug = requireZoneAdmin(z);
-        return back(slug, zones.createUser(slug, email, password), "user " + email + " created");
-    }
-
-    @PostMapping("/z/users/delete")
-    public String deleteUser(@RequestParam(name = "z") String z, @RequestParam String login) {
-        String slug = requireZoneAdmin(z);
-        return back(slug, zones.deleteUser(slug, login), "user " + login + " removed");
     }
 
     @PostMapping("/z/apps")

@@ -29,6 +29,10 @@ public class ZoneAccessService {
     /** A member row joined with the account it points at, for display. */
     public record MemberView(UUID userId, String email, ZoneMember.Role role, boolean platformAdmin) {}
 
+    public java.util.Optional<String> emailOf(UUID userId) {
+        return users.findById(userId).map(AppUser::email);
+    }
+
     public List<MemberView> membersOf(String slug) {
         return members.findByZoneSlug(slug).stream()
                 .map(m -> users.findById(m.userId())

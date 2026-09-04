@@ -81,11 +81,12 @@
         </table>
       </div>
 
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Members <span class="fw-normal">· console access</span></h2>
-      <p class="text-body-secondary small">Who can open this team's console, and at what role. <b>Admin</b>
-        manages members and Forgejo users below; <b>member</b> gets everything else here (apps, releases).
-        Adding someone attaches their existing Ignition account — they sign up (or a platform admin invites
-        them) first.</p>
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Members</h2>
+      <p class="text-body-secondary small">Who can open this team's console, and at what role — <b>admin</b>
+        manages members below; <b>member</b> gets everything else here (apps, releases). Git access isn't a
+        separate step: adding someone here also provisions their Forgejo login, as their sanitized email
+        (shown below each address). Adding someone attaches their existing Ignition account — they sign up
+        (or a platform admin invites them) first.</p>
       <form th:if="${canManageMembers}" method="post" th:action="@{/z/members}"
             class="row g-2 align-items-end mb-3" autocomplete="off">
         <input type="hidden" name="z" th:value="${zoneSlug}">
@@ -104,18 +105,24 @@
           <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Add member</button>
         </div>
       </form>
-      <div class="table-card mb-4">
+      <div class="table-card">
         <table class="table table-hover mb-0">
-          <thead><tr><th>email</th><th>role</th><th></th></tr></thead>
+          <thead><tr><th>email</th><th>git login</th><th>role</th><th></th></tr></thead>
           <tbody>
             <tr th:each="m : ${members}">
               <td th:text="${m.email}">alice@example.com</td>
+              <td><code th:text="${gitUsernames[m.email]}">alice</code></td>
               <td>
                 <span class="badge" th:classappend="${m.role.name() == 'ZONE_ADMIN'} ? 'text-bg-success' : 'text-bg-secondary'"
                       th:text="${m.role.name() == 'ZONE_ADMIN'} ? 'admin' : 'member'">member</span>
                 <span th:if="${m.platformAdmin}" class="badge text-bg-secondary">platform admin</span>
               </td>
               <td class="text-end text-nowrap" th:if="${canManageMembers}">
+                <form method="post" th:action="@{/z/members/reset-git-password}" class="d-inline">
+                  <input type="hidden" name="z" th:value="${zoneSlug}">
+                  <input type="hidden" name="userId" th:value="${m.userId}">
+                  <button class="btn btn-sm btn-outline-secondary">reset git password</button>
+                </form>
                 <form method="post" th:action="@{/z/members/role}" class="d-inline">
                   <input type="hidden" name="z" th:value="${zoneSlug}">
                   <input type="hidden" name="userId" th:value="${m.userId}">
@@ -132,45 +139,7 @@
                 </form>
               </td>
             </tr>
-            <tr th:if="${members.isEmpty()}"><td colspan="3" class="text-body-secondary text-center py-4">no members yet</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Forgejo users <span class="fw-normal">· git access</span></h2>
-      <form th:if="${canManageMembers}" method="post" th:action="@{/z/users}"
-            class="row g-2 align-items-end mb-3" autocomplete="off">
-        <input type="hidden" name="z" th:value="${zoneSlug}">
-        <div class="col-auto">
-          <label class="form-label small mb-1">email</label>
-          <input class="form-control form-control-sm" name="email" type="email" autocomplete="off" required>
-        </div>
-        <div class="col-auto">
-          <label class="form-label small mb-1">password</label>
-          <input class="form-control form-control-sm" name="password" type="password"
-                 autocomplete="new-password" required>
-        </div>
-        <div class="col-auto">
-          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Add user</button>
-        </div>
-      </form>
-      <div class="table-card">
-        <table class="table table-hover mb-0">
-          <thead><tr><th>login</th><th>email</th><th>role</th><th></th></tr></thead>
-          <tbody>
-            <tr th:each="u : ${users}">
-              <td th:text="${u.login}">alice</td>
-              <td th:text="${u.email}">a@x</td>
-              <td><span th:if="${u.admin}" class="badge text-bg-secondary">admin</span></td>
-              <td class="text-end" th:if="${canManageMembers}">
-                <form method="post" th:action="@{/z/users/delete}" class="d-inline">
-                  <input type="hidden" name="z" th:value="${zoneSlug}">
-                  <input type="hidden" name="login" th:value="${u.login}">
-                  <button class="btn btn-sm btn-outline-danger" th:disabled="${u.login == botUser}">remove</button>
-                </form>
-              </td>
-            </tr>
-            <tr th:if="${users.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">could not list users</td></tr>
+            <tr th:if="${members.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">no members yet</td></tr>
           </tbody>
         </table>
       </div>
