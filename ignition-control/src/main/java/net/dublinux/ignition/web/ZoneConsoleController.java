@@ -88,7 +88,7 @@ public class ZoneConsoleController {
         ZoneService.GitCreds myCreds = members.stream()
                 .filter(m -> m.userId().equals(currentUserId))
                 .findFirst()
-                .map(m -> zones.gitCredentials(slug, gitUsernames.get(m.email())))
+                .map(m -> zones.gitCredentials(slug, gitUsernames.get(m.email()), m.userId()))
                 .orElse(null);
 
         model.addAttribute("zoneSlug", slug);
@@ -110,8 +110,8 @@ public class ZoneConsoleController {
                             @RequestParam ZoneMember.Role role) {
         String slug = requireZoneAdmin(z);
         try {
-            access.addMember(slug, email, role);
-            String username = zones.ensureGitAccess(slug, email);
+            java.util.UUID memberId = access.addMember(slug, email, role);
+            String username = zones.ensureGitAccess(slug, email, memberId);
             return redirect(slug, email + " added as " + role.name().toLowerCase()
                     + " — git access as " + username + " (they can see their own password/PAT on this page)");
         } catch (IllegalArgumentException e) {
@@ -154,7 +154,7 @@ public class ZoneConsoleController {
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
-        String newPassword = zones.resetGitPassword(slug, username);
+        String newPassword = zones.resetGitPassword(slug, username, userId);
         return redirect(slug, "git password for " + username + " reset to: " + newPassword
                 + " — copy it now, it won't be shown again");
     }

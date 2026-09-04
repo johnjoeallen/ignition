@@ -204,27 +204,34 @@ public class ZoneService {
         return stored.isBlank() ? usernameFromEmail(email) : stored;
     }
 
-    /** The stored (encrypted-at-rest) credentials for a git login — null fields if never provisioned/minted. */
+    /**
+     * The stored credentials for a git login — null fields if never
+     * provisioned/minted. Decrypted with a key derived from {@code userId}
+     * (PBKDF2, see {@link UserSecretCipher}), not the shared zone-secret
+     * key every other {@code zone_secret} row uses — {@code userId} must be
+     * the same account the credentials were written for, or decryption
+     * fails outright rather than silently returning someone else's value.
+     */
     public record GitCreds(String password, String pat) {}
 
-    public GitCreds gitCredentials(String slug, String username) {
-        String pw = zones.secret(slug, "git_pw_" + username);
-        String pat = zones.secret(slug, "git_pat_" + username);
+    public GitCreds gitCredentials(String slug, String username, java.util.UUID userId) {
+        String pw = zones.userSecret(slug, "git_pw_" + username, userId);
+        String pat = zones.userSecret(slug, "git_pat_" + username, userId);
         return new GitCreds(pw.isBlank() ? null : pw, pat.isBlank() ? null : pat);
     }
 
     /**
      * Ensures a Forgejo account exists for this member, in the zone's org,
-     * with a password and a personal access token — both stored (encrypted,
-     * same as every other zone secret) so they can be shown back to that
-     * person later, not just once at creation. Idempotent — safe to call
-     * every time someone's added, or re-added. A username collision (two
-     * different emails sanitizing to the same login) is resolved the way
-     * Gmail suggests alternatives on a taken address — append a number and
-     * try again — not with a separator, so {@code alice} collides to
-     * {@code alice2}, {@code alice3}, ….
+     * with a password and a personal access token — both stored (encrypted
+     * with a key derived from their own {@code userId}, so they can be shown
+     * back to that person later, not just once at creation. Idempotent —
+     * safe to call every time someone's added, or re-added. A username
+     * collision (two different emails sanitizing to the same login) is
+     * resolved the way Gmail suggests alternatives on a taken address —
+     * append a number and try again — not with a separator, so {@code alice}
+     * collides to {@code alice2}, {@code alice3}, ….
      */
-    public String ensureGitAccess(String slug, String email) {
+    public String ensureGitAccess(String slug, String email, java.util.UUID userId) {
         String emailKey = "git_user_" + email.toLowerCase(Locale.ROOT);
         String base = usernameFromEmail(email);
         String username = base;
@@ -241,9 +248,9 @@ public class ZoneService {
                 // an existing password either way, so the only way to have one on file
                 // to show is to set a fresh one now.
                 if (!zones.hasSecret(slug, "git_pw_" + username)) {
-                    resetGitPassword(slug, username);
+                    resetGitPassword(slug, username, userId);
                 }
-                ensurePat(slug, username);
+                ensurePat(slug, username, userId);
                 return username; // already provisioned, from an earlier call
             }
             username = base + suffix;
@@ -259,13 +266,13 @@ public class ZoneService {
         }
         ensureOrgMembership(slug, username);
         zones.putSecret(slug, emailKey, username);
-        zones.putSecret(slug, "git_pw_" + username, password);
-        ensurePat(slug, username);
+        zones.putUserSecret(slug, "git_pw_" + username, password, userId);
+        ensurePat(slug, username, userId);
         return username;
     }
 
     /** Mints a personal access token for a git login if one isn't already stored. Self-healing, like everything else here. */
-    private void ensurePat(String slug, String username) {
+    private void ensurePat(String slug, String username, java.util.UUID userId) {
         if (zones.hasSecret(slug, "git_pat_" + username)) {
             return;
         }
@@ -283,7 +290,7 @@ public class ZoneService {
             token = res.body().path("token").asText("");
         }
         if (!token.isBlank()) {
-            zones.putSecret(slug, "git_pat_" + username, token);
+            zones.putUserSecret(slug, "git_pat_" + username, token, userId);
         }
     }
 
@@ -294,11 +301,11 @@ public class ZoneService {
         }
     }
 
-    /** A fresh random git password for a member, stored (encrypted) so it can be shown back to them. */
-    public String resetGitPassword(String slug, String username) {
+    /** A fresh random git password for a member, stored (encrypted per-user) so it can be shown back to them. */
+    public String resetGitPassword(String slug, String username, java.util.UUID userId) {
         String pw = randBase64(18);
         forgejo.patch(slug, "/admin/users/" + username, Map.of("password", pw, "must_change_password", false));
-        zones.putSecret(slug, "git_pw_" + username, pw);
+        zones.putUserSecret(slug, "git_pw_" + username, pw, userId);
         return pw;
     }
 

@@ -2,6 +2,7 @@ package net.dublinux.ignition.zone;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
@@ -18,11 +19,14 @@ public class ZoneRepository {
     private final ZoneEntityRepository zoneRepo;
     private final ZoneSecretRepository secretRepo;
     private final SecretCipher cipher;
+    private final UserSecretCipher userCipher;
 
-    public ZoneRepository(ZoneEntityRepository zoneRepo, ZoneSecretRepository secretRepo, SecretCipher cipher) {
+    public ZoneRepository(ZoneEntityRepository zoneRepo, ZoneSecretRepository secretRepo, SecretCipher cipher,
+                          UserSecretCipher userCipher) {
         this.zoneRepo = zoneRepo;
         this.secretRepo = secretRepo;
         this.cipher = cipher;
+        this.userCipher = userCipher;
     }
 
     public List<Zone> findAll() {
@@ -74,5 +78,25 @@ public class ZoneRepository {
     @Transactional
     public void deleteSecret(String slug, String name) {
         secretRepo.findByZoneSlugAndName(slug, name).ifPresent(secretRepo::delete);
+    }
+
+    // --- per-user secrets (git password / PAT) — see UserSecretCipher ---------
+
+    /** Decrypted with a key derived from {@code userId}, not the shared zone-secret key. */
+    public String userSecret(String slug, String name, UUID userId) {
+        return secretRepo.findByZoneSlugAndName(slug, name)
+                .map(s -> userCipher.decrypt(s.value(), userId))
+                .orElse("");
+    }
+
+    @Transactional
+    public void putUserSecret(String slug, String name, String plaintext, UUID userId) {
+        String ct = userCipher.encrypt(plaintext, userId);
+        secretRepo.findByZoneSlugAndName(slug, name).ifPresentOrElse(
+                s -> {
+                    s.setValue(ct);
+                    secretRepo.save(s);
+                },
+                () -> secretRepo.save(new ZoneSecret(slug, name, ct)));
     }
 }

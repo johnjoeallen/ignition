@@ -45,10 +45,11 @@ public class ZoneAccessService {
 
     /**
      * Attaches an existing account to the zone at the given role (or changes
-     * their role, if they're already a member).
+     * their role, if they're already a member). Returns their user id — the
+     * caller needs it right after anyway, to provision git access.
      */
     @Transactional
-    public void addMember(String slug, String email, ZoneMember.Role role) {
+    public UUID addMember(String slug, String email, ZoneMember.Role role) {
         String e = email == null ? "" : email.strip().toLowerCase();
         AppUser u = users.findByEmailIgnoreCase(e)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -57,6 +58,7 @@ public class ZoneAccessService {
                 .orElseGet(() -> new ZoneMember(slug, u.id(), role));
         m.setRole(role);
         members.save(m);
+        return u.id();
     }
 
     /**
