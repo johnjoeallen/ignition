@@ -16,9 +16,6 @@ public class IgnitionProperties {
     /** Apex the install is hosted on, e.g. {@code ignition.example}. */
     private String baseDomain = "ignition.example";
 
-    /** Platform-admin bearer token. Empty disables the platform console. */
-    private String adminToken = "";
-
     /**
      * Ephemeral scratch dir for files external tools read (rendered compose,
      * runner config, Traefik dynamic snippets). Regenerated from the DB; safe
@@ -84,8 +81,6 @@ public class IgnitionProperties {
 
     public String getBaseDomain() { return baseDomain; }
     public void setBaseDomain(String baseDomain) { this.baseDomain = baseDomain; }
-    public String getAdminToken() { return adminToken; }
-    public void setAdminToken(String adminToken) { this.adminToken = adminToken; }
     public Path getWorkDir() { return workDir; }
     public void setWorkDir(Path workDir) { this.workDir = workDir; }
     public String getSecretKey() { return secretKey; }

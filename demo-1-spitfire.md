@@ -35,8 +35,8 @@ The apex used throughout is **`ignition.classesarecode.net`**.
 > cp demo.conf.example demo.conf   # fill it in
 > ./render.sh demo.conf            # -> demo/out/ + demo/out/INSTALL.txt
 > ```
-> It generates `IGN_ADMIN_TOKEN` / `IGN_SECRET_KEY` / `POSTGRES_PASSWORD` and
-> the WireGuard keys for you. See [`demo/README.md`](demo/README.md).
+> It generates `IGN_SECRET_KEY` / `POSTGRES_PASSWORD` and the WireGuard keys for
+> you. See [`demo/README.md`](demo/README.md).
 
 ---
 
@@ -106,15 +106,21 @@ TLS certificates, and routes each request to the right container by
 **hostname**: `admin.…` → `ignition-control`, and later `git.<team>.…` →
 that team's Forgejo, `<app>.apps.<team>.…` → that app.
 
-### `ignition-control` and `IGN_ADMIN_TOKEN`
+### `ignition-control` and first-run setup
 
 `ignition-control` is the whole Ignition application — one Java service serving
-two web consoles (a **platform** console for you, a **zone** console per team)
-and driving Docker to build and tear down teams and apps.
+two web consoles (a **platform** console for you, a **zone** console per team),
+backed by a PostgreSQL it manages, and driving Docker to build and tear down
+teams and apps.
 
-`IGN_ADMIN_TOKEN` is a long random string **you generate**. It's the platform
-admin password — whoever has it can do anything. You paste it once to sign into
-`https://admin.ignition.classesarecode.net/`.
+On the **first** start it has no accounts, so it logs a one-time **setup code**
+(`IGNITION SETUP — ... enter code: <code>`). You open
+`https://admin.ignition.classesarecode.net/setup`, enter that code plus your
+email and a password, and that creates the **platform admin**. After that,
+`/setup` is gone and you sign in with email + password.
+
+`IGN_SECRET_KEY` (32 bytes, base64) encrypts the per-zone credentials in
+Postgres — keep it with your backups.
 
 ### Nodes, zones, apps
 
@@ -130,8 +136,8 @@ admin password — whoever has it can do anything. You paste it once to sign int
 
 The [target model](docs/exposure.md) puts a single sign-on gateway in front of
 every browser request. This demo doesn't deploy that gateway. The consoles
-still require a token; anything published later is open. Fine for a demo, wrong
-for anything real.
+require an email/password login; anything published later (apps, Forgejo) is
+open. Fine for a demo, wrong for anything real.
 
 ---
 
@@ -142,7 +148,7 @@ for anything real.
 | `<SPITFIRE_LAN_IP>` | `spitfire`'s address on your LAN | `192.168.1.20` |
 | DNS-01 credential | Joker Dynamic-DNS user/pass (Option A) *or* a deSEC/Cloudflare token (Option B) | see above |
 | `<ACME_EMAIL>` | your email, for the Let's Encrypt account | `you@classesarecode.net` |
-| `<IGN_ADMIN_TOKEN>` | platform admin token you generate | `openssl rand -hex 32` |
+| SMTP | `IGN_SMTP_*` — the service won't start without it; a `maildev` container is fine for a demo | — |
 
 ---
 
@@ -183,22 +189,30 @@ docker compose --project-directory . -f templates/ignition-control-compose.yml u
 next to the compose file (`templates/`), not from the repo root.
 
 `.env` carries `BASE_DOMAIN`, `ACME_EMAIL`, `ACME_DNS_PROVIDER`, the SMTP block,
-`IGN_PUBLIC_URL`, and the generated `IGN_ADMIN_TOKEN` / `IGN_SECRET_KEY` /
-`POSTGRES_PASSWORD` — your platform admin token is the `IGN_ADMIN_TOKEN` line
-(also in `demo/demo.conf`).
+`IGN_PUBLIC_URL`, `IGN_SECRET_KEY`, and `POSTGRES_PASSWORD`.
 
 <details><summary>Doing it by hand instead</summary>
 
 Skip the generator and set the same variables yourself: write a `.env` with
 `BASE_DOMAIN=ignition.classesarecode.net`, `ACME_EMAIL=…`,
 `ACME_DNS_PROVIDER=…`, `IGN_PUBLIC_URL=https://admin.ignition.classesarecode.net`,
-`IGN_ADMIN_TOKEN=$(openssl rand -hex 32)`,
 `IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)`,
 `POSTGRES_PASSWORD=$(openssl rand -hex 24)`, and the four `IGN_SMTP_*` values;
 and an `acme.env` with the provider lines from Step 1 (Option A: `JOKER_API_MODE=SVC`
 + `JOKER_USERNAME` / `JOKER_PASSWORD` + the two timeout lines; Option B:
 `DESEC_TOKEN=…`). Then the same `docker compose … up -d` pair.
 </details>
+
+**Create the platform admin.** On first start `ignition-control` prints a
+setup code:
+
+```sh
+docker compose --project-directory . -f templates/ignition-control-compose.yml \
+  logs ignition-control | grep "IGNITION SETUP"
+```
+
+Open `https://admin.ignition.classesarecode.net/setup`, enter that code + your
+email + a password. (Reaching the URL: see Step 3.)
 
 Watch the first certificate get issued — DNS-01 can take a few minutes while
 the `_acme-challenge` `TXT` record propagates (Joker/SVC especially):
@@ -231,8 +245,9 @@ curl -I https://admin.ignition.classesarecode.net/actuator/health
 # → HTTP/2 200, no TLS warning = the real Let's Encrypt cert is being served
 ```
 
-Open **`https://admin.ignition.classesarecode.net/`**, sign in with the
-`IGN_ADMIN_TOKEN` you saved, then:
+Open **`https://admin.ignition.classesarecode.net/`** — if you haven't done
+`/setup` yet it redirects there; otherwise sign in with the email + password
+you set. Then:
 
 **Nodes → Register**
 

@@ -70,8 +70,15 @@ public class MailService {
         msg.setTo(to);
         msg.setSubject(subject);
         msg.setText(body);
-        mail.send(msg);
-        log.info("sent '{}' to {}", subject, to);
+        try {
+            mail.send(msg);
+            log.info("sent '{}' to {}", subject, to);
+        } catch (RuntimeException e) {
+            // Don't lose the link if SMTP is misconfigured — an operator can
+            // still recover it from the logs.
+            log.warn("SMTP send FAILED for '{}' to {} ({}). Link/body follows:\n{}",
+                    subject, to, e.getMessage(), body);
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

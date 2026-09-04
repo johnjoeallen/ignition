@@ -42,7 +42,6 @@ set_back() {                       # persist a generated value into CONFIG
 gen_hex()  { openssl rand -hex "${1:-32}"; }
 gen_b64()  { head -c "${1:-32}" /dev/urandom | base64; }
 
-[ -n "$(get IGN_ADMIN_TOKEN)" ]   || set_back IGN_ADMIN_TOKEN   "$(gen_hex 32)"
 [ -n "$(get IGN_SECRET_KEY)" ]    || set_back IGN_SECRET_KEY    "$(gen_b64 32)"
 [ -n "$(get POSTGRES_PASSWORD)" ] || set_back POSTGRES_PASSWORD "$(gen_hex 24)"
 
@@ -122,6 +121,11 @@ PART 1 — spitfire  (run from the repo root of your ignition clone)
   docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
   ( --project-directory . makes compose read .env / acme.env / ssh-empty from
     the repo root, not templates/ )
+
+  first run: grab the setup code and create the platform admin —
+    docker compose --project-directory . -f templates/ignition-control-compose.yml \
+      logs ignition-control | grep "IGNITION SETUP"
+    then open  https://admin.<BASE_DOMAIN>/setup
 
 PART 2 — hetzner
   hetzner-wg0.conf           -> /etc/wireguard/wg0.conf   (chmod 600)

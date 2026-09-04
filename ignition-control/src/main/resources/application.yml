@@ -30,7 +30,6 @@ management:
 
 ignition:
   base-domain: ${IGN_BASE_DOMAIN:${BASE_DOMAIN:ignition.example}}
-  admin-token: ${IGN_ADMIN_TOKEN:}
   work-dir: ${IGN_WORK_DIR:../work}
   secret-key: ${IGN_SECRET_KEY:}
   public-url: ${IGN_PUBLIC_URL:http://localhost:8790}

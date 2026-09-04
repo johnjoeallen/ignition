@@ -5,12 +5,15 @@
 #
 #   export BASE_DOMAIN=ignition.example
 #   export IGN_PUBLIC_URL=https://admin.ignition.example      # builds the links in emails
-#   export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)          # platform key — keep it
 #   export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64) # zone_secret AES key — keep it
 #   export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 #   # SMTP is required — the service will not start without it:
 #   export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
 #   docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
+#
+# First run: the service logs a one-time setup code ("IGNITION SETUP ...").
+# Open ${IGN_PUBLIC_URL}/setup, enter the code + an email + a password to
+# create the platform admin. After that, /setup is dead.
 #
 # PostgreSQL is the source of truth (nodes, zones, apps, secrets, identity).
 # Back it up with `pg_dump`; the AES key is a separate secret. The control plane
@@ -61,7 +64,6 @@ services:
         condition: service_healthy
     environment:
       BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN}
-      IGN_ADMIN_TOKEN: ${IGN_ADMIN_TOKEN:?set IGN_ADMIN_TOKEN}
       IGN_SECRET_KEY: ${IGN_SECRET_KEY:?set IGN_SECRET_KEY}
       IGN_PUBLIC_URL: ${IGN_PUBLIC_URL:?set IGN_PUBLIC_URL}
       IGN_WORK_DIR: /work

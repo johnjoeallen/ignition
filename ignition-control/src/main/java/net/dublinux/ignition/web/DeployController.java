@@ -3,8 +3,8 @@ package net.dublinux.ignition.web;
 import java.util.Map;
 
 import net.dublinux.ignition.app.AppService;
-import net.dublinux.ignition.security.IgnitionPrincipal;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -56,11 +56,13 @@ public class DeployController {
     }
 
     private static String zoneOr403() {
-        IgnitionPrincipal p = CurrentPrincipal.get();
-        if (p == null || p.kind() != IgnitionPrincipal.Kind.DEPLOY) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean deploy = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_DEPLOY"));
+        if (!deploy) {
             throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN);
         }
-        return p.slug();
+        return auth.getName();   // the zone slug (set by DeployTokenFilter)
     }
 
     private static ResponseEntity<Map<String, Object>> err(HttpStatus status, String msg) {

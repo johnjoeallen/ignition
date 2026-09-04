@@ -88,13 +88,21 @@ public class AccountService {
         });
     }
 
-    /** First-run: the platform admin. Preapproved + platform-admin flag. */
+    /**
+     * First-run: create the platform admin directly, ACTIVE, with the password
+     * set now. No email round-trip — control of the box was already proven by
+     * the bootstrap code the operator read from the logs.
+     */
     @Transactional
-    public AppUser createBootstrapAdmin(String email) {
+    public AppUser createFirstAdmin(String email, String rawPassword) {
+        if (users.count() != 0) {
+            throw new IllegalStateException("setup is already done");
+        }
+        requirePassword(rawPassword);
         String e = requireEmail(email);
-        AppUser u = users.save(new AppUser(e, Status.PENDING_VERIFICATION, true, true));
-        mail.sendActivation(e, issue(u.id(), Purpose.ACTIVATE, ACTIVATE_TTL));
-        return u;
+        AppUser u = new AppUser(e, Status.ACTIVE, true, true);
+        u.activate(passwords.encode(rawPassword));
+        return users.save(u);
     }
 
     // --- activation / reset ------------------------------------------------

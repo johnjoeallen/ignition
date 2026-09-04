@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <title>Ignition · first-run setup</title>
+  <link rel="stylesheet" href="/css/ignition.css">
+</head>
+<body>
+  <h1>Ignition · first-run setup</h1>
+  <p class="muted">This creates the first <strong>platform admin</strong>. The setup code
+    is printed in the container logs:
+    <code>docker compose … logs ignition-control | grep "IGNITION SETUP"</code></p>
+  <div class="msg err" th:if="${error}" th:text="${error}">error</div>
+  <form method="post" th:action="@{/setup}" class="stack">
+    <label>Setup code <input name="code" autocomplete="off" autofocus required></label>
+    <label>Your email <input name="email" type="email" required></label>
+    <label>Password <input name="password" type="password" autocomplete="new-password" required
+      minlength="10"></label>
+    <label>Repeat password <input name="password2" type="password" autocomplete="new-password" required></label>
+    <button>Create admin</button>
+  </form>
+</body>
+</html>

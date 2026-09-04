@@ -1,6 +1,7 @@
 package net.dublinux.ignition.web;
 
 import net.dublinux.ignition.config.IgnitionProperties;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
 
@@ -19,8 +20,8 @@ public class GlobalModelAdvice {
     }
 
     @ModelAttribute("principal")
-    public Object principal() {
-        var p = CurrentPrincipal.get();
-        return p == null ? "" : p.toString();
+    public String principal() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth == null ? "" : auth.getName();
     }
 }

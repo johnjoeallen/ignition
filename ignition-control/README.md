@@ -18,9 +18,10 @@ values are AES-GCM with `IGN_SECRET_KEY` (`SecretCipher`).
 Working now:
 
 - health at `/actuator/health`
-- token auth: platform (`ignition.admin-token`), zone / CI deploy
-  (`zone_secret` rows) → session cookie or `Authorization: Bearer`
-  *(replaced by accounts in AUTH-DESIGN steps 3–7)*
+- **email/password accounts** (AUTH-DESIGN step 4, done): form login, first-run
+  `/setup` bootstrap code, `/signup` + admin approval, `/forgot` reset. CI still
+  uses a per-zone `deploy-token` (Bearer, `zone_secret` row) on `/deploy`.
+  `IGN_ADMIN_TOKEN` and `zone-token` are gone.
 - **platform console** (`/`) — live views of nodes / zones / apps;
   **register / drain / remove a node**; **provision / move / destroy a zone**,
   **stop an app**, a **roster** page + **sweep idle zones now**
@@ -39,18 +40,21 @@ cd ignition-control
 docker run -d --name ignition-pg -e POSTGRES_DB=ignition -e POSTGRES_USER=ignition \
   -e POSTGRES_PASSWORD=ignition -p 5432:5432 postgres:16-alpine
 
-IGN_ADMIN_TOKEN=$(openssl rand -hex 32) \
 IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64) \
 IGN_SMTP_HOST=localhost IGN_SMTP_USERNAME=x IGN_SMTP_PASSWORD=x \
 IGN_SMTP_FROM='Ignition <ignition@example.com>' \
-BASE_DOMAIN=ignition.example \
+BASE_DOMAIN=ignition.example IGN_PUBLIC_URL=http://localhost:8790 \
 ./mvnw spring-boot:run
 ```
+
+First run logs `IGNITION SETUP — … enter code: …`; open
+`http://localhost:8790/setup` to create the platform admin (SMTP need not
+actually work — the activation/reset links are logged if a send fails).
 
 SMTP is **required** (the service won't start without it) — a
 [`maildev`](https://hub.docker.com/r/maildev/maildev) container works for local dev.
 
-Then `http://localhost:8790/login` with the admin token.
+Then sign in at `http://localhost:8790/login` with that email + password.
 
 ## Build
 

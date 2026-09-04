@@ -42,11 +42,16 @@ docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 #    (owns :443, all TLS/ACME), the SSO gateway, and the control plane.
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env          # DNS API creds for the ACME challenge
-export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)        # the platform key — keep it
+export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)   # zone-secret AES key — keep it
+export IGN_PUBLIC_URL=https://admin.ignition.example
+export POSTGRES_PASSWORD=$(openssl rand -hex 24)
+export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
 docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 ```
 
-Now sign into `https://admin.ignition.example/` with `IGN_ADMIN_TOKEN` and:
+First run logs a setup code (`docker compose … logs ignition-control | grep "IGNITION SETUP"`).
+Open `https://admin.ignition.example/setup`, enter it plus an email and
+password to create the platform admin. Then sign in and:
 
 3. **Nodes → Register** each host — `local`, `ssh://ops@10.0.0.2`, or
    `tcp://host:2376`, with its CPU / memory and any labels.

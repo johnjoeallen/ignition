@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8"><title>Ignition · choose a new password</title>
+  <link rel="stylesheet" href="/css/ignition.css">
+</head>
+<body>
+  <h1>Choose a new password</h1>
+  <div class="msg err" th:if="${error}" th:text="${error}">error</div>
+  <form method="post" th:action="@{/reset}" class="stack">
+    <input type="hidden" name="token" th:value="${token}">
+    <label>New password <input name="password" type="password" autocomplete="new-password" autofocus required minlength="10"></label>
+    <label>Repeat password <input name="password2" type="password" autocomplete="new-password" required></label>
+    <button>Change password</button>
+  </form>
+</body>
+</html>

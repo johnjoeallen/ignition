@@ -46,7 +46,7 @@ Read **[CLAUDE.md](CLAUDE.md)** for the design decisions before changing anythin
 
 - **Platform admin** — registers nodes, provisions / moves / destroys zones,
   runs the roster, sees every zone and app. Works entirely in the **platform
-  console** at `admin.ignition.example` (bearer = `IGN_ADMIN_TOKEN`).
+  console** at `admin.ignition.example` (email + password; first run is `/setup`).
 - **Zone admin** — one per zone (the team lead). Adds users, creates repos,
   cuts releases (automated semver bumps), manages the zone's apps, restarts the
   runner — all from the **zone console** at `admin.<slug>.ignition.example`, for
@@ -88,13 +88,17 @@ docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 # 2. The controller — once, the only public machine. Runs the edge (owns :443,
 #    all TLS/ACME), the SSO gateway, and the control plane.
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
-printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env      # DNS API creds for the ACME challenge
-export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)   # the platform key — keep it
+printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env       # DNS API creds for the ACME challenge
+export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)   # zone-secret AES key — keep it
+export IGN_PUBLIC_URL=https://admin.ignition.example
+export POSTGRES_PASSWORD=$(openssl rand -hex 24)
+export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
 docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 ```
 
-Then open **`https://admin.ignition.example/`**, sign in with `IGN_ADMIN_TOKEN`,
-and from the console:
+First run logs a one-time setup code (`IGNITION SETUP …`). Open
+**`https://admin.ignition.example/setup`**, enter it plus an email and password
+to create the platform admin. Then from the console:
 
 - **Nodes → Register** — add each host (`local`, `ssh://ops@10.0.0.2`, or
   `tcp://host:2376`) with its CPU / memory.

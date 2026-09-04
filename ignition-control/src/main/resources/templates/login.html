@@ -7,15 +7,19 @@
 </head>
 <body>
   <h1>Ignition · sign in</h1>
-  <div class="msg err" th:if="${param.error != null}">that token isn't recognised</div>
+  <div class="msg err" th:if="${param.error != null}">email or password not recognised</div>
   <div class="msg" th:if="${param.out != null}">signed out</div>
+  <div class="msg" th:if="${param.created != null}">admin account created — sign in</div>
+  <div class="msg" th:if="${param.activated != null}">account activated — sign in</div>
+  <div class="msg" th:if="${param.pending != null}">password set — a platform admin must approve your account before you can sign in</div>
+  <div class="msg" th:if="${param.reset != null}">password changed — sign in</div>
   <form method="post" th:action="@{/login}" class="stack">
-    <label>Token
-      <input name="token" type="password" size="44" autofocus>
-    </label>
+    <label>Email <input name="email" type="email" autocomplete="username" autofocus required></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
     <button>Sign in</button>
   </form>
-  <p class="muted">Platform admins use <code>IGN_ADMIN_TOKEN</code>; zone admins use their
-    zone token (<code>state/zones/&lt;slug&gt;/zone-token</code>).</p>
+  <p class="muted">
+    <a href="/signup">Request an account</a> · <a href="/forgot">Forgot password</a>
+  </p>
 </body>
 </html>
