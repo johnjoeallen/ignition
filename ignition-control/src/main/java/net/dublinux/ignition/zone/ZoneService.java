@@ -190,6 +190,18 @@ public class ZoneService {
                         u.path("is_admin").asBoolean(false)));
             }
         }
+        // self-heal: users added before org support existed (or if a PUT ever
+        // failed) never got put in the Owners team. Re-assert membership for
+        // everyone on every page load — PUT is idempotent, so this is a no-op
+        // once it's caught up.
+        int owners = ensureOrg(slug);
+        if (owners > 0) {
+            for (ForgejoUser u : out) {
+                if (!"zoneadmin".equals(u.login())) {
+                    forgejo.put(slug, "/teams/" + owners + "/members/" + u.login(), Map.of());
+                }
+            }
+        }
         return out;
     }
 
