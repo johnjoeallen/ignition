@@ -241,20 +241,7 @@ public class ZoneService {
                 break; // free to use
             }
             if (email.equalsIgnoreCase(existing.body().path("email").asText(""))) {
-                ensureOrgMembership(slug, username);
-                zones.putSecret(slug, emailKey, username);
-                // The account predates us knowing its password (this ignition-control
-                // never set one it kept, or the row is stale — including a row this
-                // user's key can no longer decrypt, e.g. written before per-user
-                // encryption existed) — Forgejo won't hand back an existing password
-                // either way, so the only way to have one on file to show is to set a
-                // fresh one now. userSecret(), not hasSecret(): a row can exist and
-                // still not be readable with this user's key.
-                if (zones.userSecret(slug, "git_pw_" + username, userId).isBlank()) {
-                    resetGitPassword(slug, username, userId);
-                }
-                ensurePat(slug, username, userId);
-                return username; // already provisioned, from an earlier call
+                return adoptExistingAccount(slug, emailKey, username, userId);
             }
             username = base + suffix;
         }
@@ -263,6 +250,23 @@ public class ZoneService {
                 "username", username, "email", email, "password", password,
                 "must_change_password", false));
         if (!res.ok()) {
+            // The loop above only probed candidate *usernames* — but Forgejo
+            // enforces *email* uniqueness account-wide, so it can reject a
+            // username that really was free, because the same person already
+            // has an account under some other login entirely (e.g. from
+            // before this zone existed, or before the sanitizer picked this
+            // particular username). Recognize that specific rejection and go
+            // find the real account instead of just failing outright and
+            // leaving this person with team membership but no working login.
+            if (res.status() == 422 && res.message() != null && res.message().contains("e-mail already in use")) {
+                String realUsername = findByEmail(slug, email);
+                if (realUsername != null) {
+                    log.warn("zone {}: {} already has a Forgejo account as {} (found by email — the {} we "
+                            + "tried was free but the address wasn't) — adopting it instead of failing",
+                            slug, email, realUsername, username);
+                    return adoptExistingAccount(slug, emailKey, realUsername, userId);
+                }
+            }
             log.warn("zone {}: could not create Forgejo account {} for {} ({}): {}",
                     slug, username, email, res.status(), res.message());
             return username;
@@ -273,6 +277,39 @@ public class ZoneService {
         log.info("zone {}: git password generated for {} ({}): {}", slug, username, email, password);
         ensurePat(slug, username, userId);
         return username;
+    }
+
+    /** An account that already exists (found either by username or by email) — assert membership and fresh, readable creds. */
+    private String adoptExistingAccount(String slug, String emailKey, String username, java.util.UUID userId) {
+        ensureOrgMembership(slug, username);
+        zones.putSecret(slug, emailKey, username);
+        // The account predates us knowing its password (this ignition-control
+        // never set one it kept, or the row is stale — including a row this
+        // user's key can no longer decrypt, e.g. written before per-user
+        // encryption existed) — Forgejo won't hand back an existing password
+        // either way, so the only way to have one on file to show is to set a
+        // fresh one now. userSecret(), not hasSecret(): a row can exist and
+        // still not be readable with this user's key.
+        if (zones.userSecret(slug, "git_pw_" + username, userId).isBlank()) {
+            resetGitPassword(slug, username, userId);
+        }
+        ensurePat(slug, username, userId);
+        return username;
+    }
+
+    /** Forgejo's admin user search, filtered to an exact email match — for the "email already in use" fallback above. */
+    private String findByEmail(String slug, String email) {
+        var res = forgejo.get(slug, "/admin/users?limit=50&q="
+                + java.net.URLEncoder.encode(email, StandardCharsets.UTF_8));
+        if (!res.ok() || res.body() == null || !res.body().isArray()) {
+            return null;
+        }
+        for (JsonNode u : res.body()) {
+            if (email.equalsIgnoreCase(u.path("email").asText(""))) {
+                return u.path("login").asText(null);
+            }
+        }
+        return null;
     }
 
     /**
@@ -289,12 +326,14 @@ public class ZoneService {
             return;
         }
         if (zones.hasSecret(slug, "git_pat_" + username)) {
-            forgejo.delete(slug, "/users/" + username + "/tokens/ignition?sudo=" + username);
+            forgejo.deleteBasicAuth(slug, "/users/" + username + "/tokens/ignition?sudo=" + username);
         }
         // sudo: the bot is a Forgejo site admin (see ProvisioningService), so this
-        // executes as `username` rather than as the bot itself.
+        // executes as `username` rather than as the bot itself. Basic auth, not the
+        // bot's usual token — Forgejo refuses token auth on this endpoint outright
+        // (see ForgejoClient#postBasicAuth).
         log.info("zone {}: minting PAT for {} (scopes {})", slug, username, PAT_SCOPES);
-        var res = forgejo.post(slug, "/users/" + username + "/tokens?sudo=" + username,
+        var res = forgejo.postBasicAuth(slug, "/users/" + username + "/tokens?sudo=" + username,
                 Map.of("name", "ignition", "scopes", PAT_SCOPES));
         if (!res.ok()) {
             log.warn("zone {}: could not mint a PAT for {} ({}): {}", slug, username, res.status(), res.message());

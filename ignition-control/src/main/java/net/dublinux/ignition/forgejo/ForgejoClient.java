@@ -4,7 +4,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -76,30 +78,69 @@ public class ForgejoClient {
         return send(slug, "DELETE", path, null);
     }
 
+    /**
+     * Same as {@link #post}, but authenticated as HTTP Basic (the bot's own
+     * username:password) instead of its usual bearer token. Forgejo/Gitea
+     * deliberately refuses token auth on the personal-access-token endpoints
+     * — create and delete both — since a leaked token minting or revoking
+     * more tokens would defeat the point of being able to revoke it. So a
+     * {@code sudo=<username>} call to mint or delete *someone else's* token
+     * has to go in as Basic even though every other admin call here uses the
+     * token. Confirmed against a live instance: token auth on these two gets
+     * a flat {@code 401 auth method not allowed}.
+     */
+    public Response postBasicAuth(String slug, String path, Map<String, ?> body) {
+        return sendBasicAuth(slug, "POST", path, body);
+    }
+
+    public Response deleteBasicAuth(String slug, String path) {
+        return sendBasicAuth(slug, "DELETE", path, null);
+    }
+
     private Response send(String slug, String method, String path, Map<String, ?> body) {
+        String token = zones.secret(slug, "forgejo_token");
+        if (token.isBlank()) {
+            log.warn("[{}] {} {} — no forgejo_token secret yet (zone not fully provisioned?)", slug, method, path);
+            return new Response(503, error("zone has no Forgejo admin token yet"));
+        }
+        return send(slug, method, path, body, "token " + token, "token …" + tail(token));
+    }
+
+    private Response sendBasicAuth(String slug, String method, String path, Map<String, ?> body) {
+        String user = zones.secret(slug, "forgejo_username");
+        String pass = zones.secret(slug, "forgejo_password");
+        if (user.isBlank() || pass.isBlank()) {
+            log.warn("[{}] {}(basic) {} — no forgejo_username/forgejo_password secret yet", slug, method, path);
+            return new Response(503, error("zone has no Forgejo admin credentials yet"));
+        }
+        String basic = Base64.getEncoder().encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
+        return send(slug, method + "(basic)", path, body, "Basic " + basic, "as " + user);
+    }
+
+    /**
+     * @param authDescription logged in place of the credential itself — either
+     *                        {@code "token …<last 4>"} or {@code "as <bot username>"}.
+     */
+    private Response send(String slug, String method, String path, Map<String, ?> body,
+                          String authorizationHeader, String authDescription) {
         // Reach the zone's Forgejo directly over the shared docker network — the
         // public git.<slug>.<domain> name isn't resolvable from in here, and this
         // avoids a hairpin through the edge. Matches container_name in
         // zone-compose.yml.tmpl.
         String base = "http://zone-" + slug + "-forgejo:3000";
         String url = base + "/api/v1" + path;
-        String token = zones.secret(slug, "forgejo_token");
-        if (token.isBlank()) {
-            log.warn("[{}] {} {} — no forgejo_token secret yet (zone not fully provisioned?)", slug, method, path);
-            return new Response(503, error("zone has no Forgejo admin token yet"));
-        }
-        log.info("[{}] -> {} {} (token …{}, body keys {})", slug, method, url,
-                tail(token), body == null ? "none" : body.keySet());
+        log.info("[{}] -> {} {} ({}, body keys {})", slug, method, url,
+                authDescription, body == null ? "none" : body.keySet());
         try {
             HttpRequest.BodyPublisher pub = body == null
                     ? HttpRequest.BodyPublishers.noBody()
                     : HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body));
             HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(15))
-                    .header("Authorization", "token " + token)
+                    .header("Authorization", authorizationHeader)
                     .header("Content-Type", "application/json")
                     .header("Accept", "application/json")
-                    .method(method, pub)
+                    .method(method.replace("(basic)", ""), pub)
                     .build();
             HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
             String raw = res.body();
