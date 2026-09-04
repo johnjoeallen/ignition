@@ -68,6 +68,25 @@ moves to **`127.0.0.1:443`** (same port, loopback only) — so its
 `stream` module forwards each connection by SNI: demo names over WireGuard to
 `spitfire`, everything else to `127.0.0.1:443`.
 
+### With many existing Apache SSL sites
+
+This is the case it's built for. `ssl_preread` **does not decrypt** — it reads
+the SNI and hands the raw TLS stream on. So for every one of your existing
+sites, **Apache still terminates TLS itself**: its own per-vhost certificate
+selection, HTTP/2, OCSP stapling, client-cert config — all unchanged. nginx has
+a single `default` rule that covers *all* of them, however many; you never list
+a site in nginx.
+
+Two things to know:
+
+- **Client IP.** Apache will log `127.0.0.1` for HTTPS hits unless you turn on
+  PROXY protocol (Step 4 note). Matters if you use `Require ip`, mod_security,
+  fail2ban on the Apache log, or per-IP rate limits.
+- **Cert renewal keeps working.** HTTP-01 (webroot / `--webroot`, `--standalone`
+  on `:80`) is untouched — Apache keeps `:80`. TLS-ALPN-01 (`certbot --apache`)
+  still works too: the validation request carries the site's SNI, so nginx
+  routes it to Apache, which answers the ALPN challenge. DNS-01, obviously fine.
+
 ---
 
 ## What you'll fill in
@@ -198,8 +217,8 @@ router at the **top level** of `/etc/nginx/nginx.conf` (a sibling of
 ```nginx
 stream {
     map $ssl_preread_server_name $demo_backend {
-        ~\.classesarecode\.net$   10.44.0.11:443;   # demo → spitfire over WireGuard
-        default                              127.0.0.1:443;    # everything else → Apache
+        ~\.classesarecode\.net$   10.44.0.11:443;   # demo  → spitfire over WireGuard
+        default                   127.0.0.1:443;     # all your Apache sites → Apache
     }
 
     server {
@@ -212,6 +231,9 @@ stream {
 }
 ```
 
+The `default` line is the whole story for your existing sites — one rule, any
+number of vhosts, nothing to enumerate.
+
 Make sure nothing in `http {}` also binds `:443` (Debian's default site only
 binds `:80`; if you enabled an HTTPS default server, disable it —
 `rm /etc/nginx/sites-enabled/default` or edit it).
@@ -219,6 +241,38 @@ binds `:80`; if you enabled an HTTPS default server, disable it —
 ```sh
 nginx -t && systemctl enable --now nginx
 ```
+
+### Keeping the real client IP for Apache (optional)
+
+Without this, Apache logs every HTTPS hit as `127.0.0.1`. To pass the real
+address, add `proxy_protocol` to the stream `server` and teach Apache to read
+it:
+
+```nginx
+    server {
+        listen      <PUBLIC_IP>:443;
+        proxy_pass  $demo_backend;
+        ssl_preread on;
+        proxy_protocol on;                       # prepend the PROXY header
+    }
+```
+
+`hetzner` Apache (needs 2.4.31+): enable `remoteip` and turn on PROXY-protocol
+parsing globally (so it covers every `:443` vhost), trusting only the loopback:
+
+```sh
+a2enmod remoteip
+```
+```apache
+# /etc/apache2/conf-available/proxy-protocol.conf  (a2enconf it, then reload)
+RemoteIPProxyProtocol On
+```
+
+Now every connection to `127.0.0.1:443` must carry the PROXY header — which
+nginx always sends. A direct local test needs `curl --haproxy-protocol`.
+
+Skip it if your sites don't care about client IPs. It has no effect on the demo
+path — `spitfire` always sees the tunnel address either way.
 
 Verify from a machine **off your LAN**:
 
