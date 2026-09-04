@@ -189,7 +189,22 @@ public class ZoneService {
     // no separate "add a Forgejo user" step or password to hand out. ---
 
     private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
-    private static final List<String> PAT_SCOPES = List.of("write:repository", "write:user");
+    /**
+     * Every non-admin scope Forgejo has — a member's PAT should be able to do
+     * anything a normal user can do through the API, the same as they can
+     * through the web UI with their password. In particular {@code
+     * write:package}: the container registry (git.<slug>...) authenticates
+     * with a token exactly like this one, so this is what lets a member's
+     * own PAT stand in for the manually-created {@code FORGEJO_TOKEN} repo
+     * secret the seeded deploy.yml already accepts (optional there — it
+     * falls back to the per-run Actions token — but a member using their own
+     * PAT there, or from their own machine, needs the scope to push).
+     * {@code write:X} implies read:X too. Deliberately excludes the one
+     * admin-only scope (site-wide admin) — this is a normal user's token.
+     */
+    private static final List<String> PAT_SCOPES = List.of(
+            "write:activitypub", "write:issue", "write:misc", "write:notification",
+            "write:organization", "write:package", "write:repository", "write:user");
 
     /**
      * The Forgejo login a member's email actually resolved to. Not just
