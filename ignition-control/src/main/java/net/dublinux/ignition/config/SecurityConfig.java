@@ -33,6 +33,13 @@ public class SecurityConfig {
                                 "/signup", "/activate", "/forgot", "/reset",
                                 "/css/**", "/js/**", "/vendor/**", "/img/**", "/favicon.ico").permitAll()
                         .requestMatchers(HttpMethod.POST, "/deploy", "/undeploy").hasRole("DEPLOY")
+                        // The landing page every login redirects to — has to be reachable by
+                        // anyone signed in (not just platform admins), or a member with no
+                        // platform-admin flag would authenticate fine and then immediately hit
+                        // this filter chain's catch-all as a 403, which looks exactly like a
+                        // failed login. PlatformConsoleController itself branches the content by
+                        // role (admin Teams list vs. "your teams" for everyone else).
+                        .requestMatchers("/").authenticated()
                         // Any team member reaches /z (their own zone, checked against ?z=<slug> —
                         // see ZoneAuthorizationManager); a platform admin reaches everything else.
                         .requestMatchers("/z/**").access(zoneAuthz)

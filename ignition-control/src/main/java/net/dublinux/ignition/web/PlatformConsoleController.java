@@ -5,6 +5,7 @@ import java.util.Map;
 
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.auth.CurrentUser;
+import net.dublinux.ignition.auth.ZoneAccessService;
 import net.dublinux.ignition.node.Node;
 import net.dublinux.ignition.node.NodeService;
 import net.dublinux.ignition.provisioning.ProvisioningService;
@@ -32,14 +33,17 @@ public class PlatformConsoleController {
     private final AppService apps;
     private final ProvisioningService provisioning;
     private final CurrentUser currentUser;
+    private final ZoneAccessService access;
 
     public PlatformConsoleController(NodeService nodes, ZoneService zones, AppService apps,
-                                     ProvisioningService provisioning, CurrentUser currentUser) {
+                                     ProvisioningService provisioning, CurrentUser currentUser,
+                                     ZoneAccessService access) {
         this.nodes = nodes;
         this.zones = zones;
         this.apps = apps;
         this.provisioning = provisioning;
         this.currentUser = currentUser;
+        this.access = access;
     }
 
     @GetMapping("/nodes")
@@ -52,9 +56,25 @@ public class PlatformConsoleController {
         return "nodes";
     }
 
-    /** Teams is the default landing page. */
+    /**
+     * The landing page every login redirects to — has to make sense for
+     * whoever's signed in, not just a platform admin. A platform admin gets
+     * the full Teams management page; anyone else (this is the only page
+     * they can reach that isn't a specific team's own console) gets a plain
+     * list of the teams they're actually on, since they have no reason to
+     * see or manage every team on the platform.
+     */
     @GetMapping("/")
-    public String teams(Model model) {
+    public String home(Model model) {
+        if (currentUser.isPlatformAdmin()) {
+            return teamsAdmin(model);
+        }
+        var userId = currentUser.get().map(u -> u.id()).orElse(null);
+        model.addAttribute("myZones", userId == null ? List.of() : access.zonesFor(userId));
+        return "my-teams";
+    }
+
+    private String teamsAdmin(Model model) {
         List<NodeRow> nodeRows = nodes.list().stream().map(n -> {
             var a = nodes.allocation(n.name());
             return new NodeRow(n, a.cpus(), a.memGb(), a.zones());

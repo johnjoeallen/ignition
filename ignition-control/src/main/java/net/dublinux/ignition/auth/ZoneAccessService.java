@@ -33,6 +33,16 @@ public class ZoneAccessService {
         return users.findById(userId).map(AppUser::email);
     }
 
+    /** The zones a user belongs to, and their role in each — for a non-platform-admin's landing page. */
+    public record MyZone(String slug, ZoneMember.Role role) {}
+
+    public List<MyZone> zonesFor(UUID userId) {
+        return members.findByUserId(userId).stream()
+                .map(m -> new MyZone(m.zoneSlug(), m.role()))
+                .sorted(Comparator.comparing(MyZone::slug))
+                .toList();
+    }
+
     public List<MemberView> membersOf(String slug) {
         return members.findByZoneSlug(slug).stream()
                 .map(m -> users.findById(m.userId())
