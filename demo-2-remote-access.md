@@ -201,14 +201,27 @@ Keep a second SSH session open. In `hetzner`'s Apache config
 Listen 127.0.0.1:443
 ```
 
+Some Apache builds wrap the directive in `<IfModule ssl_module>`/`<IfModule
+mod_gnutls.c>` blocks instead of a bare `Listen 443` — change whichever one is
+actually active (safe to edit both if unsure which module is loaded).
+
 Leave `Listen 80` alone unless you also want nginx to handle `:80` (see the note
-at the end). Reload and confirm your existing sites still serve — bypassing
-nginx, straight to Apache:
+at the end). Confirm your existing sites still serve — bypassing nginx, straight
+to Apache:
 
 ```sh
-apachectl configtest && systemctl reload apache2
+apachectl configtest && systemctl restart apache2
 curl -kI --resolve your-existing-site.com:443:127.0.0.1 https://your-existing-site.com/
 ```
+
+**Use `restart`, not `reload`/`graceful`.** A graceful reload doesn't
+force-close the old listening socket before rebinding to the new address —
+seen live: the new process failed to bind `127.0.0.1:443` (`Address already in
+use`) while the old one was still half-alive, systemd `SIGKILL`'d it, and
+Apache ended up **fully down** until a plain `restart` (which tears down every
+socket first) recovered it. If `systemctl status apache2` ever shows
+`Active: failed` after this step, that's what happened — `systemctl restart
+apache2` again fixes it.
 
 At this point your sites are only reachable from `hetzner` itself — nginx
 (next step) puts them back on the internet.
@@ -221,15 +234,33 @@ At this point your sites are only reachable from `hetzner` itself — nginx
 apt install nginx
 ```
 
+**Debian's `nginx` package doesn't build in the `stream` module** — it's a
+separate loadable module. `nginx -t` fails with `unknown directive "stream"`
+until you also install it:
+
+```sh
+apt install libnginx-mod-stream
+```
+
+That drops a `load_module` line into `/etc/nginx/modules-enabled/`, which
+Debian's stock `nginx.conf` already `include`s near the top (before
+`events {}`) — nothing else to wire up for that part.
+
 Debian's `nginx.conf` only wires up the `http {}` block, so add the `stream {}`
-router at the **top level** of `/etc/nginx/nginx.conf` (a sibling of
-`http { … }`, not inside it):
+router as its own file, `/etc/nginx/stream-ignition.conf`:
 
 ```nginx
 stream {
+    # the map needs BOTH a line for the bare apex and a regex for every
+    # subdomain — `~\.domain$` requires a literal '.' before the match, which
+    # is true for git.<slug>.domain but NOT for the apex itself (nothing comes
+    # before it), so the apex silently falls through to `default` without
+    # this line. Confirmed live: git.<slug> hosts routed fine, the apex 503'd,
+    # until this line was added.
     map $ssl_preread_server_name $demo_backend {
-        ~\.ignition\.classesarecode\.net$   10.44.0.11:443;   # demo → spitfire over WireGuard
-        default                             127.0.0.1:443;    # all your Apache sites → Apache
+        ignition.classesarecode.net          10.44.0.11:443;   # the bare apex
+        ~\.ignition\.classesarecode\.net$    10.44.0.11:443;   # every subdomain, over WireGuard
+        default                              127.0.0.1:443;    # all your Apache sites → Apache
     }
 
     server {
@@ -242,12 +273,22 @@ stream {
 }
 ```
 
+Then include it at the top level of `/etc/nginx/nginx.conf` (a sibling of
+`http { … }`, not inside it):
+
+```nginx
+include /etc/nginx/stream-ignition.conf;
+```
+
 The `default` line is the whole story for your existing sites — one rule, any
 number of vhosts, nothing to enumerate.
 
-Make sure nothing in `http {}` also binds `:443` (Debian's default site only
-binds `:80`; if you enabled an HTTPS default server, disable it —
-`rm /etc/nginx/sites-enabled/default` or edit it).
+**Disable nginx's own default `http{}` site** — `rm
+/etc/nginx/sites-enabled/default` (or edit it). This isn't optional even if it
+only serves plain HTTP: Apache still legitimately owns `:80` in this setup, so
+nginx's stock default site trying to bind `0.0.0.0:80`/`[::]:80` too fails
+nginx's startup outright (`bind() ... Address already in use`) — confirmed
+live — regardless of whether it also has an HTTPS server block.
 
 ```sh
 nginx -t && systemctl enable --now nginx
@@ -441,7 +482,9 @@ server {
     }
 
     # demo names → force https
-    if ($host ~ \.ignition\.classesarecode\.net$) { return 301 https://$host$request_uri; }
+    # ~\.domain$ alone misses the bare apex (nothing before it) — see the same
+    # gotcha in Step 4's stream map.
+    if ($host ~ (^|\.)ignition\.classesarecode\.net$) { return 301 https://$host$request_uri; }
 
     # everything else → Apache
     location / {
