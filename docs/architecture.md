@@ -176,7 +176,7 @@ sequenceDiagram
     CI->>DinD: docker build
     CI->>Reg: docker push git.<slug>.<domain>/<repo>:<sha>
     CI->>Ctl: POST /deploy  { app, image, port }  + Bearer <deploy token>
-    Ctl->>Ctl: token → zone; image from that zone's registry
+    Ctl->>Ctl: token → zone, image from that zone's registry
     Ctl->>Node: docker compose -p app-<slug>-<name> up  (on traefik-public)
     Traefik-->>CI: https://<app>.apps.<slug>.<domain>/ serves the new build
 ```
