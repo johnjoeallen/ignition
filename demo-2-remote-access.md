@@ -123,7 +123,8 @@ challenges flowing to Apache (see the note at the end).
 
 ## Step 1 — the DNS wildcard record
 
-At Joker (the DNS host for the parent zone `classesarecode.net`):
+Wherever `ignition.classesarecode.net` is served — Joker if you used part 1
+Option A, deSEC/Cloudflare if Option B:
 
 ```
 *.ignition.classesarecode.net.   A   <PUBLIC_IP>

@@ -31,31 +31,60 @@ The apex used throughout is **`ignition.classesarecode.net`**.
 
 Read once; the steps refer back to this.
 
-### The DNS API credential (and why that's all you need here)
+### The DNS-01 credential (and why that's all you need here)
 
 "Let's Encrypt" issues the free TLS certificates that give a browser its
 padlock. To prove you control `ignition.classesarecode.net`, it asks for a
 temporary `TXT` record at `_acme-challenge.ignition.classesarecode.net`. Traefik
-creates and removes that record automatically **if you give it an API credential
-for the parent zone's DNS host** — here, `classesarecode.net` at Joker.
+(via its built-in ACME client) creates and deletes that record automatically
+**if you give it a credential for wherever that name's DNS is served**.
 
-`classesarecode.net` uses **Joker.com**'s nameservers (`x/y/z.ns.joker.com`), so
-the Traefik provider is **`joker`**, driving Joker's DMAPI (it operates on the
-registered domain and can set records for any subdomain):
-
-- **`ACME_DNS_PROVIDER=joker`**
-- **`acme.env`** — one of:
-  - `JOKER_API_KEY=<key>` — a dedicated key from the Joker account
-    (*Profile → DMAPI / API keys*; DMAPI access may need enabling first), **or**
-  - `JOKER_USERNAME=<login>` + `JOKER_PASSWORD=<password>` — your Joker web login.
-- Joker's DMAPI is slow to publish, so also set
-  `JOKER_PROPAGATION_TIMEOUT=1200` and `JOKER_POLLING_INTERVAL=30`.
-
-This challenge type is **DNS-01**. Its key property: the Certificate Authority
+This is the **DNS-01** challenge. Its key property: the Certificate Authority
 only ever *reads* DNS — it never connects back to your server. So `spitfire`,
-behind NAT with nothing open, still gets real certificates. And because only a
-`TXT` record is involved, **you don't need any `A` record yet** — part 2 adds
-the public `A` record. Part 1 needs nothing from DNS but the Joker credential.
+behind NAT with nothing open, still gets real certificates. Only a `TXT` record
+is touched, so **you don't need any `A` record yet** — part 2 adds that. Part 1
+needs nothing but the DNS credential below.
+
+`classesarecode.net` is registered at **Joker.com** on Joker's nameservers
+(`x/y/z.ns.joker.com`). Joker's full API (DMAPI) is **reseller-only**, so pick
+one of:
+
+**Option A — Joker "Dynamic DNS" (`SVC` mode).** Regular Joker accounts get a
+per-domain Dynamic-DNS credential that also covers ACME `TXT` records. In
+Joker's DNS settings for `classesarecode.net`, enable **Dynamic DNS** and note
+the generated username / password. Then `acme.env`:
+
+```sh
+ACME_DNS_PROVIDER=joker
+JOKER_API_MODE=SVC
+JOKER_USERNAME=<dyndns username>
+JOKER_PASSWORD=<dyndns password>
+JOKER_PROPAGATION_TIMEOUT=1200
+JOKER_POLLING_INTERVAL=30
+```
+
+Watch the first cert attempt — if Joker's SVC endpoint won't create a *nested*
+`_acme-challenge.ignition.…` label, use Option B.
+
+**Option B — delegate the demo subdomain (robust).** `ignition.classesarecode.net`
+is dedicated, so hand *just* its DNS to a provider with a proper free API and
+never touch Joker for the demo again:
+
+1. Create the zone `ignition.classesarecode.net` at **[deSEC.io](https://desec.io)**
+   (free, DNS-only, first-class Traefik support) or Cloudflare; get an API token.
+2. At Joker, add `NS` records delegating the subdomain:
+   ```
+   ignition.classesarecode.net.  NS  ns1.desec.io.
+   ignition.classesarecode.net.  NS  ns2.desec.org.
+   ```
+3. `acme.env`:
+   ```sh
+   ACME_DNS_PROVIDER=desec        # or: cloudflare
+   DESEC_TOKEN=<api token>        # or: CF_DNS_API_TOKEN=<scoped token>
+   ```
+
+The apex `classesarecode.net` and all your other Joker records stay exactly as
+they are.
 
 ### The edge (Traefik)
 
@@ -98,19 +127,19 @@ for anything real.
 | placeholder | what it is | example |
 |---|---|---|
 | `<SPITFIRE_LAN_IP>` | `spitfire`'s address on your LAN | `192.168.1.20` |
-| `<JOKER_KEY>` | Joker.com DMAPI key (or use `JOKER_USERNAME`/`JOKER_PASSWORD`) | `abcd1234…` |
+| DNS-01 credential | Joker Dynamic-DNS user/pass (Option A) *or* a deSEC/Cloudflare token (Option B) | see above |
 | `<ACME_EMAIL>` | your email, for the Let's Encrypt account | `you@classesarecode.net` |
 | `<IGN_ADMIN_TOKEN>` | platform admin token you generate | `openssl rand -hex 32` |
 
 ---
 
-## Step 1 — Joker API credential
+## Step 1 — the DNS-01 credential
 
-In the **Joker.com** account: enable DMAPI access if it isn't already, and
-create an API key (*Profile → DMAPI*). That key is `<JOKER_KEY>`. (Or skip the
-key and use your Joker login as `JOKER_USERNAME` / `JOKER_PASSWORD`.)
+Set up **Option A** (Joker Dynamic DNS) or **Option B** (delegate to
+deSEC/Cloudflare) from ["The DNS-01 credential"](#the-dns-01-credential-and-why-thats-all-you-need-here)
+above. You'll paste the result into `acme.env` in the next step.
 
-Nothing else in DNS is needed for part 1.
+Nothing else in DNS is needed for part 1 — no `A` record yet.
 
 ---
 
@@ -128,12 +157,21 @@ mkdir -p ssh-empty                       # the node is 'local'; no remote-node S
 # --- core services: the edge Traefik + Watchtower ---
 export BASE_DOMAIN=ignition.classesarecode.net
 export ACME_EMAIL=<ACME_EMAIL>
-export ACME_DNS_PROVIDER=joker
 
+# acme.env — one of the two from Step 1:
+#
+#   Option A (Joker Dynamic DNS)          Option B (deSEC)
+#   ---------------------------           ----------------
+#   ACME_DNS_PROVIDER=joker               ACME_DNS_PROVIDER=desec
+#   JOKER_API_MODE=SVC                    DESEC_TOKEN=<token>
+#   JOKER_USERNAME=<dyndns user>
+#   JOKER_PASSWORD=<dyndns pass>
+#   JOKER_PROPAGATION_TIMEOUT=1200
+#   JOKER_POLLING_INTERVAL=30
+#
+export ACME_DNS_PROVIDER=<from your chosen option>
 cat > acme.env <<'ENV'
-JOKER_API_KEY=<JOKER_KEY>
-JOKER_PROPAGATION_TIMEOUT=1200
-JOKER_POLLING_INTERVAL=30
+<paste the provider credential lines here>
 ENV
 chmod 600 acme.env
 
@@ -146,16 +184,17 @@ echo "SAVE THIS -> $IGN_ADMIN_TOKEN"
 docker compose -f templates/ignition-control-compose.yml up -d
 ```
 
-Watch the first certificate get issued (with Joker's DMAPI this can take
-several minutes while the `_acme-challenge` `TXT` record propagates through
-`*.ns.joker.com`):
+Watch the first certificate get issued — DNS-01 can take a few minutes while
+the `_acme-challenge` `TXT` record propagates (Joker/SVC especially):
 
 ```sh
 docker compose -f templates/traefik-core-compose.yml logs -f traefik | grep -i acme
 ```
 
 You want a line about a certificate obtained for `ignition.classesarecode.net` /
-`*.ignition.classesarecode.net`.
+`*.ignition.classesarecode.net`. If it errors on *creating* the challenge
+record, the provider credential is the problem — with Option A, that's the
+signal to switch to Option B.
 
 ---
 
