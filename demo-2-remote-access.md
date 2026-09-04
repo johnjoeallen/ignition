@@ -109,10 +109,15 @@ Two things to know:
 - One inbound `udp/51820` firewall rule (WireGuard), *only if* the host firewall
   drops input by default.
 
-**Not touched:** every Apache vhost file, all mail ports (`25` `110` `143` `465`
-`587` `993` `995`), SSH, and Apache's own certificates. If you don't need
-`http://` for the demo (all Ignition URLs are `https`, and cert issuance is
-DNS-01), Apache keeps `:80` untouched too.
+**Not touched:** every Apache vhost file, `:80`, all mail ports (`25` `110`
+`143` `465` `587` `993` `995`), SSH, and Apache's own certificates.
+
+**`:80` stays entirely with Apache** — nginx only takes `:443`. So **certbot
+HTTP-01 renewals keep working exactly as now**. The demo doesn't need `:80`
+(every Ignition URL is `https`; `spitfire`'s certs come from DNS-01), it just
+won't answer plain `http://` for its own names — fine for a demo. Only touch
+`:80` if you deliberately want that redirect, and then you *must* keep ACME
+challenges flowing to Apache (see the note at the end).
 
 ---
 
@@ -408,13 +413,39 @@ certificates, same zones.
 
 ## Handling `http://` too (optional)
 
-DNS-01 needs no `:80`, and every Ignition URL is `https`, so the minimal setup
-above leaves Apache on `:80` and simply doesn't answer `http://` for demo names.
-To redirect them, give nginx `:80` as well: `Listen 127.0.0.1:80` in
-`ports.conf`, then an `http {}` server on `<PUBLIC_IP>:80` that
-`return 301 https://$host$request_uri` for `~\.classesarecode\.net$`
-and `proxy_pass http://127.0.0.1:80` (with `X-Forwarded-For`) for everything
-else.
+The minimal setup leaves Apache on `:80` and doesn't answer `http://` for demo
+names — which is fine (Ignition is https-only, `spitfire` uses DNS-01).
+
+If you want the redirect, nginx has to take `:80` — and then **certbot HTTP-01
+for your Apache sites would break** unless you keep passing the challenge
+through. Move Apache with `Listen 127.0.0.1:80`, then in nginx `http {}` on
+`<PUBLIC_IP>:80`:
+
+```nginx
+server {
+    listen <PUBLIC_IP>:80;
+    listen [::]:80;
+
+    # let ACME HTTP-01 for the Apache sites through, untouched
+    location ^~ /.well-known/acme-challenge/ {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+    }
+
+    # demo names → force https
+    if ($host ~ \.classesarecode\.net$) { return 301 https://$host$request_uri; }
+
+    # everything else → Apache
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Simpler if you can: switch your Apache certs to DNS-01 or `--webroot` behind
+this proxy, or just don't bother with the `:80` redirect.
 
 ---
 
