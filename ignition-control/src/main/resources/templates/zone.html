@@ -52,8 +52,11 @@
           <thead><tr><th>app</th><th>repo</th><th>version</th><th>live</th><th></th></tr></thead>
           <tbody>
             <tr th:each="a : ${apps}">
-              <td><a th:href="${a.htmlUrl}" th:text="${a.name}">flora</a></td>
-              <td><code th:text="|${zoneSlug}/${a.name}|">org/repo</code></td>
+              <td>
+                <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.name}">flora</a>
+                <span th:unless="${a.deployed}" th:text="${a.name}">flora</span>
+              </td>
+              <td><a th:href="${a.htmlUrl}">git</a></td>
               <td th:text="${a.version}">v1.2.3</td>
               <td>
                 <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.image}">image</a>
