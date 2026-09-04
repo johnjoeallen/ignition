@@ -192,27 +192,58 @@ public class ZoneService {
     }
 
     public ForgejoClient.Response createUser(String slug, String username, String email, String password) {
-        return forgejo.post(slug, "/admin/users", Map.of(
+        var res = forgejo.post(slug, "/admin/users", Map.of(
                 "username", username, "email", email, "password", password,
                 "must_change_password", false));
+        if (res.ok()) {
+            // membership in the zone's org, so the new user can see its repos
+            int owners = ensureOrg(slug);
+            if (owners > 0) {
+                forgejo.put(slug, "/teams/" + owners + "/members/" + username, Map.of());
+            }
+        }
+        return res;
     }
 
     public ForgejoClient.Response deleteUser(String slug, String login) {
         return forgejo.delete(slug, "/admin/users/" + login);
     }
 
+    // --- the zone's org — one org per zone (name = slug) so every zone user
+    // can see every repo, instead of everything piling up under zoneadmin ---
+
+    private static final String OWNERS_TEAM = "Owners";
+
+    /**
+     * Create the zone's org if it doesn't exist yet (idempotent — zoneadmin,
+     * who owns every zone, already owns it after the first call). Returns the
+     * {@code Owners} team id, or -1 if it couldn't be found.
+     */
+    private int ensureOrg(String slug) {
+        forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "private"));
+        var teams = forgejo.get(slug, "/orgs/" + slug + "/teams?limit=50");
+        if (teams.ok() && teams.body() != null && teams.body().isArray()) {
+            for (JsonNode t : teams.body()) {
+                if (OWNERS_TEAM.equalsIgnoreCase(t.path("name").asText())) {
+                    return t.path("id").asInt(-1);
+                }
+            }
+        }
+        return -1;
+    }
+
     // --- Forgejo repos -----------------------------------------------------
 
     public record RepoView(String owner, String name, String fullName, String htmlUrl, String version) {}
 
+    /** Every repo in the zone's org — all repos are org-owned, so every zone user can see them. */
     public List<RepoView> repos(String slug) {
-        var res = forgejo.get(slug, "/repos/search?limit=50");
+        ensureOrg(slug);
+        var res = forgejo.get(slug, "/orgs/" + slug + "/repos?limit=50");
         List<RepoView> out = new ArrayList<>();
-        JsonNode data = res.body() == null ? null : res.body().get("data");
-        if (data != null && data.isArray()) {
-            for (JsonNode r : data) {
-                String owner = r.path("owner").path("login").asText(
-                        r.path("full_name").asText("/").split("/")[0]);
+        if (res.ok() && res.body() != null && res.body().isArray()) {
+            for (JsonNode r : res.body()) {
+                String owner = slug;
                 String name = r.path("name").asText("");
                 int[] v = ReleaseService.latestSemver(
                         forgejo.get(slug, "/repos/%s/%s/tags?limit=50".formatted(owner, name)).body());
@@ -225,8 +256,10 @@ public class ZoneService {
         return out;
     }
 
+    /** New repos always belong to the zone's org, not the zoneadmin user. */
     public ForgejoClient.Response createRepo(String slug, String name, boolean priv) {
-        return forgejo.post(slug, "/admin/users/zoneadmin/repos", Map.of(
+        ensureOrg(slug);
+        return forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
                 "name", name, "private", priv, "auto_init", true));
     }
 

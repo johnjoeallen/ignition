@@ -60,6 +60,10 @@ public class ForgejoClient {
         return send(slug, "POST", path, body);
     }
 
+    public Response put(String slug, String path, Map<String, ?> body) {
+        return send(slug, "PUT", path, body);
+    }
+
     public Response delete(String slug, String path) {
         return send(slug, "DELETE", path, null);
     }
