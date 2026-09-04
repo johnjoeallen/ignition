@@ -86,12 +86,22 @@ domain's DNS. Traefik does this automatically **if you give it an API
 credential for wherever `theresnolimits.net`'s DNS is hosted** — a token /
 key that lets a program add and remove records in that zone.
 
-- **`<DNS_PROVIDER>`** — the short name Traefik uses for your DNS host
-  (`cloudflare`, `route53`, `hetzner`, `gandiv5`, `desec`, … — the full list is
-  [here](https://doc.traefik.io/traefik/https/acme/#providers)).
-- **`<DNS_TOKEN_VAR>=<value>`** — the environment variable(s) that provider
-  needs, e.g. `CF_DNS_API_TOKEN=…` for Cloudflare, `HETZNER_API_KEY=…` for
-  Hetzner DNS. You put these in a file called `acme.env`.
+`theresnolimits.net` uses **Joker.com**'s nameservers (`x/y/z.ns.joker.com`),
+so the provider is **`joker`**, which drives Joker's DMAPI:
+
+- **`ACME_DNS_PROVIDER=joker`**
+- **`acme.env`** — one of:
+  - `JOKER_API_KEY=<key>` — a dedicated key from the Joker account
+    (*Profile → DMAPI / API keys*; DMAPI access may need enabling first), **or**
+  - `JOKER_USERNAME=<joker-login>` + `JOKER_PASSWORD=<joker-password>` — your
+    Joker web login.
+- Joker's DMAPI can be slow to publish, so also set
+  `JOKER_PROPAGATION_TIMEOUT=1200` and `JOKER_POLLING_INTERVAL=30`.
+
+(If you move DNS elsewhere later, swap in that host's provider name and env
+vars — the full list is
+[here](https://doc.traefik.io/traefik/https/acme/#providers). Leave
+`JOKER_API_MODE` unset; the legacy `SVC` DynDNS mode is not what you want.)
 
 This challenge type is called **DNS-01**. Its key property for this demo: the
 Certificate Authority only ever reads DNS — **it never connects back to your
@@ -160,8 +170,7 @@ consoles still require `IGN_ADMIN_TOKEN` / a zone token; everything else
 | `<PUBLIC_IP>` | `hetzner`'s existing address — unchanged | `203.0.113.10` |
 | `<DEMO_IP>` | the extra public IPv4 you add to `hetzner` for the demo | `203.0.113.55` |
 | `<SPITFIRE_LAN_IP>` | `spitfire`'s address on your LAN | `192.168.1.20` |
-| `<DNS_PROVIDER>` | Traefik's name for your DNS host | `cloudflare` |
-| `<DNS_TOKEN_VAR>=<value>` | the API credential that provider needs | `CF_DNS_API_TOKEN=abc123…` |
+| `<JOKER_KEY>` | Joker.com DMAPI key (or use `JOKER_USERNAME`/`JOKER_PASSWORD`) | `abcd1234…` |
 | `<ACME_EMAIL>` | your email, for the Let's Encrypt account | `you@theresnolimits.net` |
 | `<HETZNER_PRIV>` / `<HETZNER_PUB>` | WireGuard keypair generated on `hetzner` | (Step B4) |
 | `<SPITFIRE_PRIV>` / `<SPITFIRE_PUB>` | WireGuard keypair generated on `spitfire` | (Step B4) |
@@ -212,9 +221,9 @@ ignition.theresnolimits.net.     A   <DEMO_IP>     # optional: only if you want 
 (a `TXT` record), which works the moment the API token is valid, regardless of
 where the `A` record points.
 
-Create an **API token** scoped to the `theresnolimits.net` zone with permission
-to edit records. Note the provider's Traefik name (`<DNS_PROVIDER>`) and which
-env var holds the token (`<DNS_TOKEN_VAR>`).
+In the **Joker.com** account, enable DMAPI access if it isn't already and create
+an API key (*Profile → DMAPI*). That key is `<JOKER_KEY>`. (Or skip the key and
+use your Joker login as `JOKER_USERNAME` / `JOKER_PASSWORD` in `acme.env`.)
 
 ### A2. Bring up the stack
 
@@ -230,8 +239,13 @@ mkdir -p ssh-empty                       # the node is 'local'; no remote-node S
 # --- core services: the edge Traefik + Watchtower ---
 export BASE_DOMAIN=ignition.theresnolimits.net
 export ACME_EMAIL=<ACME_EMAIL>
-export ACME_DNS_PROVIDER=<DNS_PROVIDER>
-printf '<DNS_TOKEN_VAR>=<value>\n' > acme.env
+export ACME_DNS_PROVIDER=joker
+
+cat > acme.env <<'ENV'
+JOKER_API_KEY=<JOKER_KEY>
+JOKER_PROPAGATION_TIMEOUT=1200
+JOKER_POLLING_INTERVAL=30
+ENV
 chmod 600 acme.env
 
 docker compose -f templates/traefik-core-compose.yml up -d
@@ -243,8 +257,9 @@ echo "SAVE THIS -> $IGN_ADMIN_TOKEN"
 docker compose -f templates/ignition-control-compose.yml up -d
 ```
 
-Watch the first certificate get issued (DNS-01 can take a minute while the
-`TXT` record propagates):
+Watch the first certificate get issued (with Joker's DMAPI this can take
+several minutes while the `_acme-challenge` `TXT` record propagates through
+`*.ns.joker.com`):
 
 ```sh
 docker compose -f templates/traefik-core-compose.yml logs -f traefik | grep -i acme
