@@ -1,17 +1,24 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8"><title>Ignition · set your password</title>
-  <link rel="stylesheet" href="/css/ignition.css">
-</head>
+<head th:replace="~{fragments/head :: head('Ignition · set your password')}"></head>
 <body>
-  <h1>Set your password</h1>
-  <div class="msg err" th:if="${error}" th:text="${error}">error</div>
-  <form method="post" th:action="@{/activate}" class="stack">
-    <input type="hidden" name="token" th:value="${token}">
-    <label>Password <input name="password" type="password" autocomplete="new-password" autofocus required minlength="10"></label>
-    <label>Repeat password <input name="password2" type="password" autocomplete="new-password" required></label>
-    <button>Set password</button>
-  </form>
+  <div th:replace="~{fragments/auth :: auth(~{::main})}">
+    <main>
+      <h1 class="h4 mb-3">Set your password</h1>
+      <div class="alert alert-danger" th:if="${error}" th:text="${error}">error</div>
+      <form method="post" th:action="@{/activate}">
+        <input type="hidden" name="token" th:value="${token}">
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input class="form-control" name="password" type="password" autocomplete="new-password" autofocus required minlength="10">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Repeat password</label>
+          <input class="form-control" name="password2" type="password" autocomplete="new-password" required>
+        </div>
+        <button class="btn btn-accent w-100" type="submit">Set password</button>
+      </form>
+    </main>
+  </div>
 </body>
 </html>

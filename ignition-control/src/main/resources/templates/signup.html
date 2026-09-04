@@ -1,18 +1,22 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8"><title>Ignition · request an account</title>
-  <link rel="stylesheet" href="/css/ignition.css">
-</head>
+<head th:replace="~{fragments/head :: head('Ignition · request an account')}"></head>
 <body>
-  <h1>Request an account</h1>
-  <div class="msg" th:if="${sent}">If that address can have an account, an activation link is on its way.</div>
-  <div class="msg err" th:if="${error}" th:text="${error}">error</div>
-  <form method="post" th:action="@{/signup}" class="stack" th:unless="${sent}">
-    <label>Email <input name="email" type="email" autofocus required></label>
-    <button>Send activation link</button>
-  </form>
-  <p class="muted">A platform admin approves new accounts after you set a password.
-    <a href="/login">Back to sign in</a></p>
+  <div th:replace="~{fragments/auth :: auth(~{::main})}">
+    <main>
+      <h1 class="h4 mb-3">Request an account</h1>
+      <div class="alert alert-success" th:if="${sent}">If that address can have an account, an activation link is on its way.</div>
+      <div class="alert alert-danger" th:if="${error}" th:text="${error}">error</div>
+      <form method="post" th:action="@{/signup}" th:unless="${sent}">
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" type="email" autofocus required>
+        </div>
+        <button class="btn btn-accent w-100" type="submit">Send activation link</button>
+      </form>
+      <p class="text-body-secondary small mt-3 mb-0">A platform admin approves new accounts after you set a password.
+        <a href="/login">Back to sign in</a></p>
+    </main>
+  </div>
 </body>
 </html>

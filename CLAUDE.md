@@ -271,3 +271,9 @@ command's stdout.
      in the `/deploy` payload and the zone console; decides whether the
      `forward-auth` (and an `ip-allowlist`) middleware is on that app's edge
      router.
+5. **Per-team presentation, with speaker notes.** Each team gets a
+   generated slide deck (e.g. for an end-of-event demo/pitch) editable
+   from the team console, speaker notes included. Not yet scoped — needs a
+   decision on format/export (reveal.js-style HTML deck rendered per team,
+   vs. a PPTX/PDF export) and where the content lives (Forgejo-backed like
+   an app, or its own console-managed model).

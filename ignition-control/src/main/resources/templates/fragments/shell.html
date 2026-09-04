@@ -1,0 +1,50 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+  <th:block th:fragment="shell(active, content)">
+    <div class="d-flex ign-shell">
+
+      <div class="offcanvas-md offcanvas-start ign-sidebar" tabindex="-1" id="ignSidebar">
+        <div class="offcanvas-header">
+          <a class="brand" href="/">
+            <img src="/img/mark.svg" alt="" width="28" height="28">
+            <span>Ignition</span>
+          </a>
+          <button type="button" class="btn-close btn-close-white d-md-none"
+                  data-bs-dismiss="offcanvas" data-bs-target="#ignSidebar" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column p-0">
+          <nav class="nav flex-column flex-grow-1 pt-2">
+            <a class="nav-link" th:classappend="${active == 'nodes'} ? ' active'" href="/">
+              <i class="bi bi-hdd-stack"></i> Nodes</a>
+            <a class="nav-link" th:classappend="${active == 'teams'} ? ' active'" href="/teams">
+              <i class="bi bi-people"></i> Teams</a>
+          </nav>
+          <div class="ign-sidebar-foot small" th:if="${baseDomain}" th:text="${baseDomain}">ignition.example</div>
+        </div>
+      </div>
+
+      <div class="ign-main flex-grow-1">
+        <nav class="ign-topbar d-flex align-items-center justify-content-between">
+          <button class="btn btn-sm btn-outline-secondary d-md-none" type="button"
+                  data-bs-toggle="offcanvas" data-bs-target="#ignSidebar" aria-label="Menu">
+            <i class="bi bi-list"></i>
+          </button>
+          <span></span>
+          <div class="d-flex align-items-center gap-3">
+            <span class="text-body-secondary small" th:text="${principal}">user</span>
+            <form method="post" th:action="@{/logout}" class="m-0">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">
+                <i class="bi bi-box-arrow-right"></i> Sign out</button>
+            </form>
+          </div>
+        </nav>
+        <main class="container-fluid p-3 p-md-4">
+          <div th:replace="${content}"></div>
+        </main>
+      </div>
+    </div>
+    <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  </th:block>
+</body>
+</html>

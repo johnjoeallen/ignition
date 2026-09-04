@@ -1,16 +1,20 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8"><title>Ignition · reset password</title>
-  <link rel="stylesheet" href="/css/ignition.css">
-</head>
+<head th:replace="~{fragments/head :: head('Ignition · reset password')}"></head>
 <body>
-  <h1>Reset your password</h1>
-  <div class="msg" th:if="${sent}">If that address has an account, a reset link is on its way.</div>
-  <form method="post" th:action="@{/forgot}" class="stack" th:unless="${sent}">
-    <label>Email <input name="email" type="email" autofocus required></label>
-    <button>Send reset link</button>
-  </form>
-  <p class="muted"><a href="/login">Back to sign in</a></p>
+  <div th:replace="~{fragments/auth :: auth(~{::main})}">
+    <main>
+      <h1 class="h4 mb-3">Reset your password</h1>
+      <div class="alert alert-success" th:if="${sent}">If that address has an account, a reset link is on its way.</div>
+      <form method="post" th:action="@{/forgot}" th:unless="${sent}">
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" type="email" autofocus required>
+        </div>
+        <button class="btn btn-accent w-100" type="submit">Send reset link</button>
+      </form>
+      <p class="text-body-secondary small mt-3 mb-0"><a href="/login">Back to sign in</a></p>
+    </main>
+  </div>
 </body>
 </html>

@@ -40,7 +40,17 @@ public class PlatformConsoleController {
     }
 
     @GetMapping("/")
-    public String platform(Model model) {
+    public String nodes(Model model) {
+        List<NodeRow> nodeRows = nodes.list().stream().map(n -> {
+            var a = nodes.allocation(n.name());
+            return new NodeRow(n, a.cpus(), a.memGb(), a.zones());
+        }).toList();
+        model.addAttribute("nodes", nodeRows);
+        return "nodes";
+    }
+
+    @GetMapping("/teams")
+    public String teams(Model model) {
         List<NodeRow> nodeRows = nodes.list().stream().map(n -> {
             var a = nodes.allocation(n.name());
             return new NodeRow(n, a.cpus(), a.memGb(), a.zones());
@@ -48,12 +58,10 @@ public class PlatformConsoleController {
         Map<String, ProvisioningService.Status> provisioningRows = new java.util.LinkedHashMap<>();
         zones.list().forEach(z ->
                 provisioning.status(z.slug()).ifPresent(s -> provisioningRows.put(z.slug(), s)));
-        model.addAttribute("nodes", nodeRows);
         model.addAttribute("nodeNames", nodeRows.stream().map(r -> r.node().name()).toList());
         model.addAttribute("zones", zones.list());
-        model.addAttribute("apps", apps.list());
         model.addAttribute("provisioning", provisioningRows);
-        return "platform";
+        return "teams";
     }
 
     @GetMapping("/zones/new")
@@ -68,7 +76,7 @@ public class PlatformConsoleController {
                              Model model) {
         try {
             provisioning.submit(slug.strip(), node.strip(), label.strip());
-            return "redirect:/?m=provisioning+" + slug.strip();
+            return "redirect:/teams?m=provisioning+" + slug.strip();
         } catch (RuntimeException e) {
             model.addAttribute("error", e.getMessage());
             return "zone-form";
@@ -87,9 +95,9 @@ public class PlatformConsoleController {
     public String destroyZone(@PathVariable String slug) {
         try {
             zones.destroy(slug, false);
-            return "redirect:/?m=" + slug + "+destroyed";
+            return "redirect:/teams?m=" + slug + "+destroyed";
         } catch (RuntimeException e) {
-            return "redirect:/?m=" + enc(e.getMessage());
+            return "redirect:/teams?m=" + enc(e.getMessage());
         }
     }
 
@@ -98,9 +106,9 @@ public class PlatformConsoleController {
         try {
             zones.prepareMove(slug, node.strip());
             provisioning.submit(slug, node.strip(), "");
-            return "redirect:/?m=moving+" + slug + "+to+" + node.strip();
+            return "redirect:/teams?m=moving+" + slug + "+to+" + node.strip();
         } catch (RuntimeException e) {
-            return "redirect:/?m=" + enc(e.getMessage());
+            return "redirect:/teams?m=" + enc(e.getMessage());
         }
     }
 
@@ -108,9 +116,9 @@ public class PlatformConsoleController {
     public String stopApp(@PathVariable String zone, @PathVariable String name) {
         try {
             apps.undeploy(zone, name);
-            return "redirect:/?m=app+" + zone + "/" + name + "+stopped";
+            return "redirect:/z?z=" + enc(zone) + "&m=app+" + name + "+stopped";
         } catch (RuntimeException e) {
-            return "redirect:/?m=" + enc(e.getMessage());
+            return "redirect:/z?z=" + enc(zone) + "&m=" + enc(e.getMessage());
         }
     }
 

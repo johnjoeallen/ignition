@@ -1,23 +1,34 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8">
-  <title>Ignition · first-run setup</title>
-  <link rel="stylesheet" href="/css/ignition.css">
-</head>
+<head th:replace="~{fragments/head :: head('Ignition · first-run setup')}"></head>
 <body>
-  <h1>Ignition · first-run setup</h1>
-  <p class="muted">This creates the first <strong>platform admin</strong>. The setup code
-    is printed in the container logs:
-    <code>docker compose … logs ignition-control | grep "IGNITION SETUP"</code></p>
-  <div class="msg err" th:if="${error}" th:text="${error}">error</div>
-  <form method="post" th:action="@{/setup}" class="stack">
-    <label>Setup code <input name="code" autocomplete="off" autofocus required></label>
-    <label>Your email <input name="email" type="email" required></label>
-    <label>Password <input name="password" type="password" autocomplete="new-password" required
-      minlength="10"></label>
-    <label>Repeat password <input name="password2" type="password" autocomplete="new-password" required></label>
-    <button>Create admin</button>
-  </form>
+  <div th:replace="~{fragments/auth :: auth(~{::main})}">
+    <main>
+      <h1 class="h4 mb-2">First-run setup</h1>
+      <p class="text-body-secondary small">This creates the first <strong>platform admin</strong>. The setup code
+        is printed in the container logs:
+        <code>docker compose … logs ignition-control | grep "IGNITION SETUP"</code></p>
+      <div class="alert alert-danger" th:if="${error}" th:text="${error}">error</div>
+      <form method="post" th:action="@{/setup}">
+        <div class="mb-3">
+          <label class="form-label">Setup code</label>
+          <input class="form-control" name="code" autocomplete="off" autofocus required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Your email</label>
+          <input class="form-control" name="email" type="email" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input class="form-control" name="password" type="password" autocomplete="new-password" required minlength="10">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Repeat password</label>
+          <input class="form-control" name="password2" type="password" autocomplete="new-password" required>
+        </div>
+        <button class="btn btn-accent w-100" type="submit">Create admin</button>
+      </form>
+    </main>
+  </div>
 </body>
 </html>

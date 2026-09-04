@@ -1,22 +1,35 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8">
-  <title>Ignition · new zone</title>
-  <link rel="stylesheet" href="/css/ignition.css">
-</head>
+<head th:replace="~{fragments/head :: head('Ignition · new team')}"></head>
 <body>
-  <nav class="top"><a href="/">← platform</a></nav>
-  <h1>New zone</h1>
-  <div class="msg err" th:if="${error != null}" th:text="${error}">bad input</div>
-  <p class="muted">Stands up Forgejo + a private DinD build engine + an Actions
-    runner on a node, mints the zone-admin account and the console / CI tokens.
-    Runs in the background — watch it on the platform page.</p>
-  <form method="post" th:action="@{/zones}" class="stack">
-    <label>slug<input name="slug" required placeholder="quantum-badgers"></label>
-    <label>node<input name="node" placeholder="(blank = scheduler picks one)"></label>
-    <label>label<input name="label" placeholder="(blank = any node)"></label>
-    <button>Provision</button>
-  </form>
+  <div th:replace="~{fragments/shell :: shell('teams', ~{::main})}">
+    <main>
+      <p class="mb-3"><a href="/teams"><i class="bi bi-arrow-left"></i> Teams</a></p>
+      <div class="card" style="max-width:32rem">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-2">New team</h1>
+          <p class="text-body-secondary small">Stands up Forgejo + a private DinD build engine + an Actions
+            runner on a node, mints the bot account and the console / CI tokens.
+            Runs in the background — watch it on the Teams page.</p>
+          <div class="alert alert-danger" th:if="${error != null}" th:text="${error}">bad input</div>
+          <form method="post" th:action="@{/zones}">
+            <div class="mb-3">
+              <label class="form-label">Slug</label>
+              <input class="form-control" name="slug" required placeholder="quantum-badgers">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Node</label>
+              <input class="form-control" name="node" placeholder="(blank = scheduler picks one)">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Label</label>
+              <input class="form-control" name="label" placeholder="(blank = any node)">
+            </div>
+            <button class="btn btn-accent" type="submit">Provision</button>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
 </body>
 </html>

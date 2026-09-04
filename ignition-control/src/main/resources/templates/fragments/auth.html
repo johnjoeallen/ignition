@@ -1,0 +1,19 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+  <th:block th:fragment="auth(content)">
+    <div class="ign-auth-page d-flex align-items-center justify-content-center">
+      <div class="card ign-auth-card">
+        <div class="card-body p-4 p-sm-5">
+          <div class="ign-auth-brand mb-4">
+            <img src="/img/mark.svg" alt="" width="40" height="40">
+            <span>Ignition</span>
+          </div>
+          <div th:replace="${content}"></div>
+        </div>
+      </div>
+    </div>
+    <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  </th:block>
+</body>
+</html>

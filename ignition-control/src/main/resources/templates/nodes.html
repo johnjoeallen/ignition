@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('Ignition · nodes')}"></head>
+<body>
+  <div th:replace="~{fragments/shell :: shell('nodes', ~{::main})}">
+    <main>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 page-title">
+        <h1 class="h4 mb-0"><i class="bi bi-hdd-stack"></i> Nodes</h1>
+        <a class="btn btn-accent btn-sm" href="/nodes/new"><i class="bi bi-plus-lg"></i> Register a node</a>
+      </div>
+      <div class="alert alert-success" th:if="${param.m != null}" th:text="${#strings.replace(param.m[0],'+',' ')}">ok</div>
+
+      <div class="table-card">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr><th>node</th><th>state</th><th>docker host</th><th>allocated</th><th>zones</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="row : ${nodes}">
+              <td class="fw-semibold" th:text="${row.node.name}">node-1</td>
+              <td>
+                <span class="badge" th:classappend="${row.node.state.name() == 'ACTIVE'} ? 'text-bg-success' : 'text-bg-secondary'"
+                      th:text="${row.node.state}">ACTIVE</span>
+              </td>
+              <td><code th:text="${row.node.dockerHost}">local</code></td>
+              <td th:text="|${row.allocCpus} / ${row.node.cpus} cpu · ${row.allocMemGb} / ${row.node.memGb}g|">0/0</td>
+              <td th:text="${row.zoneCount}">0</td>
+              <td class="text-end text-nowrap">
+                <form th:if="${row.node.state.name() == 'ACTIVE'}" method="post"
+                      th:action="@{'/nodes/' + ${row.node.name} + '/drain'}" class="d-inline">
+                  <button class="btn btn-sm btn-outline-secondary">drain</button>
+                </form>
+                <form th:if="${row.node.state.name() == 'DRAINING'}" method="post"
+                      th:action="@{'/nodes/' + ${row.node.name} + '/undrain'}" class="d-inline">
+                  <button class="btn btn-sm btn-outline-secondary">undrain</button>
+                </form>
+                <form method="post" th:action="@{'/nodes/' + ${row.node.name} + '/delete'}" class="d-inline">
+                  <button class="btn btn-sm btn-outline-danger">remove</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${nodes.isEmpty()}"><td colspan="6" class="text-body-secondary text-center py-4">no nodes yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

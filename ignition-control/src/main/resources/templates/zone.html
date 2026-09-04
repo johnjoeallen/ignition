@@ -1,93 +1,126 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="utf-8">
-  <title th:text="|Ignition · zone ${zone.slug}|">Ignition · zone</title>
-  <link rel="stylesheet" href="/css/ignition.css">
-</head>
+<head th:replace="~{fragments/head :: head(|Ignition · team ${zone.slug}|)}"></head>
 <body>
-  <nav class="top">
-    <span th:text="${principal}">zone:…</span>
-    <form method="post" th:action="@{/logout}" class="inline"><button>Sign out</button></form>
-  </nav>
+  <div th:replace="~{fragments/shell :: shell('teams', ~{::main})}">
+    <main>
+      <p class="mb-3"><a href="/teams"><i class="bi bi-arrow-left"></i> Teams</a></p>
+      <h1 class="h4 page-title"><i class="bi bi-people"></i> <span th:text="${zone.slug}">team</span></h1>
+      <div class="alert alert-success" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
 
-  <h1 th:text="|Ignition · zone ${zone.slug}|">Ignition · zone</h1>
-  <div class="msg" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
+      <div class="card mb-4">
+        <div class="card-body d-flex flex-wrap align-items-center gap-4">
+          <div>
+            <div class="text-body-secondary small">Forgejo</div>
+            <a th:href="${zone.forgejoUrl}" th:text="${zone.forgejoUrl}">git…</a>
+          </div>
+          <div>
+            <div class="text-body-secondary small">Node</div>
+            <span th:text="${zone.node} ?: '?'">node-1</span>
+          </div>
+          <div>
+            <div class="text-body-secondary small">Stack</div>
+            <code th:text="${stack}">—</code>
+          </div>
+          <form method="post" th:action="@{/z/runner/restart}" class="ms-auto">
+            <input type="hidden" name="z" th:value="${zoneSlug}">
+            <button class="btn btn-sm btn-outline-secondary">Restart runner</button>
+          </form>
+        </div>
+      </div>
 
-  <div class="card">
-    <b>Forgejo</b> <a th:href="${zone.forgejoUrl}" th:text="${zone.forgejoUrl}">git…</a><br>
-    <b>Node</b> <span th:text="${zone.node} ?: '?'">node-1</span> &nbsp;
-    <b>Stack</b> <code th:text="${stack}">—</code>
-    <form method="post" th:action="@{/z/runner/restart}" style="margin-top:.6rem">
-      <input type="hidden" name="z" th:value="${zoneSlug}">
-      <button>Restart runner</button>
-    </form>
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">
+        Apps <span class="fw-normal" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span>
+      </h2>
+      <p class="text-body-secondary small">An app <b>is</b> its repo — creating one creates the repo (in this
+        team's org) and seeds it with a starter <code>Dockerfile</code> + page and the
+        deploy workflow, already wired with this team's registry and deploy token.
+        Clone it, push, then <b>Release</b>. A plain push to <code>main</code> never
+        deploys — only a release does.</p>
+      <form method="post" th:action="@{/z/apps}" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="z" th:value="${zoneSlug}">
+        <div class="col-auto">
+          <label class="form-label small mb-1">name</label>
+          <input class="form-control form-control-sm" name="name" required>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Create app</button>
+        </div>
+      </form>
+      <div class="table-card mb-4">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>app</th><th>repo</th><th>version</th><th>live</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="a : ${apps}">
+              <td><a th:href="${a.htmlUrl}" th:text="${a.name}">flora</a></td>
+              <td><code th:text="|${zoneSlug}/${a.name}|">org/repo</code></td>
+              <td th:text="${a.version}">v1.2.3</td>
+              <td>
+                <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.image}">image</a>
+                <span th:unless="${a.deployed}" class="text-body-secondary">not deployed yet</span>
+              </td>
+              <td class="text-end text-nowrap">
+                <form method="post" th:action="@{/z/repos/release}" class="d-inline">
+                  <input type="hidden" name="z" th:value="${zoneSlug}">
+                  <input type="hidden" name="repo" th:value="${a.name}">
+                  <select name="bump" class="form-select form-select-sm d-inline-block w-auto">
+                    <option value="auto">auto (from commits)</option>
+                    <option>patch</option><option>minor</option><option>major</option>
+                  </select>
+                  <button class="btn btn-sm btn-outline-secondary">Release</button>
+                </form>
+                <form th:if="${a.deployed}" method="post" th:action="@{/z/apps/delete}" class="d-inline">
+                  <input type="hidden" name="z" th:value="${zoneSlug}">
+                  <input type="hidden" name="name" th:value="${a.name}">
+                  <button class="btn btn-sm btn-outline-danger">stop</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${apps.isEmpty()}"><td colspan="5" class="text-body-secondary text-center py-4">no apps yet — create one above</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Users</h2>
+      <form method="post" th:action="@{/z/users}" class="row g-2 align-items-end mb-3">
+        <input type="hidden" name="z" th:value="${zoneSlug}">
+        <div class="col-auto">
+          <label class="form-label small mb-1">username</label>
+          <input class="form-control form-control-sm" name="username" required>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">email</label>
+          <input class="form-control form-control-sm" name="email" type="email" required>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">password</label>
+          <input class="form-control form-control-sm" name="password" type="password" required>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Add user</button>
+        </div>
+      </form>
+      <div class="table-card">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>login</th><th>email</th><th>role</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="u : ${users}">
+              <td th:text="${u.login}">alice</td>
+              <td th:text="${u.email}">a@x</td>
+              <td><span th:if="${u.admin}" class="badge text-bg-secondary">admin</span></td>
+              <td class="text-end">
+                <form method="post" th:action="@{/z/users/delete}" class="d-inline">
+                  <input type="hidden" name="z" th:value="${zoneSlug}">
+                  <input type="hidden" name="login" th:value="${u.login}">
+                  <button class="btn btn-sm btn-outline-danger" th:disabled="${u.login == botUser}">remove</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${users.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">could not list users</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
   </div>
-
-  <h2>Apps <span class="muted" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span></h2>
-  <p class="muted">An app <b>is</b> its repo — creating one creates the repo (in this
-    zone's org) and seeds it with a starter <code>Dockerfile</code> + page and the
-    deploy workflow, already wired with this zone's registry and deploy token.
-    Clone it, push, then <b>Release</b>. A plain push to <code>main</code> never
-    deploys — only a release does.</p>
-  <form method="post" th:action="@{/z/apps}" class="stack">
-    <input type="hidden" name="z" th:value="${zoneSlug}">
-    <label>name<input name="name" required></label>
-    <button>Create app</button>
-  </form>
-  <table>
-    <tr><th>app</th><th>repo</th><th>version</th><th>live</th><th></th></tr>
-    <tr th:each="a : ${apps}">
-      <td><a th:href="${a.htmlUrl}" th:text="${a.name}">flora</a></td>
-      <td><code th:text="|${zoneSlug}/${a.name}|">org/repo</code></td>
-      <td th:text="${a.version}">v1.2.3</td>
-      <td>
-        <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.image}">image</a>
-        <span th:unless="${a.deployed}" class="muted">not deployed yet</span>
-      </td>
-      <td style="white-space:nowrap">
-        <form method="post" th:action="@{/z/repos/release}" class="inline">
-          <input type="hidden" name="z" th:value="${zoneSlug}">
-          <input type="hidden" name="repo" th:value="${a.name}">
-          <select name="bump">
-            <option value="auto">auto (from commits)</option>
-            <option>patch</option><option>minor</option><option>major</option>
-          </select>
-          <button>Release</button>
-        </form>
-        <form th:if="${a.deployed}" method="post" th:action="@{/z/apps/delete}" class="inline">
-          <input type="hidden" name="z" th:value="${zoneSlug}">
-          <input type="hidden" name="name" th:value="${a.name}">
-          <button>stop</button>
-        </form>
-      </td>
-    </tr>
-    <tr th:if="${apps.isEmpty()}"><td colspan="5" class="muted">no apps yet — create one above</td></tr>
-  </table>
-
-  <h2>Users</h2>
-  <form method="post" th:action="@{/z/users}" class="stack">
-    <input type="hidden" name="z" th:value="${zoneSlug}">
-    <label>username<input name="username" required></label>
-    <label>email<input name="email" type="email" required></label>
-    <label>password<input name="password" type="password" required></label>
-    <button>Add user</button>
-  </form>
-  <table>
-    <tr><th>login</th><th>email</th><th>role</th><th></th></tr>
-    <tr th:each="u : ${users}">
-      <td th:text="${u.login}">alice</td>
-      <td th:text="${u.email}">a@x</td>
-      <td th:text="${u.admin} ? 'admin' : ''"></td>
-      <td>
-        <form method="post" th:action="@{/z/users/delete}" class="inline">
-          <input type="hidden" name="z" th:value="${zoneSlug}">
-          <input type="hidden" name="login" th:value="${u.login}">
-          <button th:disabled="${u.login == botUser}">remove</button>
-        </form>
-      </td>
-    </tr>
-    <tr th:if="${users.isEmpty()}"><td colspan="4" class="muted">could not list users</td></tr>
-  </table>
 </body>
 </html>

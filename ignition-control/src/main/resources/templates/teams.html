@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head('Ignition · teams')}"></head>
+<body>
+  <div th:replace="~{fragments/shell :: shell('teams', ~{::main})}">
+    <main>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 page-title">
+        <h1 class="h4 mb-0"><i class="bi bi-people"></i> Teams</h1>
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/roster"><i class="bi bi-list-check"></i> Roster</a>
+          <a class="btn btn-accent btn-sm" href="/zones/new"><i class="bi bi-plus-lg"></i> New team</a>
+        </div>
+      </div>
+      <div class="alert alert-success" th:if="${param.m != null}" th:text="${#strings.replace(param.m[0],'+',' ')}">ok</div>
+
+      <div class="table-card">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr><th>team</th><th>node</th><th>footprint</th><th>status</th><th>forge</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="z : ${zones}">
+              <td><a class="fw-semibold" th:href="@{/z(z=${z.slug})}" th:text="${z.slug}">quantum-badgers</a></td>
+              <td th:text="${z.node}">node-1</td>
+              <td th:text="|${z.zoneCpus}cpu / ${z.zoneMemGb}g|">5cpu/8g</td>
+              <td th:with="p=${provisioning.get(z.slug)}">
+                <span class="text-body-secondary" th:if="${p == null}">—</span>
+                <span th:if="${p != null}" class="badge"
+                      th:classappend="${p.state().name() == 'FAILED'} ? 'text-bg-danger' : 'text-bg-secondary'"
+                      th:text="${p.state() + ': ' + p.message()}">provisioning</span>
+              </td>
+              <td><a th:href="${z.forgejoUrl}" th:text="${z.forgejoUrl}" class="small">git…</a></td>
+              <td class="text-end text-nowrap">
+                <form method="post" th:action="@{'/zones/' + ${z.slug} + '/move'}" class="d-inline">
+                  <select name="node" class="form-select form-select-sm d-inline-block w-auto">
+                    <option th:each="n : ${nodeNames}" th:value="${n}" th:text="${n}"
+                            th:disabled="${n == z.node}">node</option>
+                  </select>
+                  <button class="btn btn-sm btn-outline-secondary">move</button>
+                </form>
+                <form method="post" th:action="@{'/zones/' + ${z.slug} + '/destroy'}" class="d-inline"
+                      onsubmit="return confirm('Destroy team ' + this.action.split('/zones/')[1].split('/')[0] + ' and every app it deployed?')">
+                  <button class="btn btn-sm btn-outline-danger">destroy</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${zones.isEmpty()}"><td colspan="6" class="text-body-secondary text-center py-4">no teams yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
