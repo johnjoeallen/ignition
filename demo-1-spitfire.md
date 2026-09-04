@@ -11,7 +11,7 @@ This part assumes you have never run Ignition, so it explains each moving part.
   (the control plane + web consoles), and later every team's Forgejo, build
   engine, runner, and deployed apps.
 
-The apex used throughout is **`ignition.theresnolimits.net`**.
+The apex used throughout is **`classesarecode.net`**.
 
 ```
      ┌──────────────────────────────┐
@@ -34,12 +34,12 @@ Read once; the steps refer back to this.
 ### The DNS API credential (and why that's all you need here)
 
 "Let's Encrypt" issues the free TLS certificates that give a browser its
-padlock. To prove you control `theresnolimits.net`, it asks for a specific
+padlock. To prove you control `classesarecode.net`, it asks for a specific
 temporary `TXT` record under that domain. Traefik creates and removes that
 record automatically **if you give it an API credential for the domain's DNS
 host**.
 
-`theresnolimits.net` uses **Joker.com**'s nameservers (`x/y/z.ns.joker.com`),
+`classesarecode.net` uses **Joker.com**'s nameservers (`x/y/z.ns.joker.com`),
 so the Traefik provider is **`joker`**, driving Joker's DMAPI:
 
 - **`ACME_DNS_PROVIDER=joker`**
@@ -71,7 +71,7 @@ and driving Docker to build and tear down teams and apps.
 
 `IGN_ADMIN_TOKEN` is a long random string **you generate**. It's the platform
 admin password — whoever has it can do anything. You paste it once to sign into
-`https://admin.ignition.theresnolimits.net/`.
+`https://admin.classesarecode.net/`.
 
 ### Nodes, zones, apps
 
@@ -98,7 +98,7 @@ for anything real.
 |---|---|---|
 | `<SPITFIRE_LAN_IP>` | `spitfire`'s address on your LAN | `192.168.1.20` |
 | `<JOKER_KEY>` | Joker.com DMAPI key (or use `JOKER_USERNAME`/`JOKER_PASSWORD`) | `abcd1234…` |
-| `<ACME_EMAIL>` | your email, for the Let's Encrypt account | `you@theresnolimits.net` |
+| `<ACME_EMAIL>` | your email, for the Let's Encrypt account | `you@classesarecode.net` |
 | `<IGN_ADMIN_TOKEN>` | platform admin token you generate | `openssl rand -hex 32` |
 
 ---
@@ -125,7 +125,7 @@ docker network create traefik-public
 mkdir -p ssh-empty                       # the node is 'local'; no remote-node SSH keys needed
 
 # --- core services: the edge Traefik + Watchtower ---
-export BASE_DOMAIN=ignition.theresnolimits.net
+export BASE_DOMAIN=classesarecode.net
 export ACME_EMAIL=<ACME_EMAIL>
 export ACME_DNS_PROVIDER=joker
 
@@ -153,8 +153,8 @@ several minutes while the `_acme-challenge` `TXT` record propagates through
 docker compose -f templates/traefik-core-compose.yml logs -f traefik | grep -i acme
 ```
 
-You want a line about a certificate obtained for `ignition.theresnolimits.net` /
-`*.ignition.theresnolimits.net`.
+You want a line about a certificate obtained for `classesarecode.net` /
+`*.classesarecode.net`.
 
 ---
 
@@ -165,17 +165,17 @@ test from — a laptop on the same LAN:
 
 ```
 # add to /etc/hosts  (Linux/macOS)  or  C:\Windows\System32\drivers\etc\hosts
-<SPITFIRE_LAN_IP>   admin.ignition.theresnolimits.net
+<SPITFIRE_LAN_IP>   admin.classesarecode.net
 ```
 
 Check the cert and reach the console:
 
 ```sh
-curl -I https://admin.ignition.theresnolimits.net/actuator/health
+curl -I https://admin.classesarecode.net/actuator/health
 # → HTTP/2 200, no TLS warning = the real Let's Encrypt cert is being served
 ```
 
-Open **`https://admin.ignition.theresnolimits.net/`**, sign in with the
+Open **`https://admin.classesarecode.net/`**, sign in with the
 `IGN_ADMIN_TOKEN` you saved, then:
 
 **Nodes → Register**
@@ -200,7 +200,7 @@ part 2.**
 
 **Provisioning a zone is deliberately left for [part 2](demo-2-remote-access.md).**
 It makes `ignition-control` talk to the team's Forgejo over its public name
-(`git.<slug>.ignition.theresnolimits.net`), and CI pushes images to that same
+(`git.<slug>.classesarecode.net`), and CI pushes images to that same
 name — both need the public path that part 2 builds.
 
 ---
