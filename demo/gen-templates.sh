@@ -122,7 +122,8 @@ stream {
     #   demo names       -> spitfire over WireGuard
     #   every other host -> local Apache
     map $ssl_preread_server_name $ignition_backend {
-        ~\.<BASE_DOMAIN_RE>$  <WG_SPITFIRE_IP>:443;
+        <BASE_DOMAIN>         <WG_SPITFIRE_IP>:443;   # the bare apex itself
+        ~\.<BASE_DOMAIN_RE>$  <WG_SPITFIRE_IP>:443;    # every subdomain
         default               127.0.0.1:443;
     }
 
