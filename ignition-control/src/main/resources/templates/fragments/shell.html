@@ -26,6 +26,8 @@
             <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'nodes'} ? ' active'" href="/nodes">
               <i class="bi bi-hdd-stack"></i> Nodes</a>
           </nav>
+          <div class="px-3 py-2 text-body-secondary" style="font-size:.7rem;opacity:.6"
+               th:text="${'v' + buildVersion + (buildCommit != '' ? ' · ' + buildCommit : '')}">v0.1.0</div>
         </div>
       </div>
 

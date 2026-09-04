@@ -3,11 +3,16 @@
 # ssh:// nodes are shelled out (see ../DESIGN.md "Docker engine access").
 
 FROM maven:3.9-eclipse-temurin-21 AS build
+# Set by the CI build (see ../.github/workflows/image.yml) to the commit
+# being built — baked into build-info.properties, shown small in the
+# sidebar, so "did my redeploy actually take" is a glance, not a
+# docker-inspect session. Defaults to "unknown" for a manual/local build.
+ARG GIT_SHA=unknown
 WORKDIR /src
 COPY pom.xml .
 RUN mvn -q -B -e -DskipTests dependency:go-offline
 COPY src ./src
-RUN mvn -q -B -e -DskipTests package && cp target/ignition-control.jar /ignition-control.jar
+RUN mvn -q -B -e -DskipTests -Dgit.commit=${GIT_SHA} package && cp target/ignition-control.jar /ignition-control.jar
 
 FROM eclipse-temurin:21-jre
 ARG DOCKER_CLI_VERSION=27.3.1

@@ -20,6 +20,11 @@
   <properties>
     <java.version>21</java.version>
     <testcontainers.version>1.21.3</testcontainers.version>
+    <!-- Overridden at image-build time (-Dgit.commit=<sha>, see Dockerfile /
+         .github/workflows/image.yml) so the running binary can say exactly
+         what it was built from — shown small in the sidebar. Plain `mvn
+         package` locally leaves it at this default; nothing false to show. -->
+    <git.commit>unknown</git.commit>
   </properties>
 
   <dependencyManagement>
@@ -119,6 +124,18 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>build-info</goal>
+            </goals>
+            <configuration>
+              <additionalProperties>
+                <git.commit>${git.commit}</git.commit>
+              </additionalProperties>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

@@ -1,6 +1,9 @@
 package net.dublinux.ignition.web;
 
+import java.util.Optional;
+
 import net.dublinux.ignition.config.IgnitionProperties;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -10,9 +13,31 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 public class GlobalModelAdvice {
 
     private final IgnitionProperties props;
+    private final Optional<BuildProperties> buildProperties;
 
-    public GlobalModelAdvice(IgnitionProperties props) {
+    public GlobalModelAdvice(IgnitionProperties props, Optional<BuildProperties> buildProperties) {
         this.props = props;
+        this.buildProperties = buildProperties;
+    }
+
+    /**
+     * What's actually running, shown small in the sidebar — the exact question
+     * "did my redeploy take" keeps coming up (an old cached image, a pinned
+     * IGN_CONTROL_VERSION, a CI build that hadn't finished yet), and eyeballing
+     * a version string beats re-deriving it from docker inspect every time.
+     * Empty outside a real container build (dev, tests) — no build-info.properties
+     * on the classpath then, so there's nothing false to show instead.
+     */
+    @ModelAttribute("buildVersion")
+    public String buildVersion() {
+        return buildProperties.map(BuildProperties::getVersion).orElse("dev");
+    }
+
+    @ModelAttribute("buildCommit")
+    public String buildCommit() {
+        return buildProperties.map(bp -> bp.get("git.commit")).filter(s -> s != null && !s.isBlank())
+                .map(s -> s.length() > 7 ? s.substring(0, 7) : s)
+                .orElse("");
     }
 
     @ModelAttribute("baseDomain")
