@@ -6,7 +6,8 @@ Instead of hand-editing the config files in
 file and render the rest.
 
 ```sh
-cd demo
+git clone https://github.com/johnjoeallen/ignition.git
+cd ignition/demo
 ./gen-templates.sh                 # writes templates/ and demo.conf.example
 cp demo.conf.example demo.conf
 $EDITOR demo.conf                  # fill in the values

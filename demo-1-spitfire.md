@@ -29,7 +29,9 @@ The apex used throughout is **`ignition.classesarecode.net`**.
 > generator for every file in this guide *and* part 2. Read on for what each
 > value means, then:
 > ```sh
-> cd demo && ./gen-templates.sh
+> git clone https://github.com/johnjoeallen/ignition.git
+> cd ignition/demo
+> ./gen-templates.sh
 > cp demo.conf.example demo.conf   # fill it in
 > ./render.sh demo.conf            # -> demo/out/ + demo/out/INSTALL.txt
 > ```
@@ -161,44 +163,38 @@ webserver. Traefik binds the host's `:80` and `:443`, so free them first
 (`ss -tlnp | grep -E ':80 |:443 '`; `systemctl disable --now apache2` /
 `nginx` if present). You don't have to uninstall anything, just stop it.
 
-Then, on `spitfire`:
+The generator (from the callout at the top) has produced `demo/out/ignition.env`
+and `demo/out/acme.env`, filled in. On `spitfire`, in the clone:
 
 ```sh
-git clone https://github.com/johnjoeallen/ignition.git
 cd ignition
+cp demo/out/ignition.env .env            # compose auto-loads it
+cp demo/out/acme.env    acme.env && chmod 600 acme.env
 
 docker network create traefik-public
-mkdir -p ssh-empty                       # the node is 'local'; no remote-node SSH keys needed
-
-# --- core services: the edge Traefik + Watchtower ---
-export BASE_DOMAIN=ignition.classesarecode.net
-export ACME_EMAIL=<ACME_EMAIL>
-
-# acme.env — one of the two from Step 1:
-#
-#   Option A (Joker Dynamic DNS)          Option B (deSEC)
-#   ---------------------------           ----------------
-#   ACME_DNS_PROVIDER=joker               ACME_DNS_PROVIDER=desec
-#   JOKER_API_MODE=SVC                    DESEC_TOKEN=<token>
-#   JOKER_USERNAME=<dyndns user>
-#   JOKER_PASSWORD=<dyndns pass>
-#   JOKER_PROPAGATION_TIMEOUT=1200
-#   JOKER_POLLING_INTERVAL=30
-#
-export ACME_DNS_PROVIDER=<from your chosen option>
-cat > acme.env <<'ENV'
-<paste the provider credential lines here>
-ENV
-chmod 600 acme.env
+mkdir -p ssh-empty                        # node is 'local'; no remote-node SSH keys
 
 docker compose -f templates/traefik-core-compose.yml up -d
-
-# --- the control plane ---
-export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)
-echo "SAVE THIS -> $IGN_ADMIN_TOKEN"
-
 docker compose -f templates/ignition-control-compose.yml up -d
 ```
+
+`.env` carries `BASE_DOMAIN`, `ACME_EMAIL`, `ACME_DNS_PROVIDER`, the SMTP block,
+`IGN_PUBLIC_URL`, and the generated `IGN_ADMIN_TOKEN` / `IGN_SECRET_KEY` /
+`POSTGRES_PASSWORD` — your platform admin token is the `IGN_ADMIN_TOKEN` line
+(also in `demo/demo.conf`).
+
+<details><summary>Doing it by hand instead</summary>
+
+Skip the generator and set the same variables yourself: write a `.env` with
+`BASE_DOMAIN=ignition.classesarecode.net`, `ACME_EMAIL=…`,
+`ACME_DNS_PROVIDER=…`, `IGN_PUBLIC_URL=https://admin.ignition.classesarecode.net`,
+`IGN_ADMIN_TOKEN=$(openssl rand -hex 32)`,
+`IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)`,
+`POSTGRES_PASSWORD=$(openssl rand -hex 24)`, and the four `IGN_SMTP_*` values;
+and an `acme.env` with the provider lines from Step 1 (Option A: `JOKER_API_MODE=SVC`
++ `JOKER_USERNAME` / `JOKER_PASSWORD` + the two timeout lines; Option B:
+`DESEC_TOKEN=…`). Then the same `docker compose … up -d` pair.
+</details>
 
 Watch the first certificate get issued — DNS-01 can take a few minutes while
 the `_acme-challenge` `TXT` record propagates (Joker/SVC especially):
