@@ -25,10 +25,10 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Slug</label>
-              <input class="form-control" name="slug" id="teamSlug" required
+              <input class="form-control" name="slug" id="teamSlug" required readonly
                      th:value="${suggestedSlug}" placeholder="hairy-badgers">
-              <div class="form-text">This is what shows up in URLs (<code>git.hairy-badgers.…</code>) — edit
-                directly if you want something other than what the name suggests.</div>
+              <div class="form-text">This is what shows up in URLs (<code>git.hairy-badgers.…</code>) — follows
+                the name above; change the name (or suggest another) to change it.</div>
             </div>
             <div class="mb-3">
               <label class="form-label">Node</label>
