@@ -16,6 +16,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.zone.ZoneRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,6 +27,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class ForgejoClient {
+
+    private static final Logger log = LoggerFactory.getLogger(ForgejoClient.class);
 
     /** {@code (status, body)} — body is a parsed JSON node, or an {@code {"error": …}} node. */
     public record Response(int status, JsonNode body) {
@@ -78,15 +82,19 @@ public class ForgejoClient {
         // avoids a hairpin through the edge. Matches container_name in
         // zone-compose.yml.tmpl.
         String base = "http://zone-" + slug + "-forgejo:3000";
+        String url = base + "/api/v1" + path;
         String token = zones.secret(slug, "forgejo_token");
         if (token.isBlank()) {
+            log.warn("[{}] {} {} — no forgejo_token secret yet (zone not fully provisioned?)", slug, method, path);
             return new Response(503, error("zone has no Forgejo admin token yet"));
         }
+        log.info("[{}] -> {} {} (token …{}, body keys {})", slug, method, url,
+                tail(token), body == null ? "none" : body.keySet());
         try {
             HttpRequest.BodyPublisher pub = body == null
                     ? HttpRequest.BodyPublishers.noBody()
                     : HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body));
-            HttpRequest req = HttpRequest.newBuilder(URI.create(base + "/api/v1" + path))
+            HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(15))
                     .header("Authorization", "token " + token)
                     .header("Content-Type", "application/json")
@@ -96,13 +104,30 @@ public class ForgejoClient {
             HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
             String raw = res.body();
             JsonNode node = (raw == null || raw.isBlank()) ? json.nullNode() : safeParse(raw);
-            return new Response(res.statusCode(), node);
-        } catch (java.io.IOException | JacksonException e) {
+            Response out = new Response(res.statusCode(), node);
+            if (out.ok()) {
+                log.info("[{}] <- {} {} {}", slug, method, path, res.statusCode());
+            } else {
+                // Forgejo's own error body — never anything we sent, safe to log in full.
+                log.warn("[{}] <- {} {} {} : {}", slug, method, path, res.statusCode(),
+                        raw == null ? "" : (raw.length() > 1000 ? raw.substring(0, 1000) + "…" : raw));
+            }
+            return out;
+        } catch (java.io.IOException e) {
+            log.warn("[{}] {} {} failed: {}: {}", slug, method, path,
+                    e.getClass().getSimpleName(), e.getMessage());
+            return new Response(502, error(e.getMessage()));
+        } catch (JacksonException e) {
+            log.warn("[{}] {} {} — response wasn't valid JSON: {}", slug, method, path, e.getMessage());
             return new Response(502, error(e.getMessage()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new Response(502, error("interrupted"));
         }
+    }
+
+    private static String tail(String token) {
+        return token.length() <= 4 ? "…" : token.substring(token.length() - 4);
     }
 
     private JsonNode safeParse(String raw) {
