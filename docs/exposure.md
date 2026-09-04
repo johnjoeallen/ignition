@@ -188,6 +188,24 @@ network you control:
 | **Terminate on the relay** | Traefik/Caddy + ACME (or an internal-CA cert) on the relay host | trusted cert at the relay; cluster speaks plain HTTP or passes TLS through |
 | **none** | — | plain HTTP only |
 
+### ACME with SSO in front of everything
+
+The gateway is a Traefik **middleware**, not a front proxy, so:
+
+- **DNS-01 (the `public` default)** — Let's Encrypt never connects to the box;
+  it checks a `_acme-challenge` TXT record that Traefik writes through the DNS
+  API. **Nothing to bypass.** Keep SSO on every hostname. Wildcards mean one
+  challenge per zone, not per app. This is the recommended answer.
+- **HTTP-01 (`public-http01`)** — Traefik serves `/.well-known/acme-challenge/*`
+  from its **own internal handler**, before any router or middleware runs, so
+  the forward-auth middleware never sees it. It works even though `:80`
+  redirects to `:443` (Traefik exempts the challenge path from the redirect).
+  Set `--certificatesresolvers.le.acme.httpchallenge.entrypoint=web`; the only
+  requirement is that `:80` is reachable from Let's Encrypt.
+- If you deliberately put a **separate** auth proxy (oauth2-proxy / Authelia) in
+  front of Traefik instead of using the middleware, add one unauthenticated
+  bypass: path prefix `^/\.well-known/acme-challenge/`, plain HTTP, no session.
+
 ## SSO — the mechanism
 
 **Mandatory whenever the box is on the corporate DMZ** (topologies A / B / E):
