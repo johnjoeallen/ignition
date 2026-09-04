@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.zone.Zone;
@@ -47,11 +48,16 @@ public class TraefikDynamicConfig {
     /** Rebuild the full dynamic directory from the DB as soon as the service is up. */
     @EventListener(ApplicationReadyEvent.class)
     public void rebuild() {
-        writePlatformRouter();
-        for (Zone z : zones.findAll()) {
-            writeZoneRouter(z);
+        try {
+            writePlatformRouter();
+            List<Zone> all = zones.findAll();
+            for (Zone z : all) {
+                writeZoneRouter(z);
+            }
+            log.info("rebuilt Traefik dynamic config for {} zone(s)", all.size());
+        } catch (RuntimeException e) {
+            log.error("could not rebuild Traefik dynamic config on startup", e);
         }
-        log.info("rebuilt Traefik dynamic config for {} zone(s)", zones.findAll().size());
     }
 
     public void writePlatformRouter() {

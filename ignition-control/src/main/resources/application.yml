@@ -10,7 +10,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none          # Flyway owns the schema
   flyway:
     enabled: true
 
@@ -33,7 +33,15 @@ ignition:
   admin-token: ${IGN_ADMIN_TOKEN:}
   work-dir: ${IGN_WORK_DIR:../work}
   secret-key: ${IGN_SECRET_KEY:}
+  public-url: ${IGN_PUBLIC_URL:http://localhost:8790}
   insecure-tls: ${IGN_INSECURE_TLS:false}
+  smtp:
+    host: ${IGN_SMTP_HOST:}
+    port: ${IGN_SMTP_PORT:587}
+    username: ${IGN_SMTP_USERNAME:}
+    password: ${IGN_SMTP_PASSWORD:}
+    from: ${IGN_SMTP_FROM:}
+    starttls: ${IGN_SMTP_STARTTLS:true}
   sweep:
     ttl: ${IGN_SWEEP_TTL:24h}
     interval: ${IGN_SWEEP_INTERVAL:15m}

@@ -1,5 +1,6 @@
 package net.dublinux.ignition;
 
+import net.dublinux.ignition.auth.SmtpProperties;
 import net.dublinux.ignition.config.IgnitionProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -16,7 +17,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 @EnableScheduling
-@EnableConfigurationProperties(IgnitionProperties.class)
+@EnableConfigurationProperties({IgnitionProperties.class, SmtpProperties.class})
 public class IgnitionControlApplication {
 
     public static void main(String[] args) {

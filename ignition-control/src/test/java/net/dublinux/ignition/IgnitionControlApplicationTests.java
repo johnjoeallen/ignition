@@ -18,7 +18,11 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @TestPropertySource(properties = {
         "ignition.admin-token=test-platform-token",
         "ignition.secret-key=/DoDwvqamAc1dBkxMs9k7J3mrLX1ORbse5AK1Z2Sa/k=",
-        "ignition.work-dir=target/test-work"
+        "ignition.work-dir=target/test-work",
+        "ignition.smtp.host=localhost",
+        "ignition.smtp.username=ignition",
+        "ignition.smtp.password=test",
+        "ignition.smtp.from=Ignition <ignition@example.com>"
 })
 class IgnitionControlApplicationTests {
 

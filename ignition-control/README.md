@@ -41,9 +41,14 @@ docker run -d --name ignition-pg -e POSTGRES_DB=ignition -e POSTGRES_USER=igniti
 
 IGN_ADMIN_TOKEN=$(openssl rand -hex 32) \
 IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64) \
+IGN_SMTP_HOST=localhost IGN_SMTP_USERNAME=x IGN_SMTP_PASSWORD=x \
+IGN_SMTP_FROM='Ignition <ignition@example.com>' \
 BASE_DOMAIN=ignition.example \
 ./mvnw spring-boot:run
 ```
+
+SMTP is **required** (the service won't start without it) — a
+[`maildev`](https://hub.docker.com/r/maildev/maildev) container works for local dev.
 
 Then `http://localhost:8790/login` with the admin token.
 
@@ -60,8 +65,9 @@ docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
 |---|---|
 | `config` | `IgnitionProperties`, `SecurityConfig` |
 | `security` | token → `IgnitionPrincipal`, the auth filter |
+| `auth` | `AppUser` / `AuthToken` / `ZoneMember` / `ZoneViewer` entities, `AccountService`, `MailService`, `SmtpProperties`, `PasswordConfig` |
 | `node` / `zone` / `app` | JPA entities + repositories + services; `zone.SecretCipher` |
-| `db/migration` | Flyway schema (`V1__infra.sql`) |
+| `db/migration` | Flyway schema (`V1__infra.sql`, `V2__identity.sql`) |
 | `forgejo` | `ForgejoClient` — per-zone REST wrapper (Jackson 3 / `java.net.http`) |
 | `release` | `ReleaseService` — Conventional-Commits bump + `cut` via Forgejo |
 | `scheduler` | `Scheduler` — CPU-headroom node placement |

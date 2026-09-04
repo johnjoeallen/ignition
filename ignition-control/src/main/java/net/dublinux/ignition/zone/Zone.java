@@ -53,6 +53,9 @@ public class Zone {
     @Column(name = "last_activity", nullable = false)
     private Instant lastActivity = Instant.now();
 
+    @Column(name = "created_by")
+    private java.util.UUID createdBy;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -86,7 +89,10 @@ public class Zone {
     public Visibility visibility() { return visibility; }
     public Instant lastActivity() { return lastActivity; }
 
+    public java.util.UUID createdBy() { return createdBy; }
+
     public void setNode(String node) { this.node = node; }
     public void setVisibility(Visibility visibility) { this.visibility = visibility; }
+    public void setCreatedBy(java.util.UUID createdBy) { this.createdBy = createdBy; }
     public void touch() { this.lastActivity = Instant.now(); }
 }

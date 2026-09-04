@@ -29,6 +29,9 @@ public class IgnitionProperties {
     /** 32 bytes base64 — AES-GCM key for {@code zone_secret} values. */
     private String secretKey = "";
 
+    /** Public origin, e.g. {@code https://admin.ignition.example} — used to build email links. */
+    private String publicUrl = "http://localhost:8790";
+
     /** Skip TLS verification when calling a zone's Forgejo (pre-cert). */
     private boolean insecureTls = false;
 
@@ -87,6 +90,8 @@ public class IgnitionProperties {
     public void setWorkDir(Path workDir) { this.workDir = workDir; }
     public String getSecretKey() { return secretKey; }
     public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
+    public String getPublicUrl() { return publicUrl; }
+    public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
     public boolean isInsecureTls() { return insecureTls; }
     public void setInsecureTls(boolean insecureTls) { this.insecureTls = insecureTls; }
     public Sweep getSweep() { return sweep; }
