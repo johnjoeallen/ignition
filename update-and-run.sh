@@ -44,10 +44,19 @@ if [ "$do_pull" = 1 ]; then
     "${CONTROL[@]}" pull
 fi
 
-log "traefik-core up"
+# Full down/up, not `up -d` alone: compose only recreates a container when it
+# notices something changed, and it can miss command-line arg / label changes
+# (e.g. Traefik's static entrypoint flags) depending on what actually changed
+# upstream. down+up guarantees every container matches the compose file
+# exactly. Safe for data: down never touches a volume without -v/--volumes,
+# and we never pass that — ignition-pgdata, ignition-work, ignition-dynamic,
+# and traefik's acme (cert storage) all survive untouched.
+log "traefik-core down/up"
+"${TRAEFIK[@]}" down
 "${TRAEFIK[@]}" up -d
 
-log "ignition-control up"
+log "ignition-control down/up"
+"${CONTROL[@]}" down
 "${CONTROL[@]}" up -d
 
 log "waiting for ignition-control to answer"
