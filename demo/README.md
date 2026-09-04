@@ -26,6 +26,14 @@ cat out/INSTALL.txt               # where each rendered file goes
 `demo.conf` and `out/` hold secrets and are git-ignored. `demo.conf` is the
 one file to back up — it has every generated token and key.
 
+## Keeping it up to date
+
+On `spitfire`, once the initial files from `out/` are in place, pulling a
+later change and restarting is [`../update-and-run.sh`](../update-and-run.sh)
+(run from the repo root): `git pull`, `docker compose … pull`, `up -d` for
+both stacks, then prints status and the first-run setup code if `/setup`
+hasn't been used yet.
+
 ## What gets rendered
 
 | file | goes to | part |
