@@ -99,9 +99,12 @@ public class ZoneConsoleController {
         String slug = requireZoneAdmin(z);
         try {
             access.addMember(slug, email, role);
-            String username = zones.ensureGitAccess(slug, email);
-            return redirect(slug, email + " added as " + role.name().toLowerCase()
-                    + " — git access as " + username);
+            var git = zones.ensureGitAccess(slug, email);
+            String msg = email + " added as " + role.name().toLowerCase() + " — git access as " + git.username();
+            if (git.password() != null) {
+                msg += ", password: " + git.password() + " (copy it now, it won't be shown again)";
+            }
+            return redirect(slug, msg);
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }

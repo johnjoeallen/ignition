@@ -196,35 +196,46 @@ public class ZoneService {
     }
 
     /**
-     * Ensures a Forgejo account exists for this member, in the zone's org.
-     * Idempotent — safe to call every time someone's added, or re-added.
-     * A username collision (two different emails sanitizing to the same
-     * login) is resolved by appending {@code -2}, {@code -3}, ….
+     * A provisioned (or just-ensured) git account. {@code password} is only
+     * set when this call is what actually created the account — same idea as
+     * {@link #resetGitPassword}: shown once, never stored, never retrievable
+     * again after that.
      */
-    public String ensureGitAccess(String slug, String email) {
+    public record GitAccess(String username, String password) {}
+
+    /**
+     * Ensures a Forgejo account exists for this member, in the zone's org.
+     * Idempotent — safe to call every time someone's added, or re-added. A
+     * username collision (two different emails sanitizing to the same login)
+     * is resolved the way Gmail suggests alternatives on a taken address —
+     * append a number and try again — not with a separator, so {@code alice}
+     * collides to {@code alice2}, {@code alice3}, ….
+     */
+    public GitAccess ensureGitAccess(String slug, String email) {
         String base = usernameFromEmail(email);
         String username = base;
-        for (int suffix = 2; suffix <= 5; suffix++) {
+        for (int suffix = 2; suffix <= 20; suffix++) {
             var existing = forgejo.get(slug, "/users/" + username);
             if (!existing.ok()) {
                 break; // free to use
             }
             if (email.equalsIgnoreCase(existing.body().path("email").asText(""))) {
                 ensureOrgMembership(slug, username);
-                return username; // already provisioned, from an earlier call
+                return new GitAccess(username, null); // already provisioned, from an earlier call
             }
-            username = base + "-" + suffix;
+            username = base + suffix;
         }
+        String password = randBase64(18);
         var res = forgejo.post(slug, "/admin/users", Map.of(
-                "username", username, "email", email, "password", randBase64(18),
+                "username", username, "email", email, "password", password,
                 "must_change_password", false));
-        if (res.ok()) {
-            ensureOrgMembership(slug, username);
-        } else {
+        if (!res.ok()) {
             log.warn("zone {}: could not create Forgejo account {} for {} ({}): {}",
                     slug, username, email, res.status(), res.message());
+            return new GitAccess(username, null);
         }
-        return username;
+        ensureOrgMembership(slug, username);
+        return new GitAccess(username, password);
     }
 
     private void ensureOrgMembership(String slug, String username) {
