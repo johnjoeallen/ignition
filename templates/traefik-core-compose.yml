@@ -86,8 +86,16 @@ services:
       # ACME_CA_SERVER: leave unset for Let's Encrypt, or set to a self-hosted
       # step-ca directory URL for certs from your own CA.
       - --certificatesresolvers.le.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
-      # Uncomment to watch the ACME exchange while getting DNS creds right:
-      # - --log.level=DEBUG
+      # TRAEFIK_LOG_LEVEL=DEBUG to watch the full ACME exchange while getting
+      # DNS creds right (very verbose — includes the DNS provider's own
+      # request/response traffic). INFO is the default either way; set it in
+      # .env, don't edit this file.
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      # Every request, not just errors — this is what answers "did the
+      # request even reach Traefik, and what did it do with it" without
+      # guessing from what's absent. CLF to stdout; picked up by `docker logs`
+      # same as everything else here.
+      - --accesslog=true
     ports:
       # Bind to a specific host interface on a multi-homed box (the corp-DMZ IP,
       # or the public IP) — see docs/exposure.md "Topologies". Default: all.
