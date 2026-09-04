@@ -80,21 +80,6 @@ body { background: var(--ign-bg); }
 
 code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem .35rem; border-radius: 4px; }
 
-/* ---- logs ---- */
-.ign-log {
-  background: var(--ign-card-bg); box-shadow: var(--ign-shadow); border-radius: .75rem;
-  padding: 1rem 1.25rem; max-height: 75vh; overflow: auto;
-  font-size: .8rem; line-height: 1.5;
-}
-.ign-log code {
-  display: block; background: none; padding: 0; border-radius: 0;
-  color: inherit; white-space: pre-wrap; word-break: break-word;
-}
-.ign-log-warn { color: #a15c00; }
-.ign-log-error { color: #b3261e; }
-[data-bs-theme="dark"] .ign-log-warn { color: #e0a53d; }
-[data-bs-theme="dark"] .ign-log-error { color: #ff8a80; }
-
 /* ---- auth pages (login/setup/signup/...) ---- */
 .ign-auth-page { min-height: 100vh; padding: 1.5rem; background: var(--ign-bg); }
 .ign-auth-card { width: 100%; max-width: 26rem; }
