@@ -338,6 +338,50 @@ spitfire 10.44.0.11:443 → Traefik → ignition-control`.
 
 ---
 
+### Optional cleanup — redirect the bare apex domain to HTTPS
+
+Not part of the demo path, but worth doing on the same box: if `hetzner`'s
+**own** apex domain (e.g. `classesarecode.net`, not `ignition.classesarecode.net`
+— that one's spitfire's, routed by nginx above) has no Apache vhost of its own,
+plain `http://classesarecode.net` silently falls through to whichever vhost
+Apache picks as its default — usually not what you want.
+
+First confirm whether it already has a real `:443` vhost + certificate (`apachectl
+-S | grep -i classesarecode`). If it does, this redirect is enough —
+`/etc/apache2/sites-available/classesarecode.net.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName classesarecode.net
+    ServerAlias www.classesarecode.net
+
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</VirtualHost>
+```
+
+```sh
+a2ensite classesarecode.net
+a2enmod rewrite
+apachectl configtest && systemctl restart apache2   # restart, not reload — see Step 3
+```
+
+**If there's no `:443` vhost/cert for the bare apex yet**, this redirect has
+nowhere valid to land — a browser will follow the 301 straight into a broken
+TLS handshake. Get a real cert first; Apache still owns `:80` here, so
+HTTP-01 works normally:
+
+```sh
+certbot --apache -d classesarecode.net -d www.classesarecode.net
+```
+
+(or point the redirect at a real existing destination instead, e.g.
+`https://ignition.classesarecode.net/`, if the apex was never meant to be its
+own site).
+
+---
+
 ## Step 5 — firewall
 
 `:443` is already open (Apache used it). The only possible addition is
