@@ -1,9 +1,14 @@
 # Per-node core services — Traefik + Watchtower. Runs once on every node,
 # before any zone is placed there.
 #
-#   export BASE_DOMAIN=example.com ACME_EMAIL=ops@example.com
-#   export CF_DNS_API_TOKEN=...            # DNS-challenge creds for the certs
+#   export BASE_DOMAIN=example.com ACME_EMAIL=ops@example.com ACME_DNS_PROVIDER=<your dns host>
+#   # put the DNS API creds for ACME_DNS_PROVIDER in ./acme.env (see below)
 #   docker compose -f templates/traefik-core-compose.yml up -d
+#
+# ACME_DNS_PROVIDER is any of Traefik's ~100 DNS providers — whatever hosts
+# your zone (route53, hetzner, gandiv5, desec, rfc2136 for a self-run DNS, …);
+# the matching credential env vars go in acme.env. Set ACME_CA_SERVER to point
+# at a self-hosted step-ca instead of Let's Encrypt.
 #
 # Watchtower rolls any deployed app container forward if its image tag ever
 # gets a new digest — e.g. CI re-runs for the same release tag after a
@@ -65,7 +70,10 @@ services:
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?set ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/acme/acme.json
       - --certificatesresolvers.le.acme.dnschallenge=true
-      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
+      - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:?set ACME_DNS_PROVIDER}
+      # ACME_CA_SERVER: leave unset for Let's Encrypt, or set to a self-hosted
+      # step-ca directory URL for certs from your own CA.
+      - --certificatesresolvers.le.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       # Uncomment to watch the ACME exchange while getting DNS creds right:
       # - --log.level=DEBUG
     ports:
@@ -74,10 +82,12 @@ services:
     extra_hosts:
       # so a file-provider router can reach ignition-control on the control host's loopback
       - "host.docker.internal:host-gateway"
-    environment:
-      # Cloudflare by default; swap ACME_DNS_PROVIDER + the matching var for
-      # another provider (see https://doc.traefik.io/traefik/https/acme/).
-      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+    env_file:
+      # the DNS-provider credential vars for ACME_DNS_PROVIDER (e.g.
+      # AWS_ACCESS_KEY_ID / HETZNER_API_KEY / RFC2136_* …). Create it:
+      #   printf 'PROVIDER_TOKEN=…\n' > acme.env
+      - path: acme.env
+        required: false
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - acme:/acme

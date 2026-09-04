@@ -71,7 +71,8 @@ Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
 ```sh
 # 1. Core services (Traefik + Watchtower) — once per node.
-export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example CF_DNS_API_TOKEN=...
+export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
+printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env      # DNS API creds for the ACME challenge
 docker compose -f templates/traefik-core-compose.yml up -d
 
 # 2. The control plane — once, on the control host. Its routers front it at

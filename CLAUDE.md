@@ -238,14 +238,17 @@ command's stdout.
    Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
-4. **Exposure profiles** (`docs/exposure.md`). A cluster-level
-   `ignition.exposure.profile` — `public` (today) / `public-http01` /
-   `cloudflare-tunnel` / `tailscale` / `frp` / `corp-ca` / `http-only` — plus an
-   optional `corp-sso` layer. It decides the Traefik entrypoint (`websecure` vs
-   `web`), cert resolver (`le-dns` / `le-http` / `corp` / none), and whether a
-   `forward-auth` middleware is attached. `traefik-core-compose.yml` gains
-   optional `cloudflared` / `tailscale` / `oauth2-proxy` services enabled by the
-   profile. `ComposeTemplate` renders the app / zone Traefik labels from
+4. **Exposure profiles** (`docs/exposure.md`). All self-hosted — no third-party
+   tunnel or mesh services. A cluster-level `ignition.exposure.profile` —
+   `public` (today) / `public-http01` / `relay` / `internal-ca` / `http-only` —
+   plus an optional `sso` layer. It decides the Traefik entrypoint (`websecure`
+   vs `web`), the cert resolver (`le-dns` / `le-http` / `internal` / none — the
+   ACME CA is configurable via `ACME_CA_SERVER`, so a self-hosted `step-ca`
+   works), and whether a `forward-auth` middleware is attached.
+   `traefik-core-compose.yml` gains an optional reverse-tunnel client
+   (`rathole` / `frp` / `ssh -R` to a relay host the operator runs) and an
+   optional `oauth2-proxy` / Authelia service, enabled by the profile.
+   `ComposeTemplate` renders the app / zone Traefik labels from
    `profile × visibility`, where `visibility` (`public` / `corp` / `private`) is
    a per-app field in the `/deploy` payload and the zone console.
    `ignition-control` records the effective scheme + host so the console and

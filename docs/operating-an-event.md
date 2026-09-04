@@ -14,9 +14,11 @@ Everything an operator does is in the **platform console** at
   `admin.<slug>.<BASE_DOMAIN>` / `<app>.apps.<slug>.<BASE_DOMAIN>` → whichever
   node runs that zone. On a single node, `*.<slug>.<BASE_DOMAIN>` A-records cover
   it; across nodes, a record per zone/app.
-- A DNS-provider API token for Traefik's ACME DNS challenge (Cloudflare by
-  default; swap the provider in `templates/traefik-core-compose.yml`). The
-  control host's Traefik fetches the apex cert (`<BASE_DOMAIN>` +
+- API credentials for **your** DNS provider so Traefik can answer the ACME
+  DNS-01 challenge (`ACME_DNS_PROVIDER` + the matching vars in `acme.env` —
+  any of Traefik's ~100 providers, including `rfc2136` for a self-run DNS).
+  Set `ACME_CA_SERVER` to use a self-hosted `step-ca` instead of Let's Encrypt.
+  The control host's Traefik fetches the apex cert (`<BASE_DOMAIN>` +
   `*.<BASE_DOMAIN>`); each zone's Forgejo router fetches `*.<slug>.<BASE_DOMAIN>`
   + `*.apps.<slug>.<BASE_DOMAIN>`.
 
@@ -25,13 +27,15 @@ Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 The above is the **`public`** exposure profile — direct inbound + DNS-01
 wildcard certs. If the cluster has no inbound, or the audience is corporate
 only, or you can't get trusted certs, see **[Exposure & access](exposure.md)**
-for reverse tunnels, internal-CA certs, plain-HTTP fallback, and SSO gating.
+for a self-hosted reverse tunnel, internal-CA certs, plain-HTTP fallback, and
+SSO gating.
 
 ## Standing up the event
 
 ```sh
 # 1. Core services (Traefik + Watchtower) — once per node.
-export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example CF_DNS_API_TOKEN=...
+export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
+printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env      # DNS API creds for the ACME challenge
 docker compose -f templates/traefik-core-compose.yml up -d
 
 # 2. The control plane — once, on the control host.

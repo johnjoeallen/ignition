@@ -7,6 +7,7 @@ Thumbs.db
 
 # Env / secrets
 .env
+acme.env
 .env.*
 !.env.example
 
