@@ -10,6 +10,16 @@
   <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/vendor/icons/bootstrap-icons.css">
   <link rel="stylesheet" href="/css/ignition.css">
+  <script>
+    // Set before first paint so there's no flash of the wrong theme.
+    (function () {
+      try {
+        var t = localStorage.getItem('ign-theme')
+            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-bs-theme', t);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body></body>
 </html>

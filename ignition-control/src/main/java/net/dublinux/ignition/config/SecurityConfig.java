@@ -29,7 +29,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/error",
                                 "/login", "/logout", "/setup", "/setup/**",
                                 "/signup", "/activate", "/forgot", "/reset",
-                                "/css/**", "/vendor/**", "/img/**", "/favicon.ico").permitAll()
+                                "/css/**", "/js/**", "/vendor/**", "/img/**", "/favicon.ico").permitAll()
                         .requestMatchers(HttpMethod.POST, "/deploy", "/undeploy").hasRole("DEPLOY")
                         // AUTH-DESIGN step 6 opens /z to zone members; for now platform-only.
                         .requestMatchers("/z/**", "/roster/**", "/sweep").hasAuthority("PLATFORM_ADMIN")

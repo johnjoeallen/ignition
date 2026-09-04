@@ -4,8 +4,24 @@
   --ign-sidebar-bg: #0f2d28;
   --ign-sidebar-bg-2: #123a33;
   --ign-bg: #f4f6f6;
+  --ign-card-bg: #fff;
+  --ign-table-head-bg: #fafbfb;
+  --ign-table-head-fg: #6b7676;
+  --ign-code-bg: #eef2f2;
+  --ign-code-fg: inherit;
+  --ign-shadow: 0 1px 2px rgba(16,24,24,.06), 0 2px 8px rgba(16,24,24,.06);
   --bs-link-color: var(--ign-accent);
   --bs-link-hover-color: var(--ign-accent-2);
+}
+
+[data-bs-theme="dark"] {
+  --ign-bg: #12181a;
+  --ign-card-bg: var(--bs-body-bg);
+  --ign-table-head-bg: rgba(255,255,255,.03);
+  --ign-table-head-fg: var(--bs-secondary-color);
+  --ign-code-bg: rgba(255,255,255,.08);
+  --ign-code-fg: #e6e6e6;
+  --ign-shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.3);
 }
 
 body { background: var(--ign-bg); }
@@ -33,11 +49,10 @@ body { background: var(--ign-bg); }
 .ign-sidebar .nav-link i { font-size: 1.1rem; }
 .ign-sidebar .nav-link:hover { background: rgba(255,255,255,.08); color: #fff; }
 .ign-sidebar .nav-link.active { background: rgba(255,255,255,.16); color: #fff; font-weight: 600; }
-.ign-sidebar-foot { color: rgba(255,255,255,.5); padding: .8rem 1.2rem; }
 
 .ign-main { min-width: 0; }
 .ign-topbar {
-  background: #fff; border-bottom: 1px solid #e5e9ea;
+  background: var(--ign-card-bg); border-bottom: 1px solid var(--bs-border-color);
   padding: .6rem 1rem; position: sticky; top: 0; z-index: 10;
 }
 
@@ -45,13 +60,15 @@ body { background: var(--ign-bg); }
 .card, .table-card {
   border: none;
   border-radius: .75rem;
-  box-shadow: 0 1px 2px rgba(16,24,24,.06), 0 2px 8px rgba(16,24,24,.06);
+  box-shadow: var(--ign-shadow);
+  background: var(--ign-card-bg);
 }
-.table-card { background: #fff; overflow: hidden; }
+.table-card { overflow: hidden; }
 .table-card > .table { margin-bottom: 0; }
 .table thead th {
   text-transform: uppercase; letter-spacing: .04em; font-size: .72rem;
-  color: #6b7676; background: #fafbfb; border-bottom: 1px solid #e5e9ea;
+  color: var(--ign-table-head-fg); background: var(--ign-table-head-bg);
+  border-bottom: 1px solid var(--bs-border-color);
 }
 .table td, .table th { vertical-align: middle; }
 
@@ -61,7 +78,7 @@ body { background: var(--ign-bg); }
 .page-title { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
 .page-title i { color: var(--ign-accent); }
 
-code { background: #eef2f2; padding: .1rem .35rem; border-radius: 4px; }
+code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem .35rem; border-radius: 4px; }
 
 /* ---- auth pages (login/setup/signup/...) ---- */
 .ign-auth-page { min-height: 100vh; padding: 1.5rem; background: var(--ign-bg); }
@@ -70,3 +87,4 @@ code { background: #eef2f2; padding: .1rem .35rem; border-radius: 4px; }
   display: flex; align-items: center; gap: .6rem;
   font-weight: 700; font-size: 1.3rem; color: var(--ign-sidebar-bg);
 }
+[data-bs-theme="dark"] .ign-auth-brand { color: #fff; }

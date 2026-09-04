@@ -82,19 +82,20 @@
       </div>
 
       <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Users</h2>
-      <form method="post" th:action="@{/z/users}" class="row g-2 align-items-end mb-3">
+      <form method="post" th:action="@{/z/users}" class="row g-2 align-items-end mb-3" autocomplete="off">
         <input type="hidden" name="z" th:value="${zoneSlug}">
         <div class="col-auto">
           <label class="form-label small mb-1">username</label>
-          <input class="form-control form-control-sm" name="username" required>
+          <input class="form-control form-control-sm" name="username" autocomplete="off" required>
         </div>
         <div class="col-auto">
           <label class="form-label small mb-1">email</label>
-          <input class="form-control form-control-sm" name="email" type="email" required>
+          <input class="form-control form-control-sm" name="email" type="email" autocomplete="off" required>
         </div>
         <div class="col-auto">
           <label class="form-label small mb-1">password</label>
-          <input class="form-control form-control-sm" name="password" type="password" required>
+          <input class="form-control form-control-sm" name="password" type="password"
+                 autocomplete="new-password" required>
         </div>
         <div class="col-auto">
           <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Add user</button>

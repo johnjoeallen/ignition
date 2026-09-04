@@ -5,15 +5,21 @@
     <div class="ign-auth-page d-flex align-items-center justify-content-center">
       <div class="card ign-auth-card">
         <div class="card-body p-4 p-sm-5">
-          <div class="ign-auth-brand mb-4">
-            <img src="/img/mark.svg" alt="" width="40" height="40">
-            <span>Ignition</span>
+          <div class="d-flex align-items-center justify-content-between mb-4">
+            <div class="ign-auth-brand">
+              <img src="/img/mark.svg" alt="" width="40" height="40">
+              <span>Ignition</span>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" type="button" id="ignThemeToggle" title="Toggle theme">
+              <i class="bi bi-moon-stars"></i>
+            </button>
           </div>
           <div th:replace="${content}"></div>
         </div>
       </div>
     </div>
     <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="/js/theme.js"></script>
   </th:block>
 </body>
 </html>
