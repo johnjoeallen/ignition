@@ -64,38 +64,28 @@ public class ZoneAccessService {
      *                     out of ZONE_ADMIN is refused outright, even with
      *                     other team admins around — same rule as platform
      *                     admin (see {@link AccountService#setPlatformAdmin}).
+     *                     Unlike platform admin, there's no "last team admin"
+     *                     guard beyond that — a team with zero admins isn't a
+     *                     dead end, a platform admin can always add one back.
      */
     @Transactional
     public void setRole(String slug, UUID userId, ZoneMember.Role role, UUID actingUserId) {
         ZoneMember m = members.findByZoneSlugAndUserId(slug, userId)
                 .orElseThrow(() -> new IllegalArgumentException("not a member of this team"));
-        if (m.role() == ZoneMember.Role.ZONE_ADMIN && role != ZoneMember.Role.ZONE_ADMIN) {
-            if (userId.equals(actingUserId)) {
-                throw new IllegalStateException(
-                        "you can't demote yourself out of team admin — ask another team admin");
-            }
-            guardLastZoneAdmin(slug, userId);
+        if (m.role() == ZoneMember.Role.ZONE_ADMIN && role != ZoneMember.Role.ZONE_ADMIN
+                && userId.equals(actingUserId)) {
+            throw new IllegalStateException(
+                    "you can't demote yourself out of team admin — ask another team admin");
         }
         m.setRole(role);
         members.save(m);
     }
 
+    /** No "last admin" guard here either — see {@link #setRole}. */
     @Transactional
     public void removeMember(String slug, UUID userId) {
         ZoneMember m = members.findByZoneSlugAndUserId(slug, userId)
                 .orElseThrow(() -> new IllegalArgumentException("not a member of this team"));
-        if (m.role() == ZoneMember.Role.ZONE_ADMIN) {
-            guardLastZoneAdmin(slug, userId);
-        }
         members.delete(m);
-    }
-
-    private void guardLastZoneAdmin(String slug, UUID exceptId) {
-        long others = members.findByZoneSlug(slug).stream()
-                .filter(m -> m.role() == ZoneMember.Role.ZONE_ADMIN && !m.userId().equals(exceptId))
-                .count();
-        if (others == 0) {
-            throw new IllegalStateException("cannot remove the team's last admin");
-        }
     }
 }

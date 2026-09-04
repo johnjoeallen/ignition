@@ -236,6 +236,13 @@ public class ZoneService {
             if (email.equalsIgnoreCase(existing.body().path("email").asText(""))) {
                 ensureOrgMembership(slug, username);
                 zones.putSecret(slug, emailKey, username);
+                // The account predates us knowing its password (this ignition-control
+                // never set one it kept, or the row is stale) — Forgejo won't hand back
+                // an existing password either way, so the only way to have one on file
+                // to show is to set a fresh one now.
+                if (!zones.hasSecret(slug, "git_pw_" + username)) {
+                    resetGitPassword(slug, username);
+                }
                 ensurePat(slug, username);
                 return username; // already provisioned, from an earlier call
             }
