@@ -239,12 +239,17 @@ command's stdout.
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
 4. **Exposure profiles** (`docs/exposure.md`). All self-hosted — no third-party
-   tunnel or mesh services. A cluster-level `ignition.exposure.profile` —
-   `public` (today) / `public-http01` / `relay` / `internal-ca` / `http-only` —
-   plus an optional `sso` layer. It decides the Traefik entrypoint (`websecure`
-   vs `web`), the cert resolver (`le-dns` / `le-http` / `internal` / none — the
-   ACME CA is configurable via `ACME_CA_SERVER`, so a self-hosted `step-ca`
-   works), and whether a `forward-auth` middleware is attached.
+   tunnel or mesh services. The Ignition box is **multi-homed**: the internal
+   Ignition network (`traefik-public`, `zone-<slug>` nets, DinD) is always
+   isolated with no route out; exposure is which host interface Traefik binds
+   (`IGN_EXPOSE_ADDR` — the corp-DMZ IP, a public IP, or a LAN IP) and how the
+   audience reaches it. Topologies A–E in the doc. A cluster-level
+   `ignition.exposure.profile` — `public` (today) / `public-http01` / `relay` /
+   `internal-ca` / `http-only` — plus an `sso` layer (mandatory on a DMZ
+   interface). It decides the Traefik entrypoint (`websecure` vs `web`), the
+   cert resolver (`le-dns` / `le-http` / `internal` / none — the ACME CA is
+   configurable via `ACME_CA_SERVER`, so a self-hosted `step-ca` works), and
+   whether a `forward-auth` middleware is attached.
    `traefik-core-compose.yml` gains an optional reverse-tunnel client
    (`rathole` / `frp` / `ssh -R` to a relay host the operator runs) and an
    optional `oauth2-proxy` / Authelia service, enabled by the profile.

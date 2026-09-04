@@ -31,6 +31,41 @@ The `sso` layer is added on top of **any** of these.
 
 ---
 
+## The Ignition box is multi-homed
+
+Whatever the topology, the **internal Ignition network is always isolated**:
+`traefik-public`, every `zone-<slug>` network, and each zone's DinD engine are
+Docker bridge networks that live on the box and have **no route to the
+corporate network or the internet inbound**. Corp users never touch a zone's
+Forgejo, runner, or build engine — only the app routers Traefik publishes.
+
+Exposure is therefore a question of **which interface Traefik binds `:80/:443`
+to**, and how a request reaches it. The box typically has two or more
+attachments:
+
+- **corporate DMZ** — so people on the corp network can reach the demos
+  (SSO + SSL mandatory here);
+- **the internal Ignition network** — the isolated per-zone stacks (never
+  routable from outside);
+- optionally **a direct internet link** — a separate NIC / uplink for external
+  guests, used when corp can't accept inbound or run a tunnel to the box.
+
+### Topologies
+
+| # | Box is attached to | App traffic reaches it via | Profile | Notes |
+|---|---|---|---|---|
+| **A** | corp DMZ + internal | Traefik on the **DMZ interface** | `public` (internal-CA or public ACME) **+ `sso`** | The common corporate case. `IGN_EXPOSE_ADDR` binds `:443` to the DMZ IP only. Certs from the corp internal CA (`step-ca`) or public ACME if the DMZ names are delegatable. |
+| **B** | corp DMZ + internal + a direct internet link | Traefik on **both** the DMZ and the public interface | `public` + `sso` for corp names, plus public ACME on the internet interface | Two entrypoints / two sets of routers; external guests hit the public NIC, corp hits the DMZ NIC. Split the router hostnames or duplicate them per interface. |
+| **C** | internet only (no corp link at all) | Traefik on the **public interface** | `public` (public ACME) **± `sso`** | The box is just on the internet. SSO optional — a self-hosted Keycloak with invited accounts if you want to restrict to named guests. |
+| **D** | a local switch only (air-gapped) | Traefik on the **LAN interface**, laptops in the room | `internal-ca` or `http-only` | No remote demo. Certs from a `step-ca` you run on the box, or plain HTTP. |
+| **E** | corp DMZ + internal, but corp won't route inbound to the DMZ | outbound **tunnel** from the box to a relay | `relay` (+ `sso`) | Box dials out to a relay (DMZ box or VPS); see below. |
+
+`IGN_EXPOSE_ADDR` (host IP or `0.0.0.0`) controls which interface the Traefik
+ports bind to; `ignition-control` records the resulting scheme + host so the
+console and `/info` show the URL the audience will actually use.
+
+---
+
 ## 1. Public inbound (`public`, `public-http01`)
 
 The node's Traefik owns `:80` / `:443`; requests arrive directly.
@@ -122,8 +157,13 @@ network you control:
 
 ## SSO
 
-Independent of reachability. An identity proxy sits in front of the app
-routers; unauthenticated requests bounce to your IdP.
+Independent of reachability, but **mandatory whenever the box is on the
+corporate DMZ** (topologies A / B / E) — the DMZ interface is reachable by the
+whole corp network, so app routers there must be gated. Optional for a purely
+public box (C) if the guest list is closed.
+
+An identity proxy sits in front of the app routers; unauthenticated requests
+bounce to your IdP.
 
 - **Traefik `forwardAuth` middleware → `oauth2-proxy`**, or **Authelia**
   (self-contained: OIDC/LDAP, 2FA, access-control rules), configured against
@@ -154,16 +194,22 @@ resolver (`le-dns` / `le-http` / `internal` / none), and whether the
 
 ## Decision guide
 
-- **Public IP + you control DNS** → `public` (DNS-01 wildcard). ACME CA = Let's
-  Encrypt, or your own if you'd rather not use a public CA.
-- **Public IP, no DNS API** → `public-http01`.
-- **No inbound, internet audience** → `relay` on a small public VPS you run,
-  TLS terminated there.
-- **No inbound, corporate audience** → `relay` on a DMZ box, split-horizon DNS,
-  certs from your internal CA (or ACME on the relay).
-- **Reachable from the corp network already, must stay internal** →
-  `internal-ca` (`step-ca`) + `sso`.
-- **Truly nothing works** → `http-only`, closed network, no SSO.
+Start from the topology (above), then:
+
+- **Box on the corp DMZ, corp audience** (topology A) → `public` + `sso`, bind
+  `IGN_EXPOSE_ADDR` to the DMZ IP. Certs from the corp `step-ca`, or public ACME
+  if the DMZ names are delegatable.
+- **Corp DMZ + a direct internet link** (B) → the above for corp names, plus
+  public ACME + `public` on the internet interface for external guests.
+- **Internet only, no corp link** (C) → `public` (DNS-01 wildcard, public ACME).
+  Add `sso` (self-hosted Keycloak, invited accounts) if the guest list is
+  closed.
+- **Air-gapped, laptops in the room** (D) → `internal-ca` (`step-ca` on the box)
+  or `http-only`. No remote demo.
+- **Corp DMZ but no inbound allowed** (E) → `relay`: the box dials out to a
+  relay you run (a DMZ box, or a VPS for an external audience); TLS terminates
+  on the relay; split-horizon DNS.
+- **Public IP but no DNS API** → `public-http01` (per-host HTTP-01).
 
 ## Status
 

@@ -77,8 +77,10 @@ services:
       # Uncomment to watch the ACME exchange while getting DNS creds right:
       # - --log.level=DEBUG
     ports:
-      - "80:80"
-      - "443:443"
+      # Bind to a specific host interface on a multi-homed box (the corp-DMZ IP,
+      # or the public IP) — see docs/exposure.md "Topologies". Default: all.
+      - "${IGN_EXPOSE_ADDR:-0.0.0.0}:80:80"
+      - "${IGN_EXPOSE_ADDR:-0.0.0.0}:443:443"
     extra_hosts:
       # so a file-provider router can reach ignition-control on the control host's loopback
       - "host.docker.internal:host-gateway"
