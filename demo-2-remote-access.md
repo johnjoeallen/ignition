@@ -5,30 +5,30 @@
 
 This part makes the demo reachable from the internet through a root server you
 already run, **without a second IP and without IPv6** (which corporate networks
-often can't reach). The trick: dedicate the whole `classesarecode.net`
+often can't reach). The trick: dedicate the whole `ignition.classesarecode.net`
 domain to the demo and split traffic on `hetzner` by **TLS SNI** — the hostname
 the client asks for, visible in the TLS handshake without decrypting it.
 
 - **`hetzner`** — one public IPv4 (`<PUBLIC_IP>`), already serving web on
   `:80`/`:443` (Apache) plus mail and SSH. For the demo it runs a small **SNI
-  front proxy** on that IP: connections for `*.classesarecode.net` go
+  front proxy** on that IP: connections for `*.ignition.classesarecode.net` go
   down a WireGuard tunnel to `spitfire`; everything else goes to Apache on
   loopback. **Mail and SSH are untouched; Apache needs a one-line port change,
   no vhost edits.**
 
 ```
-                    internet  →  <PUBLIC_IP>:443
-                             │
-             ┌───────────────▼───────────────┐
-             │  hetzner :  nginx SNI router   │
-             └───────┬───────────────┬───────┘
-        SNI matches  │               │  SNI = anything else
-    *.classesarecode.net             │
-        (over WireGuard)             ▼
-                     │       Apache  127.0.0.1:443
-                     ▼       (your existing sites — unchanged, loopback-only)
-        spitfire  10.44.0.11:443
-        (part 1 — unchanged; terminates its own TLS)
+                       internet  →  <PUBLIC_IP>:443
+                                │
+                ┌───────────────▼───────────────┐
+                │   hetzner :  nginx SNI router  │
+                └───────┬───────────────┬────────┘
+   SNI ends in          │               │          SNI = anything else
+   .ignition.classesarecode.net         │
+   (raw TLS over WireGuard)             ▼
+                        │      Apache  127.0.0.1:443
+                        ▼      (your existing sites — unchanged, loopback-only)
+             spitfire  10.44.0.11:443
+             (part 1 — unchanged; terminates its own TLS)
 ```
 
 > **Why not put the control plane on `hetzner` instead?** The
@@ -43,7 +43,7 @@ the client asks for, visible in the TLS handshake without decrypting it.
 
 ### A dedicated domain + SNI routing
 
-Every demo hostname is under `classesarecode.net`; none of Apache's
+Every demo hostname is under `ignition.classesarecode.net`; none of Apache's
 sites are. So `hetzner` can decide where a connection goes purely from the
 **SNI** — the server name in the TLS `ClientHello`, sent in the clear before any
 encryption. `nginx`'s `ssl_preread` reads it **without terminating TLS**:
@@ -123,11 +123,11 @@ challenges flowing to Apache (see the note at the end).
 
 ## Step 1 — the DNS wildcard record
 
-At Joker (the DNS host for `classesarecode.net`):
+At Joker (the DNS host for the parent zone `classesarecode.net`):
 
 ```
-*.classesarecode.net.   A   <PUBLIC_IP>
-classesarecode.net.     A   <PUBLIC_IP>     # optional: the bare apex
+*.ignition.classesarecode.net.   A   <PUBLIC_IP>
+ignition.classesarecode.net.     A   <PUBLIC_IP>     # optional: the bare apex
 ```
 
 One record covers every depth (`admin.…`, `git.<slug>.…`,
@@ -222,8 +222,8 @@ router at the **top level** of `/etc/nginx/nginx.conf` (a sibling of
 ```nginx
 stream {
     map $ssl_preread_server_name $demo_backend {
-        ~\.classesarecode\.net$   10.44.0.11:443;   # demo  → spitfire over WireGuard
-        default                   127.0.0.1:443;     # all your Apache sites → Apache
+        ~\.ignition\.classesarecode\.net$   10.44.0.11:443;   # demo → spitfire over WireGuard
+        default                             127.0.0.1:443;    # all your Apache sites → Apache
     }
 
     server {
@@ -282,7 +282,7 @@ path — `spitfire` always sees the tunnel address either way.
 Verify from a machine **off your LAN**:
 
 ```sh
-curl -I https://admin.classesarecode.net/actuator/health   # → spitfire
+curl -I https://admin.ignition.classesarecode.net/actuator/health   # → spitfire
 curl -kI https://your-existing-site.com/                            # → Apache, unchanged
 ```
 
@@ -317,7 +317,7 @@ tunnel needs nothing.
 
 ## Step 6 — flip to the public path
 
-Remove the `admin.classesarecode.net` line from your laptop's
+Remove the `admin.ignition.classesarecode.net` line from your laptop's
 `/etc/hosts` (added in part 1). The name now resolves to `<PUBLIC_IP>` and
 routes through nginx for real.
 
@@ -325,21 +325,21 @@ routes through nginx for real.
 
 ## Step 7 — provision a zone and deploy an app
 
-In the platform console (`https://admin.classesarecode.net/`):
+In the platform console (`https://admin.ignition.classesarecode.net/`):
 
 1. **Zones → Provision** — a slug, e.g. `quantum-badgers`. The scheduler places
    it on `spitfire` (the only node): Forgejo + a private build engine + a
    runner + a `zoneadmin` account + two tokens (~1–2 min). Bulk: **Roster**.
 2. Copy the zone's **zone token** (team-lead console sign-in at
-   `https://admin.quantum-badgers.classesarecode.net/`) and **deploy
+   `https://admin.quantum-badgers.ignition.classesarecode.net/`) and **deploy
    token** (CI).
 
-Each zone auto-requests its own `*.quantum-badgers.classesarecode.net`
-+ `*.apps.quantum-badgers.classesarecode.net` cert (two labels below
+Each zone auto-requests its own `*.quantum-badgers.ignition.classesarecode.net`
++ `*.apps.quantum-badgers.ignition.classesarecode.net` cert (two labels below
 the apex).
 
 **Deploy an app** — in that zone's Forgejo
-(`https://git.quantum-badgers.classesarecode.net/`):
+(`https://git.quantum-badgers.ignition.classesarecode.net/`):
 
 1. A repo with a `Dockerfile` and `.forgejo/workflows/deploy.yml`
    (copy [`examples/deploy.yml`](examples/deploy.yml)).
@@ -348,7 +348,7 @@ the apex).
 3. **Zone console → Repositories → Release** — `ignition-control` reads the
    commits since the last tag, picks the semver bump (Conventional Commits;
    dropdown overrides), tags `vX.Y.Z` on `main`; the tag builds, pushes, deploys.
-4. Live at `https://<APP_NAME>.apps.quantum-badgers.classesarecode.net/`.
+4. Live at `https://<APP_NAME>.apps.quantum-badgers.ignition.classesarecode.net/`.
 
 A plain `git push` to `main` does **not** deploy — only a release tag.
 Watchtower on `spitfire` then rolls the app forward on any new digest for that
@@ -368,7 +368,7 @@ tag (~60s).
   `RemoteIPProxyProtocol On` (Apache ≥ 2.4.31) on the loopback listener.
 - **`traefik-public` is one flat network on `spitfire`** — a deployed app can
   reach another zone's Forgejo by IP. Don't demo with untrusted app code.
-- **When done:** delete the `*.classesarecode.net` DNS record.
+- **When done:** delete the `*.ignition.classesarecode.net` DNS record.
 
 ---
 
@@ -390,7 +390,7 @@ apachectl configtest && systemctl reload apache2
 rm /etc/wireguard/wg0.conf
 # remove the udp/51820 firewall rule you added
 
-# DNS: delete the *.classesarecode.net record
+# DNS: delete the *.ignition.classesarecode.net record
 ```
 
 ---
@@ -433,7 +433,7 @@ server {
     }
 
     # demo names → force https
-    if ($host ~ \.classesarecode\.net$) { return 301 https://$host$request_uri; }
+    if ($host ~ \.ignition\.classesarecode\.net$) { return 301 https://$host$request_uri; }
 
     # everything else → Apache
     location / {
@@ -453,7 +453,7 @@ this proxy, or just don't bother with the `:80` redirect.
 
 If you'd rather not put nginx in front of Apache, order a **second IPv4** for
 the server in Robot, bind it as `<DEMO_IP>/32` on `<IFACE>` *alongside* the main
-address, point `*.classesarecode.net` at `<DEMO_IP>`, and forward just
+address, point `*.ignition.classesarecode.net` at `<DEMO_IP>`, and forward just
 that IP's `:443` to `spitfire` with an isolated nftables DNAT table
 (`ip daddr <DEMO_IP> tcp dport 443 dnat to 10.44.0.11`, plus `masquerade`
 `oifname "wg0"`, plus `net.ipv4.ip_forward=1`). Apache, mail and SSH keep

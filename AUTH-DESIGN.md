@@ -274,7 +274,7 @@ IGN_SMTP_USERNAME  (required)
 IGN_SMTP_PASSWORD  (required)
 IGN_SMTP_FROM      (required, e.g. "Ignition <ignition@classesarecode.net>")
 IGN_SMTP_STARTTLS  (default true)
-IGN_PUBLIC_URL     (required, e.g. https://admin.classesarecode.net — builds links)
+IGN_PUBLIC_URL     (required, e.g. https://admin.ignition.classesarecode.net — builds links)
 ```
 
 Also required at startup: **`IGN_SECRET_KEY`** (32 bytes base64, for
