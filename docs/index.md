@@ -29,8 +29,10 @@ subdomain:
 
 !!! note
     `ignition.example` is a placeholder. `BASE_DOMAIN` can be any apex your
-    organisation controls — the only requirement is DNS that can serve names
-    two labels deep and wildcard certificates for `*.<slug>.<apex>`.
+    organisation controls. DNS is one pre-registered wildcard `*.<apex>` → the
+    controller, which resolves every name at any depth (RFC 4592); certs are all
+    issued at the controller's edge. See
+    [Exposure & access](exposure.md).
 
 | host | what |
 |---|---|
@@ -57,34 +59,36 @@ subdomain:
 ```mermaid
 flowchart TB
     pa["Platform admin"] --> cp
-    cp["Control plane<br/>admin.ignition.example"]
+    dev["Team developer"] -->|"git push (PAT) · https"| cp
+    visitor["Judge / stakeholder"] -->|https| cp
+    za["Zone admin (quantum-badgers)"] -->|"users · repos · apps · runner"| cp
+    cp["Controller<br/>edge :443 · SSO · ignition-control<br/>the only public machine"]
 
-    subgraph node1["node-1"]
-        traefik1["Traefik"]
+    subgraph node1["node-1  (private, no inbound)"]
+        traefik1["Traefik (internal :80)"]
         subgraph zA["zone quantum-badgers  (isolated)"]
             fa["Forgejo"]
         end
         appA1["app: paywise"]
         appA2["app: reco-api"]
     end
-    subgraph node2["node-2"]
-        traefik2["Traefik"]
+    subgraph node2["node-2  (private, no inbound)"]
+        traefik2["Traefik (internal :80)"]
         subgraph zB["zone pixel-foxes  (isolated)"]
             fb["Forgejo"]
         end
         appB["app: paywise"]
     end
 
-    cp -->|place / manage| zA
-    cp -->|place / manage| zB
+    cp -->|"WireGuard · place / manage"| zA
+    cp -->|"WireGuard · place / manage"| zB
     cp -->|deploy| appA1
     cp -->|deploy| appA2
-    za["Zone admin (quantum-badgers)"] -->|"users · repos · apps · runner"| cp
-    dev["Team developer"] -->|git push| traefik1
-    traefik1 -->|"git.quantum-badgers.ignition.example"| fa
-    traefik1 -->|"paywise.apps.quantum-badgers.ignition.example · reco-api.apps.quantum-badgers.ignition.example"| appA1
-    traefik2 -->|"paywise.apps.pixel-foxes.ignition.example"| appB
-    visitor["Judge / stakeholder"] -->|https| traefik1
+    cp -->|"Host → git.quantum-badgers.ignition.example"| traefik1
+    cp -->|"Host → *.apps.pixel-foxes.ignition.example"| traefik2
+    traefik1 --> fa
+    traefik1 --> appA1
+    traefik2 --> appB
 ```
 
 ## How a zone's apps get deployed
@@ -151,7 +155,7 @@ design is what makes a "yes" possible at all. That's a bonus, not the reason.
 
 A few choices look odd until you hit the constraint behind them — each zone
 gets its own subdomain subtree rather than a URL path, apps are deployed from
-the control host rather than from inside the sandbox, there are no per-zone
+the controller rather than from inside the sandbox, there are no per-zone
 host ports, and one central control plane holds every credential rather than an
 agent per node. See **[Architecture](architecture.md)** for
 each, **[Roles](roles.md)** for the platform-admin / zone-admin split, and
@@ -160,11 +164,12 @@ each, **[Roles](roles.md)** for the platform-admin / zone-admin split, and
 ## Status
 
 Ignition is **one Java (Spring Boot) service, `ignition-control`, deployed as a
-container** on the control host. Both consoles, node registration, zone
-provisioning (the two-phase Forgejo + DinD + runner apply) / move / destroy, the
-scheduler, the roster, the idle sweep, and the CI `/deploy` bridge are all in
-place. There is no CLI — every operation is in the web UI.
+container** on the controller — the only public machine and the only place TLS
+terminates, reaching the private nodes over WireGuard. Both consoles, node
+registration, zone provisioning (the two-phase Forgejo + DinD + runner apply) /
+move / destroy, the scheduler, the roster, the idle sweep, and the CI `/deploy`
+bridge are all in place. There is no CLI — every operation is in the web UI.
 
-Rough edges — creating the `git.<slug>` / `*.apps.<slug>` / `admin.<slug>` DNS
-records, repo seeding, a services catalogue — are tracked in `README` and
+Rough edges — finishing the edge / SSO / WireGuard wiring in the compose
+templates, repo seeding, a services catalogue — are tracked in `README` and
 `CLAUDE.md`. The design and the port history are in `DESIGN.md`.

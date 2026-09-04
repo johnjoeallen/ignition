@@ -12,8 +12,10 @@ Many teams (target ~80), a small pool of hosts ("nodes"). Each team gets a
 fully isolated stack (a "zone").
 
 The whole thing is **one Java (Spring Boot 4) service, `ignition-control`,
-deployed as a container** on the control host. Every platform-admin and
-zone-admin operation is in its web UI — there is no CLI. Design and the
+deployed as a container** on the **controller** — the only public machine and
+the only place TLS terminates; nodes sit on a private network with no inbound,
+reached over WireGuard. Every platform-admin and zone-admin operation is in its
+web UI — there is no CLI. Design and the
 port history are in **[DESIGN.md](DESIGN.md)**; the module is
 [`ignition-control/`](ignition-control/).
 
@@ -74,7 +76,7 @@ ignition-control/                # the control plane — one Spring Boot service
     web/           Platform / Zone / Roster / Login / Deploy controllers + Thymeleaf
   src/main/resources/compose/     zone-compose.yml.tmpl, app-compose.tmpl
 templates/
-  ignition-control-compose.yml   # run the control plane on the control host
+  ignition-control-compose.yml   # run the control plane on the controller
   traefik-core-compose.yml       # per-node core: Traefik + Watchtower
 examples/deploy.yml              # sample workflow to seed into a zone's repo
 state/
@@ -94,7 +96,7 @@ state/
 **"Zone" = one team's isolated stack, assigned 1:1 to a node.** Every per-zone
 Docker resource is prefixed `zone-<slug>` (containers, networks, volumes,
 compose project) so `docker compose -p zone-<slug> down -v` is a complete,
-safe teardown. A node is a host that runs zone stacks; the control host runs
+safe teardown. A node is a host that runs zone stacks; the controller runs
 `ignition-control`, which reaches each node's Docker daemon over the `docker`
 CLI (`-H` local socket / `ssh://` / `tcp://`+TLS).
 
@@ -107,8 +109,7 @@ subtree: `admin.<slug>.<BASE_DOMAIN>` (the zone console) and
 `<app>.apps.<slug>.<BASE_DOMAIN>` (one per deployed app). The platform admin is
 one host on the apex, `admin.<BASE_DOMAIN>`.
 
-**Ingress: the controller is the only front door** (design — see task 4; the
-current code runs Traefik on every node). All inbound `:443` terminates at the
+**Ingress: the controller is the only front door.** All inbound `:443` terminates at the
 controller's Traefik edge, which runs the SSO gateway and reverse-proxies by
 `Host` over WireGuard to the node running the zone; nodes have **no inbound**
 and their Traefik is internal-only (plain HTTP behind the edge). DNS is a
@@ -125,7 +126,7 @@ single-label). `ignition-control` writes the edge router + cert config per zone
 (`git.<slug>.<domain>/…`). Each app is its own compose project
 `app-<slug>-<name>` on the zone's node.
 
-**Apps are deployed from the control host onto the zone's node, not from inside
+**Apps are deployed from the controller onto the zone's node, not from inside
 the zone's DinD sandbox.** A container built and run inside a nested Docker
 engine is in that engine's private netns — Traefik can't route to it. So CI
 builds + pushes an image, then `POST /deploy` (`{app, image, port}`, per-zone
@@ -190,25 +191,24 @@ command's stdout.
 
 ## Known gaps (see README "rough edges" for the full list)
 
-- **Nothing creates the `git.<slug>` / `<app>.apps.<slug>` / `admin.<slug>` DNS
-  records.** Provisioning and deploy assume they resolve (wildcard the subtree
-  for a single node; per-record across nodes). Wiring it to the DNS-provider API
-  Traefik already uses is the top task.
+- **The edge / SSO / WireGuard wiring in the compose templates isn't finished.**
+  The architecture is the controller-only front door (above, and
+  `docs/exposure.md`): `traefik-core-compose.yml` should be internal-only on
+  `:80` with no ACME, and `ignition-control-compose.yml` should carry the edge
+  Traefik + `forward-auth` + WireGuard. `ignition-control` already writes the
+  per-zone router snippet; it needs to write the edge cert config and add each
+  node as a WG peer at registration. See task 4.
 - **`traefik-public` is one flat network.** The app containers and the Forgejo
   instances on a node can reach each other by IP; the untrusted code is the app
   container. A Traefik-per-zone network or an L3 policy would close it.
-- **`ignition-control` holds every token** and drives every node's Docker
-  daemon — it needs a locked-down deployment (its own TLS front, restricted
-  socket access).
+- **`ignition-control` holds every token**, is the single public front door,
+  and drives every node's Docker daemon — a concentrated blast radius that
+  needs a locked-down deployment.
 - **No repo seeding.** The starter repo, `deploy.yml`, and repo vars/secrets
   are still set up by hand per zone.
 - **No services catalogue.** A team that needs Postgres, a mock of an internal
   API, or a keyed proxy to an external one stands it up by hand. See task 3.
 - **`move` rebuilds the zone empty** — the Forgejo data volume doesn't follow.
-- **Ingress is not the single-ingress model yet.** The code still runs Traefik
-  on every node, needs a DNS record per zone, and has no SSO. The controller-
-  only edge (WireGuard to private nodes, plain HTTP inward, pre-registered
-  wildcard DNS, one SSO gateway) is designed in `docs/exposure.md` — task 4.
 
 ## Likely next tasks
 
@@ -237,9 +237,10 @@ command's stdout.
    Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
-4. **Exposure & access** (`docs/exposure.md`) — one model, no per-topology
-   choices. **The controller is the only public machine and the only place TLS
-   terminates.** It runs the Traefik **edge**, an **SSO gateway**, and
+4. **Wire up the single front door** (the architecture — `docs/exposure.md` and
+   the Ingress section above; this task is the implementation). **The controller
+   is the only public machine and the only place TLS terminates.** It runs the
+   Traefik **edge**, an **SSO gateway**, and
    `ignition-control`; it owns `:443` and reverse-proxies by `Host` over
    **WireGuard** to nodes on a private network with **no inbound**
    (`ignition-control` adds each node as a WG peer at registration). Behind the

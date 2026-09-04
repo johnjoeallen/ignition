@@ -104,10 +104,8 @@ The deploy payload and the zone console carry a `visibility`:
 whether the `forward-auth` (and `ip-allowlist`) middleware is attached; the
 entrypoint and cert are always the edge's.
 
-## Status
+## Where this sits
 
-Ignition today runs Traefik on every node with a DNS record per zone and no
-SSO. The model above — controller-only ingress, WireGuard to private nodes,
-plain HTTP inward, pre-registered wildcard DNS, one SSO gateway — is the design;
-see [`CLAUDE.md`](https://github.com/johnjoeallen/ignition/blob/main/CLAUDE.md)
-task 4.
+This is the architecture — see [Architecture → Ingress](architecture.md#ingress-one-front-door).
+The per-node Traefik stays, internal-only, for the final `Host` → container hop;
+everything public terminates at the controller's edge.

@@ -5,41 +5,41 @@ Everything an operator does is in the **platform console** at
 
 ## Prerequisites
 
-- A **control host** with Docker + Compose v2, and a way to reach each node's
-  Docker daemon (local socket, `ssh://`, or `tcp://`+TLS).
-- **Nodes** — hosts with Docker, each with the shared network created:
-  `docker network create traefik-public`.
+- The **controller** — the one public machine — with Docker + Compose v2. It
+  owns `:443`, terminates all TLS, runs the SSO gateway, and reaches each node
+  over WireGuard.
+- **Nodes** — hosts with Docker on a private network with **no inbound**, each
+  with the shared network created: `docker network create traefik-public`, and a
+  WireGuard peer to the controller.
 - **DNS** (`BASE_DOMAIN` is the apex, e.g. `ignition.example`): one
-  pre-registered wildcard `*.<BASE_DOMAIN>` → the control host, set up once and
+  pre-registered wildcard `*.<BASE_DOMAIN>` → the controller, set up once and
   never touched again. It matches at any depth (RFC 4592), so
   `admin.<BASE_DOMAIN>`, `git.<slug>.<BASE_DOMAIN>`,
   `admin.<slug>.<BASE_DOMAIN>`, and `<app>.apps.<slug>.<BASE_DOMAIN>` all
   resolve with no per-zone record. Provisioning a zone adds zero DNS.
-- API credentials for **your** DNS provider so Traefik can answer the ACME
+- API credentials for **your** DNS provider so the edge can answer the ACME
   DNS-01 challenge (`ACME_DNS_PROVIDER` + the matching vars in `acme.env` —
   any of Traefik's ~100 providers, including `rfc2136` for a self-run DNS).
   Set `ACME_CA_SERVER` to use a self-hosted `step-ca` instead of Let's Encrypt.
-  The control host's Traefik fetches the apex cert (`<BASE_DOMAIN>` +
-  `*.<BASE_DOMAIN>`); each zone's Forgejo router fetches `*.<slug>.<BASE_DOMAIN>`
-  + `*.apps.<slug>.<BASE_DOMAIN>`.
+  The edge fetches the apex cert (`<BASE_DOMAIN>` + `*.<BASE_DOMAIN>`) and, per
+  zone, `*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>`.
 
-Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
-
-Today Ignition runs Traefik on every node. The target model — the controller as
-the only public machine and only TLS terminator, WireGuard to private nodes with
-no inbound, plain HTTP inward, and one SSO gateway — is described in
-**[Exposure & access](exposure.md)**.
+All TLS terminates at the controller's edge; behind it, over WireGuard,
+everything is plain HTTP. See **[Exposure & access](exposure.md)** for the full
+picture.
 
 ## Standing up the event
 
 ```sh
-# 1. Core services (Traefik + Watchtower) — once per node.
-export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
-printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env      # DNS API creds for the ACME challenge
+# 1. Core services (internal Traefik + Watchtower) — once per node,
+#    on the private network. No public ports, no certs here.
 docker compose -f templates/traefik-core-compose.yml up -d
 
-# 2. The control plane — once, on the control host.
-export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)      # the platform key — keep it
+# 2. The controller — once, the only public machine. Runs the edge
+#    (owns :443, all TLS/ACME), the SSO gateway, and the control plane.
+export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
+printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env          # DNS API creds for the ACME challenge
+export IGN_ADMIN_TOKEN=$(openssl rand -hex 32)        # the platform key — keep it
 docker compose -f templates/ignition-control-compose.yml up -d
 ```
 
@@ -56,7 +56,7 @@ Each zone's page shows its **zone token** and **deploy token**. Hand the team
 lead only the **zone token** — they sign in with it at
 `https://admin.<slug>.ignition.example/`, the zone console, and that's their
 whole surface. (`zone-admin.txt` is `ignition-control`'s service credential;
-it never leaves the control host.)
+it never leaves the controller.)
 
 In each repo they want deployed they add `.forgejo/workflows/deploy.yml` (from
 `examples/deploy.yml`) with its variables/secrets — `REGISTRY`, `CONTROL_URL`,
@@ -105,15 +105,15 @@ capacity per node.
 
 ## Rough edges
 
-- **DNS records for `git.<slug>` / `admin.<slug>` / `*.apps.<slug>` aren't
-  created for you** — the target model pre-registers one wildcard
-  `*.<BASE_DOMAIN>` → the controller (matches at any depth), so provisioning
-  adds zero DNS; until then it's a wildcard `*.<slug>.<BASE_DOMAIN>` per node.
+- **The edge / SSO / WireGuard wiring in the compose templates is still being
+  finished** — the architecture is the controller-only front door
+  ([Exposure & access](exposure.md)); `traefik-core-compose.yml` and
+  `ignition-control-compose.yml` are catching up to it.
 - **`traefik-public` is one flat network** — app containers and Forgejo
   instances on a node can reach each other by IP.
-- **`ignition-control` holds every token** and drives every node's Docker
-  daemon — it needs a locked-down deployment (its own TLS front, restricted
-  socket access).
+- **`ignition-control` holds every token**, is the single public front door,
+  and drives every node's Docker daemon — the controller is a
+  concentrated blast radius and needs a locked-down deployment.
 - **The control plane and the per-node Watchtower pull images anonymously** —
   private packages need `docker login git.<slug>.<BASE_DOMAIN>` on the node.
 - **No repo seeding** — the starter repo + repo vars/secrets are still set by

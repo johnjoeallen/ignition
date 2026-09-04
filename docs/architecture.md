@@ -1,11 +1,14 @@
 # Architecture
 
 Ignition is **one Java (Spring Boot) service, `ignition-control`**, plus two
-compose templates. It runs as a container on the control host, serves both
-admin consoles, and drives every node's Docker daemon over the `docker` CLI.
-State is a directory per node, per zone, and per app under `state/`. This page
-covers the domain scheme, the shape of a zone's stack, node placement, the
-control plane, and the decisions that aren't obvious. Implementation detail is
+compose templates. It runs as a container on the **controller** — the only
+machine with a public address and the only place TLS terminates — serves both
+admin consoles, is the single front door for all traffic, and drives every
+node's Docker daemon over the `docker` CLI. Nodes sit on a private network with
+no inbound; the controller reaches them over WireGuard. State is a directory per
+node, per zone, and per app under `state/`. This page covers the domain scheme,
+the shape of a zone's stack, node placement, the control plane, ingress, and the
+decisions that aren't obvious. Implementation detail is
 in `DESIGN.md` and [`ignition-control/`](https://github.com/johnjoeallen/ignition/tree/main/ignition-control).
 
 ## The domain scheme
@@ -24,15 +27,17 @@ under it:
 
 A forge needs a whole origin because Docker registry clients hit `/v2/…` at the
 domain *root* and ignore path prefixes. Giving each zone its own subtree keeps
-git, admin, and every app on one clean per-zone namespace. Everything is two
-labels deep, so a `*.<BASE_DOMAIN>` wildcard misses it — see the TLS note under
-[Core services](#core-services-once-per-node).
+git, admin, and every app on one clean per-zone namespace. A single
+pre-registered DNS wildcard `*.<BASE_DOMAIN>` → the controller resolves all of
+it at any depth (RFC 4592), so provisioning a zone adds no DNS. TLS wildcards,
+which are single-label, are handled at the edge — see
+[Ingress](#ingress-one-front-door).
 
-## Nodes, zones, control host
+## Nodes, zones, controller
 
 ```mermaid
 flowchart TB
-    ch["Control host<br/>ignition-control container · state/"]
+    ch["Controller<br/>ignition-control container · state/"]
     ch -->|"docker over local / ssh:// / tcp://"| n1
     ch -->|"    "| n2
 
@@ -58,7 +63,7 @@ flowchart TB
 - An **app** is `state/zones/<slug>/apps/<name>.env`: which node it
   runs on, its image, port, and last deploy id — plus the rendered
   `<name>-compose.yml`.
-- The **control host** runs `ignition-control` and never runs workloads
+- The **controller** runs `ignition-control` and never runs workloads
   itself — it drives each node's Docker daemon remotely.
 
 The **scheduler** places a new zone on the active node with the most free CPU
@@ -81,12 +86,12 @@ flowchart LR
     end
 
     subgraph shared["node, shared"]
-        traefik["Traefik  (:443)"]
+        traefik["Traefik (node, :80 internal<br/>via WireGuard from the edge)"]
         app1["app-paywise<br/>on traefik-public"]
         app2["app-reco-api<br/>on traefik-public"]
     end
 
-    cp["ignition-control (control host)"]
+    cp["ignition-control (controller)"]
     traefik -->|"Host(git.&lt;slug&gt;.&lt;domain&gt;)"| forgejo
     runner -->|"push image → forgejo registry<br/>POST /deploy {app,image,port}"| cp
     cp -->|"docker compose -p app-&lt;slug&gt;-&lt;name&gt; up"| app1
@@ -101,7 +106,7 @@ every app the zone deployed**.
 
 ## The control plane
 
-`ignition-control` is one container on the control host. It authenticates the caller's
+`ignition-control` is one container on the controller. It authenticates the caller's
 bearer token and acts only within that scope:
 
 | Token | Role | Can do |
@@ -155,7 +160,7 @@ the same subtree, `<app>.apps.<slug>.<domain>`, so a zone runs as many as it
 likes and each has a clean host. The zone admin view is `admin.<slug>.<domain>`;
 the platform control plane is `admin.<domain>`.
 
-## Decision 2 — apps are deployed from the control host
+## Decision 2 — apps are deployed from the controller
 
 A container built and run *inside* the zone's nested DinD engine is in that
 engine's own network namespace. Traefik has no route to it.
@@ -169,7 +174,7 @@ sequenceDiagram
     participant CI as runner (in zone net)
     participant DinD as zone DinD engine
     participant Reg as zone Forgejo registry
-    participant Ctl as ignition-control (control host)
+    participant Ctl as ignition-control (controller)
     participant Node as zone's node daemon
     participant Traefik
 
@@ -200,16 +205,18 @@ build sandbox stays isolated, the serving layer does not.
 
 ## Decision 3 — no per-zone host ports, one central control plane
 
-Everything is routed by hostname through each node's Traefik:
-`git.<slug>.<domain>` → Forgejo, `<app>.apps.<slug>.<domain>` → an app,
-`admin.<slug>.<domain>` → the zone view, `admin.<domain>` → the platform plane. Nothing binds a host port per zone — no
-allocation table, no range to exhaust.
+Everything is routed by hostname — the controller's edge terminates it and, for
+`git.<slug>.<domain>` and `<app>.apps.<slug>.<domain>`, forwards over WireGuard
+to that node's internal Traefik, which does the final hop to Forgejo or the app;
+`admin.<slug>.<domain>` and `admin.<domain>` are served by `ignition-control`
+itself. Nothing binds a host port per zone — no allocation table, no range to
+exhaust.
 
 And there is **one** `ignition-control`, not an agent per node. It already needs to
 orchestrate across nodes (place a zone, move a zone, deploy an app to whichever
 node its zone is on), and it is the natural place to hold the platform token,
 every zone and deploy token, and every zone's Forgejo admin token behind one
-auth check. It runs as a container on the control host (socket + `state/` +
+auth check. It runs as a container on the controller (socket + `state/` +
 ssh keys mounted; on `traefik-public`) via
 `templates/ignition-control-compose.yml`. Nodes run only Docker; all
 decision-making is central.
@@ -231,10 +238,39 @@ chars → bytes → hex → `8-4-4-4-12`). But the secret still has to be regist
 
 Real chicken-and-egg, not accidental complexity.
 
+## Ingress — one front door
+
+There is **one front door**: the controller is the only public machine and the
+only place TLS terminates. Its edge Traefik owns `:443` (and `:80` for the ACME
+challenge and the HTTPS redirect), runs the **SSO gateway** for browser
+traffic, and reverse-proxies by `Host` over **WireGuard** to whichever node
+runs the zone. Nodes have **no inbound at all**; behind the edge everything is
+**plain HTTP** — the WireGuard link is the confidentiality boundary.
+
+**DNS** is a single pre-registered wildcard `*.<BASE_DOMAIN>` → the controller,
+set up once and never touched. It matches at any depth (RFC 4592), so
+`admin.<BASE_DOMAIN>`, `git.<slug>.<BASE_DOMAIN>`, and
+`<app>.apps.<slug>.<BASE_DOMAIN>` all resolve to the controller with no
+per-zone record.
+
+**Certs** are all issued at the edge via the ACME DNS-01 challenge — one
+`*.<BASE_DOMAIN>` (covering every single-label name) plus, per zone,
+`*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` (cert wildcards are
+single-label, so these are two labels deep), which `ignition-control` requests
+as it provisions the zone, alongside its router snippet in
+`state/control/dynamic/<slug>.yml`. CA is Let's Encrypt or a self-hosted
+`step-ca` via `ACME_CA_SERVER`.
+
+The **per-node Traefik** (`traefik-core-compose.yml`) stays, but
+**internal-only** on `:80`: it watches `traefik-public` and does the final
+`Host` → container hop for that node's Forgejo and apps. It holds no
+certificates.
+
 ## Core services, once per node
 
 `traefik-core-compose.yml` brings up two per-node services (on **every** node);
-the control host additionally runs `ignition-control-compose.yml`.
+the controller additionally runs `ignition-control-compose.yml` with the edge
+Traefik and SSO gateway.
 
 **Watchtower** (`--label-enable`, 60s poll, `--cleanup --rolling-restart`)
 rolls any container labelled `com.centurylinklabs.watchtower.enable=true`
@@ -244,29 +280,6 @@ Traefik, Forgejo, DinD and runners are never restarted. It reads
 `${DOCKER_CONFIG_DIR:-/root/.docker}/config.json` for registry auth — the same
 `docker login` a node needs for private packages.
 
-**Traefik** owns `:80` / `:443`, watches `traefik-public`, and
-holds certificates via the ACME DNS challenge. The control host's Traefik
-holds the apex cert (`<event-domain>` + `*.<event-domain>`, covering
-`admin.<event-domain>`); **each zone's own Forgejo router** additionally
-requests `*.<slug>.<event-domain>` + `*.apps.<slug>.<event-domain>`, covering
-that zone's git, admin, and every app with no per-name request.
-`admin.<slug>.<event-domain>` is served by `ignition-control` behind the control
-host's Traefik via a file-provider snippet
-(`state/control/dynamic/<slug>.yml`).
-
-DNS is separate from certs: `git.<slug>.<event-domain>` and
-`*.apps.<slug>.<event-domain>` A-records must point at whichever node runs that
-zone; `admin.<slug>.<event-domain>` and `admin.<event-domain>` at the control
-host. On a single host, one `*.<slug>.<event-domain>` record per zone covers
-it; across nodes, split git/apps from admin (automating this via the
-DNS-provider API is the top next task).
-
-!!! warning "Being replaced by single-ingress"
-    The above is the current implementation. The design (**[Exposure &
-    access](exposure.md)**) is one front door: **the controller is the only
-    public machine and the only place TLS terminates**. It owns `:443`, runs
-    the SSO gateway, and reverse-proxies by `Host` over **WireGuard** to nodes
-    on a private network with **no inbound**. DNS is a single pre-registered
-    wildcard `*.<BASE_DOMAIN>` → the controller; all certs are issued there;
-    behind the edge everything is plain HTTP. The per-node Traefik stays,
-    internal-only, for the final `Host` → container hop.
+**Traefik** (per node) watches `traefik-public` on `:80` only, reachable solely
+over WireGuard from the controller. All TLS, all ACME, and all SSO live at the
+controller's edge, described above.

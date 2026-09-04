@@ -125,8 +125,9 @@ from?" six months later.
 - **Predictable footprint.** Per-zone CPU and memory quotas are set in one
   place; the console shows allocation vs. capacity per node. Adding a node is
   one form.
-- **No new vendor.** Forgejo (community-governed, FOSS), Docker, and Traefik —
-  all things a platform team can already reason about and audit.
+- **No new vendor.** Forgejo (community-governed, FOSS), Docker, Traefik, and
+  WireGuard — all things a platform team can already reason about and audit. No
+  hosted tunnel or edge service: the controller is the only public machine.
 - **Reversible.** Nothing here is a long-lived commitment. Run an event, tear it
   down, keep the templates.
 
