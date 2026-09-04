@@ -86,7 +86,9 @@
         manages members below; <b>member</b> gets everything else here (apps, releases). Git access isn't a
         separate step: adding someone here also provisions their Forgejo login, as their sanitized email
         (shown below each address). Adding someone attaches their existing Ignition account — they sign up
-        (or a platform admin invites them) first.</p>
+        (or a platform admin invites them) first. Your own git password and personal access token (for
+        <code>git clone</code>/<code>push</code> or the API) are in your own row below — nobody else's,
+        including other admins, are shown here.</p>
       <form th:if="${canManageMembers}" method="post" th:action="@{/z/members}"
             class="row g-2 align-items-end mb-3" autocomplete="off">
         <input type="hidden" name="z" th:value="${zoneSlug}">
@@ -107,11 +109,23 @@
       </form>
       <div class="table-card">
         <table class="table table-hover mb-0">
-          <thead><tr><th>email</th><th>git login</th><th>role</th><th></th></tr></thead>
+          <thead><tr><th>email</th><th>git login</th><th>git password</th><th>PAT</th><th>role</th><th></th></tr></thead>
           <tbody>
             <tr th:each="m : ${members}">
               <td th:text="${m.email}">alice@example.com</td>
               <td><code th:text="${gitUsernames[m.email]}">alice</code></td>
+              <td>
+                <code th:if="${m.userId == currentUserId and myGitPassword != null}"
+                      th:text="${myGitPassword}">••••••••</code>
+                <span th:unless="${m.userId == currentUserId and myGitPassword != null}"
+                      class="text-body-secondary">—</span>
+              </td>
+              <td>
+                <code th:if="${m.userId == currentUserId and myGitPat != null}"
+                      th:text="${myGitPat}" style="word-break:break-all">••••••••</code>
+                <span th:unless="${m.userId == currentUserId and myGitPat != null}"
+                      class="text-body-secondary">—</span>
+              </td>
               <td>
                 <span class="badge" th:classappend="${m.role.name() == 'ZONE_ADMIN'} ? 'text-bg-success' : 'text-bg-secondary'"
                       th:text="${m.role.name() == 'ZONE_ADMIN'} ? 'admin' : 'member'">member</span>
@@ -139,7 +153,7 @@
                 </form>
               </td>
             </tr>
-            <tr th:if="${members.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">no members yet</td></tr>
+            <tr th:if="${members.isEmpty()}"><td colspan="6" class="text-body-secondary text-center py-4">no members yet</td></tr>
           </tbody>
         </table>
       </div>

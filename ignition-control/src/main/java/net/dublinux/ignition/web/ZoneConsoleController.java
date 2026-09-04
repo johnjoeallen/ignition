@@ -79,7 +79,17 @@ public class ZoneConsoleController {
         List<ZoneAccessService.MemberView> members = access.membersOf(slug);
         Map<String, String> gitUsernames = members.stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        ZoneAccessService.MemberView::email, m -> zones.gitUsername(m.email())));
+                        ZoneAccessService.MemberView::email, m -> zones.gitUsername(slug, m.email())));
+
+        java.util.UUID currentUserId = currentUser.get().map(u -> u.id()).orElse(null);
+        // Credentials are only ever computed for the viewer's own row — never
+        // fetched (let alone decrypted) for anyone else's, so there's nothing
+        // to accidentally leak even if the template gating had a bug.
+        ZoneService.GitCreds myCreds = members.stream()
+                .filter(m -> m.userId().equals(currentUserId))
+                .findFirst()
+                .map(m -> zones.gitCredentials(slug, gitUsernames.get(m.email())))
+                .orElse(null);
 
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("zone", zone);
@@ -87,8 +97,10 @@ public class ZoneConsoleController {
         model.addAttribute("apps", rows);
         model.addAttribute("members", members);
         model.addAttribute("gitUsernames", gitUsernames);
+        model.addAttribute("myGitPassword", myCreds == null ? null : myCreds.password());
+        model.addAttribute("myGitPat", myCreds == null ? null : myCreds.pat());
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
-        model.addAttribute("currentUserId", currentUser.get().map(u -> u.id()).orElse(null));
+        model.addAttribute("currentUserId", currentUserId);
         return "zone";
     }
 
@@ -99,12 +111,9 @@ public class ZoneConsoleController {
         String slug = requireZoneAdmin(z);
         try {
             access.addMember(slug, email, role);
-            var git = zones.ensureGitAccess(slug, email);
-            String msg = email + " added as " + role.name().toLowerCase() + " — git access as " + git.username();
-            if (git.password() != null) {
-                msg += ", password: " + git.password() + " (copy it now, it won't be shown again)";
-            }
-            return redirect(slug, msg);
+            String username = zones.ensureGitAccess(slug, email);
+            return redirect(slug, email + " added as " + role.name().toLowerCase()
+                    + " — git access as " + username + " (they can see their own password/PAT on this page)");
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }
@@ -131,7 +140,7 @@ public class ZoneConsoleController {
             String email = access.emailOf(userId).orElse(null);
             access.removeMember(slug, userId);
             if (email != null) {
-                zones.removeGitAccess(slug, zones.gitUsername(email));
+                zones.removeGitAccess(slug, zones.gitUsername(slug, email));
             }
             return redirect(slug, "member and their git access removed");
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -144,7 +153,7 @@ public class ZoneConsoleController {
         String slug = requireZoneAdmin(z);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
-        String username = zones.gitUsername(email);
+        String username = zones.gitUsername(slug, email);
         String newPassword = zones.resetGitPassword(slug, username);
         return redirect(slug, "git password for " + username + " reset to: " + newPassword
                 + " — copy it now, it won't be shown again");

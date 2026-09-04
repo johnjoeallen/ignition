@@ -189,29 +189,43 @@ public class ZoneService {
     // no separate "add a Forgejo user" step or password to hand out. ---
 
     private static final java.security.SecureRandom RANDOM = new java.security.SecureRandom();
+    private static final List<String> PAT_SCOPES = List.of("write:repository", "write:user");
 
-    /** The Forgejo login a member's email maps to — for display, or to look them up. */
-    public String gitUsername(String email) {
-        return usernameFromEmail(email);
+    /**
+     * The Forgejo login a member's email actually resolved to. Not just
+     * {@code usernameFromEmail(email)} — a username collision means the real
+     * login can carry a numeric suffix (see {@link #ensureGitAccess}), so
+     * this reads back the mapping {@code ensureGitAccess} recorded, falling
+     * back to the bare sanitized form only for an email nothing's ever
+     * provisioned yet (nothing to look up).
+     */
+    public String gitUsername(String slug, String email) {
+        String stored = zones.secret(slug, "git_user_" + email.toLowerCase(Locale.ROOT));
+        return stored.isBlank() ? usernameFromEmail(email) : stored;
+    }
+
+    /** The stored (encrypted-at-rest) credentials for a git login — null fields if never provisioned/minted. */
+    public record GitCreds(String password, String pat) {}
+
+    public GitCreds gitCredentials(String slug, String username) {
+        String pw = zones.secret(slug, "git_pw_" + username);
+        String pat = zones.secret(slug, "git_pat_" + username);
+        return new GitCreds(pw.isBlank() ? null : pw, pat.isBlank() ? null : pat);
     }
 
     /**
-     * A provisioned (or just-ensured) git account. {@code password} is only
-     * set when this call is what actually created the account — same idea as
-     * {@link #resetGitPassword}: shown once, never stored, never retrievable
-     * again after that.
+     * Ensures a Forgejo account exists for this member, in the zone's org,
+     * with a password and a personal access token — both stored (encrypted,
+     * same as every other zone secret) so they can be shown back to that
+     * person later, not just once at creation. Idempotent — safe to call
+     * every time someone's added, or re-added. A username collision (two
+     * different emails sanitizing to the same login) is resolved the way
+     * Gmail suggests alternatives on a taken address — append a number and
+     * try again — not with a separator, so {@code alice} collides to
+     * {@code alice2}, {@code alice3}, ….
      */
-    public record GitAccess(String username, String password) {}
-
-    /**
-     * Ensures a Forgejo account exists for this member, in the zone's org.
-     * Idempotent — safe to call every time someone's added, or re-added. A
-     * username collision (two different emails sanitizing to the same login)
-     * is resolved the way Gmail suggests alternatives on a taken address —
-     * append a number and try again — not with a separator, so {@code alice}
-     * collides to {@code alice2}, {@code alice3}, ….
-     */
-    public GitAccess ensureGitAccess(String slug, String email) {
+    public String ensureGitAccess(String slug, String email) {
+        String emailKey = "git_user_" + email.toLowerCase(Locale.ROOT);
         String base = usernameFromEmail(email);
         String username = base;
         for (int suffix = 2; suffix <= 20; suffix++) {
@@ -221,7 +235,9 @@ public class ZoneService {
             }
             if (email.equalsIgnoreCase(existing.body().path("email").asText(""))) {
                 ensureOrgMembership(slug, username);
-                return new GitAccess(username, null); // already provisioned, from an earlier call
+                zones.putSecret(slug, emailKey, username);
+                ensurePat(slug, username);
+                return username; // already provisioned, from an earlier call
             }
             username = base + suffix;
         }
@@ -232,10 +248,36 @@ public class ZoneService {
         if (!res.ok()) {
             log.warn("zone {}: could not create Forgejo account {} for {} ({}): {}",
                     slug, username, email, res.status(), res.message());
-            return new GitAccess(username, null);
+            return username;
         }
         ensureOrgMembership(slug, username);
-        return new GitAccess(username, password);
+        zones.putSecret(slug, emailKey, username);
+        zones.putSecret(slug, "git_pw_" + username, password);
+        ensurePat(slug, username);
+        return username;
+    }
+
+    /** Mints a personal access token for a git login if one isn't already stored. Self-healing, like everything else here. */
+    private void ensurePat(String slug, String username) {
+        if (zones.hasSecret(slug, "git_pat_" + username)) {
+            return;
+        }
+        // sudo: the bot is a Forgejo site admin (see ProvisioningService), so this
+        // executes as `username` rather than as the bot itself.
+        var res = forgejo.post(slug, "/users/" + username + "/tokens?sudo=" + username,
+                Map.of("name", "ignition", "scopes", PAT_SCOPES));
+        if (!res.ok()) {
+            log.warn("zone {}: could not mint a PAT for {} ({}): {}", slug, username, res.status(), res.message());
+            return;
+        }
+        // Forgejo returns the raw token only on creation, as `sha1` (legacy field name, carried from Gitea).
+        String token = res.body().path("sha1").asText("");
+        if (token.isBlank()) {
+            token = res.body().path("token").asText("");
+        }
+        if (!token.isBlank()) {
+            zones.putSecret(slug, "git_pat_" + username, token);
+        }
     }
 
     private void ensureOrgMembership(String slug, String username) {
@@ -245,15 +287,18 @@ public class ZoneService {
         }
     }
 
-    /** A fresh random git password for a member — returned once; Forgejo doesn't keep the old one readable either. */
+    /** A fresh random git password for a member, stored (encrypted) so it can be shown back to them. */
     public String resetGitPassword(String slug, String username) {
         String pw = randBase64(18);
         forgejo.patch(slug, "/admin/users/" + username, Map.of("password", pw, "must_change_password", false));
+        zones.putSecret(slug, "git_pw_" + username, pw);
         return pw;
     }
 
     public void removeGitAccess(String slug, String username) {
         forgejo.delete(slug, "/admin/users/" + username);
+        zones.deleteSecret(slug, "git_pw_" + username);
+        zones.deleteSecret(slug, "git_pat_" + username);
     }
 
     private static String randBase64(int bytes) {
