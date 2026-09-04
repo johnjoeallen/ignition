@@ -1,65 +1,57 @@
-# Demo, part 2 — remote access via a public box
+# Demo, part 2 — remote access via a public box (one shared IPv4)
 
 **Prerequisite:** [part 1](demo-1-spitfire.md) is done — Ignition runs on
 `spitfire` and its platform console works from your LAN with a real certificate.
 
-This part makes the demo reachable from the internet by routing one spare
-public IP through a box you already run, then provisions a team and deploys an
-app.
+This part makes the demo reachable from the internet through a root server you
+already run, **without a second IP and without IPv6** (which corporate networks
+often can't reach). The trick: dedicate the whole `ignition.theresnolimits.net`
+domain to the demo and split traffic on `hetzner` by **TLS SNI** — the hostname
+the client asks for, visible in the TLS handshake without decrypting it.
 
-- **`hetzner`** — a public root server you already run (web on `:80`/`:443`,
-  mail on `:143`, SSH). For the demo it does exactly two things: it is the
-  **WireGuard endpoint** `spitfire` dials out to, and it **forwards** one spare
-  public IP's `:80`/`:443` down that tunnel to `spitfire`. It terminates no TLS,
-  holds no Ignition config, and **none of its existing services are touched.**
+- **`hetzner`** — one public IPv4 (`<PUBLIC_IP>`), already serving web on
+  `:80`/`:443` (Apache) plus mail and SSH. For the demo it runs a small **SNI
+  front proxy** on that IP: connections for `*.ignition.theresnolimits.net` go
+  down a WireGuard tunnel to `spitfire`; everything else goes to Apache on
+  loopback. **Mail and SSH are untouched; Apache needs a one-line port change,
+  no vhost edits.**
 
 ```
-   Apache's existing sites              *.ignition.theresnolimits.net
-   (internet → <PUBLIC_IP>)             (internet → <DEMO_IP>)
-            │  :80/:443                          │  :80/:443
- ┌──────────▼────────────────────────────────────▼────────┐
- │  hetzner  (root server, unchanged services)            │
- │   <PUBLIC_IP>  →  Apache / Dovecot / sshd  (untouched) │
- │   <DEMO_IP>    →  nft DNAT :80/:443  ─┐                 │
- │   WireGuard listener :51820  10.44.0.1 │                │
- └───────────────────────────────────────┼───────────────┘
-                                         │  WireGuard tunnel
-                     spitfire dials OUT to hetzner:51820
-                                         │
-                     ┌───────────────────▼──────┐
-                     │  spitfire   10.44.0.11    │  (part 1 — unchanged)
-                     └──────────────────────────┘
+                 internet  →  <PUBLIC_IP>:443
+                          │
+        ┌─────────────────▼──────────────────┐
+        │  hetzner   nginx (SNI front proxy)  │
+        │                                     │
+        │  SNI = *.ignition.theresnolimits.net ├──── WireGuard ───┐
+        │  SNI = anything else  ┐              │                  │
+        └───────────────────────┼─────────────┘                  │
+                                ▼                                 ▼
+                     Apache  127.0.0.1:443          spitfire  10.44.0.11:443
+                     (your existing sites,          (part 1 — unchanged;
+                      unchanged, loopback-only)      terminates its own TLS)
 ```
 
 > **Why not put the control plane on `hetzner` instead?** The
 > [target architecture](docs/exposure.md) does — the public box runs the edge
 > Traefik and an SSO gateway. Wiring that into the compose templates is
-> unfinished (task 4). Until then, `spitfire` runs everything and `hetzner` is
-> a dumb layer-4 forwarder.
+> unfinished (task 4). Until then, `spitfire` runs everything and `hetzner`
+> only shuttles bytes.
 
 ---
 
 ## The pieces, explained
 
-### The two IPs on `hetzner`
+### A dedicated domain + SNI routing
 
-- **`<PUBLIC_IP>`** — the address `hetzner` already has. Apache, Dovecot and
-  sshd listen on it. **Nothing here changes that.**
-- **`<DEMO_IP>`** — a *second*, separate public IPv4 you add to `hetzner` just
-  for the demo (Hetzner calls it an "additional IP", ordered in Robot). Its own
-  address is what lets the forwarding rule be "anything for `<DEMO_IP>` goes to
-  `spitfire`" without ever matching the real services. Hand it back when done.
+Every demo hostname is under `ignition.theresnolimits.net`; none of Apache's
+sites are. So `hetzner` can decide where a connection goes purely from the
+**SNI** — the server name in the TLS `ClientHello`, sent in the clear before any
+encryption. `nginx`'s `ssl_preread` reads it **without terminating TLS**:
+`spitfire` still presents its own Let's Encrypt certificate end-to-end, and
+Apache still presents its own for its own domains. `hetzner` decrypts nothing.
 
-### The DNS wildcard record
-
-Now you create **one** record: `*.ignition.theresnolimits.net → <DEMO_IP>`.
-
-A `*` record is a catch-all: it answers for **any** name under
-`ignition.theresnolimits.net` at **any depth** (standard DNS, RFC 4592). So
-`admin.ignition.theresnolimits.net`,
-`git.quantum-badgers.ignition.theresnolimits.net`, and
-`paywise.apps.quantum-badgers.ignition.theresnolimits.net` all resolve from
-that single record — which is why **provisioning a team never touches DNS.**
+Corporate networks pass SNI fine (it's how every HTTPS site is reached). Only
+Encrypted Client Hello would hide it, and that isn't in play here.
 
 ### WireGuard
 
@@ -68,13 +60,13 @@ A small, modern VPN. It builds one encrypted link between `hetzner`
 `hetzner:51820`, so your router needs no configuration. Once up, `hetzner` can
 reach `spitfire` even though `spitfire` accepts nothing inbound.
 
-### The `nft` forward
+### The front proxy
 
-`nft` (nftables) is Linux's built-in packet filter / NAT. The demo adds a tiny,
-self-contained table on `hetzner`: *"a TCP connection arriving for `<DEMO_IP>`
-on port 80 or 443 → rewrite its destination to `10.44.0.11` and send it down
-the tunnel."* It's a separate table (`ignition_demo`), so it cannot interfere
-with any firewall `hetzner` already runs.
+`nginx` binds **`<PUBLIC_IP>:443`** (the public address specifically). Apache
+moves to **`127.0.0.1:443`** (same port, loopback only) — so its
+`<VirtualHost *:443>` blocks still match and **no vhost file changes**. nginx's
+`stream` module forwards each connection by SNI: demo names over WireGuard to
+`spitfire`, everything else to `127.0.0.1:443`.
 
 ---
 
@@ -82,26 +74,26 @@ with any firewall `hetzner` already runs.
 
 | placeholder | what it is | example |
 |---|---|---|
-| `<PUBLIC_IP>` | `hetzner`'s existing address — unchanged | `203.0.113.10` |
-| `<DEMO_IP>` | the extra public IPv4 you add to `hetzner` | `203.0.113.55` |
-| `<HETZNER_PRIV>` / `<HETZNER_PUB>` | WireGuard keypair generated on `hetzner` | (Step 5) |
-| `<SPITFIRE_PRIV>` / `<SPITFIRE_PUB>` | WireGuard keypair generated on `spitfire` | (Step 5) |
+| `<PUBLIC_IP>` | `hetzner`'s existing public IPv4 | `203.0.113.10` |
+| `<IFACE>` | `hetzner`'s network interface | `eth0` / `enp0s31f6` |
+| `<HETZNER_PRIV>` / `<HETZNER_PUB>` | WireGuard keypair generated on `hetzner` | (Step 2) |
+| `<SPITFIRE_PRIV>` / `<SPITFIRE_PUB>` | WireGuard keypair generated on `spitfire` | (Step 2) |
 
 ---
 
-## Why this is safe for the existing services
+## What changes on `hetzner`, and what doesn't
 
-`hetzner` already serves `:80`, `:443`, `:143` and SSH on `<PUBLIC_IP>`. Nothing
-below edits an existing service, IP binding, or firewall rule, because:
+**Changes:**
 
-- the demo lives entirely on the **separate** `<DEMO_IP>`;
-- the forwarding is its **own** nft table (`ignition_demo`) — nft tables are
-  independent, so adding or removing one cannot change a rule in another;
-- that table only matches `ip daddr <DEMO_IP> tcp dport {80,443}` — a packet to
-  `<PUBLIC_IP>:80` / `:443` / `:143` / `:22` never matches it.
+- Apache's `Listen 443` → `Listen 127.0.0.1:443` (one line in `ports.conf`).
+- `nginx` installed and given `<PUBLIC_IP>:443`.
+- One inbound `udp/51820` firewall rule (WireGuard), *only if* the host firewall
+  drops input by default.
 
-The **one** unavoidable addition is an inbound `udp/51820` accept for WireGuard,
-and only if `hetzner`'s host firewall defaults to dropping input.
+**Not touched:** every Apache vhost file, all mail ports (`25` `110` `143` `465`
+`587` `993` `995`), SSH, and Apache's own certificates. If you don't need
+`http://` for the demo (all Ignition URLs are `https`, and cert issuance is
+DNS-01), Apache keeps `:80` untouched too.
 
 ---
 
@@ -110,96 +102,25 @@ and only if `hetzner`'s host firewall defaults to dropping input.
 At Joker (the DNS host for `theresnolimits.net`):
 
 ```
-*.ignition.theresnolimits.net.   A   <DEMO_IP>
-ignition.theresnolimits.net.     A   <DEMO_IP>     # optional: only if you want the bare apex to resolve
+*.ignition.theresnolimits.net.   A   <PUBLIC_IP>
+ignition.theresnolimits.net.     A   <PUBLIC_IP>     # optional: the bare apex
 ```
 
-The certificate from part 1 is unaffected — it was issued via DNS-01 and
-doesn't care where the `A` record points.
+One record covers every depth (`admin.…`, `git.<slug>.…`,
+`x.apps.<slug>.…`) — provisioning a zone adds no DNS. The certificate from
+part 1 is unaffected (DNS-01 doesn't care where the `A` record points).
 
 ---
 
-## Step 2 — add `<DEMO_IP>` in Robot
+## Step 2 — WireGuard on both machines
 
-Order a **single additional IPv4** for the server (Robot → *IPs* →
-*Order additional IP*). Hetzner routes it to the server's main interface — no
-separate MAC address is needed to use it on the host. Robot tells you whether
-it's in the **same subnet** as `<PUBLIC_IP>` (usual — bind as `/32`) or a
-**separate subnet** (it also gives a gateway; use the `pointopoint` form from
-Hetzner's "Additional IP addresses" doc).
-
----
-
-## Step 3 — bind it on Debian
-
-Add it *alongside* the existing address — never replace the main interface's
-config.
-
-**systemd-networkd:**
-
-```ini
-# /etc/systemd/network/<existing-iface-file>.network.d/demo-ip.conf
-[Network]
-Address=<DEMO_IP>/32
-```
-```sh
-networkctl reload
-networkctl reconfigure <iface>          # <iface> e.g. eth0 / enp0s31f6
-```
-
-**ifupdown (`/etc/network/interfaces`):**
-
-```
-# /etc/network/interfaces.d/60-demo-ip
-up   ip addr add <DEMO_IP>/32 dev <iface>
-down ip addr del <DEMO_IP>/32 dev <iface>
-```
-```sh
-ip addr add <DEMO_IP>/32 dev <iface>    # apply now, main iface not restarted
-```
-
-Verify — from another host:
-
-```sh
-ping <DEMO_IP>
-curl -I http://<DEMO_IP>/               # still reaches Apache; nothing forwards yet
-```
-
-Re-check your real site and IMAP. Everything should be exactly as before.
-
----
-
-## Step 4 — Hetzner Robot firewall (only if you use it)
-
-Hetzner offers a **stateless** hardware firewall (Robot → *Firewall*). If it is
-**not** active on this server, leave it off — do not enable it now.
-
-If it **is** active, its template already permits your `:80` / `:443` / `:143` /
-SSH. **Add one row, keep every existing row:**
-
-| version | protocol | dst port | action |
-|---|---|---|---|
-| IPv4 | `udp` | `51820` | accept |
-
-It filters all of the server's IPs, so the existing `:80` / `:443` rows already
-cover `<DEMO_IP>`. (Being stateless it also needs the "TCP established" accept
-row — which it has if SSH works today.)
-
----
-
-## Step 5 — WireGuard on both machines
-
-Install: `apt install wireguard` on both.
-
-Generate a keypair on **each** machine:
+`apt install wireguard` on both. Generate a keypair on **each**:
 
 ```sh
 wg genkey | tee privatekey | wg pubkey > publickey
 ```
 
-Call `hetzner`'s pair `<HETZNER_PRIV>` / `<HETZNER_PUB>` and `spitfire`'s
-`<SPITFIRE_PRIV>` / `<SPITFIRE_PUB>`. Each machine keeps its own **private** key;
-exchange the **public** keys.
+Each machine keeps its own **private** key; exchange the **public** keys.
 
 **`hetzner:/etc/wireguard/wg0.conf`**
 
@@ -209,30 +130,9 @@ Address    = 10.44.0.1/24
 ListenPort = 51820
 PrivateKey = <HETZNER_PRIV>
 
-# load / unload the demo's forwarding table together with the tunnel
-PostUp   = nft -f /etc/wireguard/forward.nft
-PostDown = nft delete table ip ignition_demo
-
 [Peer]   # spitfire
 PublicKey  = <SPITFIRE_PUB>
 AllowedIPs = 10.44.0.11/32
-```
-
-**`hetzner:/etc/wireguard/forward.nft`**
-
-```nft
-#!/usr/sbin/nft -f
-
-table ip ignition_demo {
-  chain prerouting {
-    type nat hook prerouting priority dstnat; policy accept;
-    ip daddr <DEMO_IP> tcp dport { 80, 443 } dnat to 10.44.0.11
-  }
-  chain postrouting {
-    type nat hook postrouting priority srcnat; policy accept;
-    ip daddr 10.44.0.11 tcp dport { 80, 443 } oifname "wg0" masquerade
-  }
-}
 ```
 
 **`spitfire:/etc/wireguard/wg0.conf`**
@@ -249,162 +149,187 @@ AllowedIPs          = 10.44.0.0/24
 PersistentKeepalive = 25
 ```
 
-`AllowedIPs = 10.44.0.0/24` on `spitfire` means only tunnel-subnet traffic goes
-over WireGuard; its normal LAN and internet are untouched.
-`PersistentKeepalive` keeps the NAT hole open so `hetzner` can always reach back.
-
-Enable forwarding on `hetzner` (persistently — a `PostUp` alone isn't enough):
+`AllowedIPs = 10.44.0.0/24` on `spitfire` keeps only tunnel traffic on
+WireGuard. No IP forwarding or NAT is needed on `hetzner` — nginx does the
+forwarding at the application layer.
 
 ```sh
-echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-ignition-demo.conf
-sysctl --system
-```
-
-Bring the tunnel up on both:
-
-```sh
-systemctl enable --now wg-quick@wg0
-wg show                              # each side should show a recent handshake
-```
-```sh
-ping -c3 10.44.0.11                   # from hetzner
-ping -c3 10.44.0.1                    # from spitfire
+systemctl enable --now wg-quick@wg0     # both machines
+wg show                                 # a recent handshake on each side
+ping -c3 10.44.0.11                      # from hetzner
 ```
 
 ---
 
-## Step 6 — host firewall on `hetzner`
+## Step 3 — move Apache to loopback
 
-Inspect what's already there:
+Keep a second SSH session open. In `hetzner`'s Apache config
+(`/etc/apache2/ports.conf` on Debian):
 
-```sh
-nft list ruleset | less
-nft -a list ruleset | grep -E 'hook (input|forward)'    # look for 'policy drop'
+```apache
+# was: Listen 443
+Listen 127.0.0.1:443
 ```
 
-**Before changing anything in an existing table:** open a *second* SSH session
-and keep it connected, and arm a rollback:
+Leave `Listen 80` alone unless you also want nginx to handle `:80` (see the note
+at the end). Reload and confirm your existing sites still serve — bypassing
+nginx, straight to Apache:
 
 ```sh
-shutdown -r +10 "firewall rollback"   # cancel with `shutdown -c` once access is re-verified
+apachectl configtest && systemctl reload apache2
+curl -kI --resolve your-existing-site.com:443:127.0.0.1 https://your-existing-site.com/
 ```
 
-Then:
+At this point your sites are only reachable from `hetzner` itself — nginx
+(next step) puts them back on the internet.
 
-- The **`ignition_demo`** NAT table (from Step 5) is isolated — nothing to
-  reconcile.
-- **`ip_forward`** — set in Step 5. If another file under `/etc/sysctl.d/` sets
-  it to `0`, the highest-numbered file wins and `99-` is high; confirm with
-  `sysctl net.ipv4.ip_forward` (want `1`).
-- **If input policy is `drop`**, append one rule to the *existing* table:
+---
+
+## Step 4 — the nginx SNI proxy
+
+```sh
+apt install nginx
+```
+
+Debian's `nginx.conf` only wires up the `http {}` block, so add the `stream {}`
+router at the **top level** of `/etc/nginx/nginx.conf` (a sibling of
+`http { … }`, not inside it):
+
+```nginx
+stream {
+    map $ssl_preread_server_name $demo_backend {
+        ~\.ignition\.theresnolimits\.net$   10.44.0.11:443;   # demo → spitfire over WireGuard
+        default                              127.0.0.1:443;    # everything else → Apache
+    }
+
+    server {
+        listen      <PUBLIC_IP>:443;
+        listen      [::]:443;          # drop this line if hetzner has no usable IPv6
+        proxy_pass  $demo_backend;
+        ssl_preread on;                # read SNI, do NOT terminate TLS
+        proxy_timeout 10m;             # long-poll consoles, docker pushes
+    }
+}
+```
+
+Make sure nothing in `http {}` also binds `:443` (Debian's default site only
+binds `:80`; if you enabled an HTTPS default server, disable it —
+`rm /etc/nginx/sites-enabled/default` or edit it).
+
+```sh
+nginx -t && systemctl enable --now nginx
+```
+
+Verify from a machine **off your LAN**:
+
+```sh
+curl -I https://admin.ignition.theresnolimits.net/actuator/health   # → spitfire
+curl -kI https://your-existing-site.com/                            # → Apache, unchanged
+```
+
+Path for the demo: `client → <PUBLIC_IP>:443 (nginx, SNI) → WireGuard →
+spitfire 10.44.0.11:443 → Traefik → ignition-control`.
+
+---
+
+## Step 5 — firewall
+
+`:443` is already open (Apache used it). The only possible addition is
+**`udp/51820`** for WireGuard.
+
+- **Hetzner Robot firewall** (if active): add one row — IPv4 / `udp` / dst port
+  `51820` / accept — and keep every existing row.
+- **Host `nft`/`iptables`** (if it drops input by default): append **one** rule
+  to the *existing* table, with a second SSH session open and a rollback armed:
 
   ```sh
+  shutdown -r +10 "firewall rollback"        # cancel with `shutdown -c` after re-checking access
   nft add rule inet <table> <input-chain> udp dport 51820 accept
-  ```
-- **If forward policy is `drop`**, append the demo flow to the *existing*
-  forward chain:
-
-  ```sh
-  nft add rule inet <table> <forward-chain> ip daddr 10.44.0.11 tcp dport { 80, 443 } accept
-  nft add rule inet <table> <forward-chain> ip saddr 10.44.0.11 ct state established,related accept
+  # confirm a fresh SSH login works, then:
+  shutdown -c
   ```
 
-Open a fresh SSH session to confirm you're not locked out, then `shutdown -c`.
-Persist whatever you appended into the file `nft` reads at boot (commonly
-`/etc/nftables.conf`, or a file in `/etc/nftables.d/`).
+  Persist it into whatever file `nft` reads at boot.
+
+If there's no host firewall and no Robot firewall, WireGuard's outbound-dialed
+tunnel needs nothing.
 
 ---
 
-## Step 7 — flip to the public path
+## Step 6 — flip to the public path
 
-Remove the `admin.ignition.theresnolimits.net` line you added to your laptop's
-`/etc/hosts` in part 1. The name now resolves to `<DEMO_IP>` for real.
-
-```sh
-curl -I https://admin.ignition.theresnolimits.net/actuator/health   # from a machine OFF your LAN
-```
-
-Full request path:
-`client → <DEMO_IP>:443 on hetzner → nft DNAT → WireGuard → spitfire
-10.44.0.11:443 → Traefik → ignition-control`.
+Remove the `admin.ignition.theresnolimits.net` line from your laptop's
+`/etc/hosts` (added in part 1). The name now resolves to `<PUBLIC_IP>` and
+routes through nginx for real.
 
 ---
 
-## Step 8 — provision a zone and deploy an app
+## Step 7 — provision a zone and deploy an app
 
 In the platform console (`https://admin.ignition.theresnolimits.net/`):
 
-1. **Zones → Provision** — enter a slug, e.g. `quantum-badgers`. The scheduler
-   places it on `spitfire` (the only node). It stands up Forgejo + a private
-   build engine + a runner, creates a `zoneadmin` account, and mints two tokens
-   (~1–2 min). For several teams at once use **Roster** and paste a slug list.
-2. On the zone's page, copy the **zone token** (the team lead's console
-   sign-in — `https://admin.quantum-badgers.ignition.theresnolimits.net/`) and
-   the **deploy token** (used by CI).
+1. **Zones → Provision** — a slug, e.g. `quantum-badgers`. The scheduler places
+   it on `spitfire` (the only node): Forgejo + a private build engine + a
+   runner + a `zoneadmin` account + two tokens (~1–2 min). Bulk: **Roster**.
+2. Copy the zone's **zone token** (team-lead console sign-in at
+   `https://admin.quantum-badgers.ignition.theresnolimits.net/`) and **deploy
+   token** (CI).
 
-Each zone automatically requests its own certificate for
-`*.quantum-badgers.ignition.theresnolimits.net` +
-`*.apps.quantum-badgers.ignition.theresnolimits.net` (two labels below the
-apex, past the `*.ignition.theresnolimits.net` cert).
+Each zone auto-requests its own `*.quantum-badgers.ignition.theresnolimits.net`
++ `*.apps.quantum-badgers.ignition.theresnolimits.net` cert (two labels below
+the apex).
 
 **Deploy an app** — in that zone's Forgejo
 (`https://git.quantum-badgers.ignition.theresnolimits.net/`):
 
-1. Create a repo with a `Dockerfile` and
-   `.forgejo/workflows/deploy.yml` (copy [`examples/deploy.yml`](examples/deploy.yml)).
-2. Set its repo variables / secrets: `REGISTRY`, `CONTROL_URL`, `APP_NAME`,
-   `APP_PORT`, `DEPLOY_TOKEN` (the deploy token from step 2), and optionally
-   `FORGEJO_TOKEN`.
-3. In the **zone console → Repositories**, click **Release**.
-   `ignition-control` reads the commits since the last tag, picks the semver
-   bump (Conventional Commits: `fix:` → patch, `feat:` → minor,
-   `feat!:` / `BREAKING CHANGE:` → major; a dropdown overrides), tags `vX.Y.Z`
-   on `main`. The tag builds, pushes to the zone's registry, and deploys.
-4. The app comes up at
-   `https://<APP_NAME>.apps.quantum-badgers.ignition.theresnolimits.net/`.
+1. A repo with a `Dockerfile` and `.forgejo/workflows/deploy.yml`
+   (copy [`examples/deploy.yml`](examples/deploy.yml)).
+2. Repo vars / secrets: `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
+   `DEPLOY_TOKEN`, optionally `FORGEJO_TOKEN`.
+3. **Zone console → Repositories → Release** — `ignition-control` reads the
+   commits since the last tag, picks the semver bump (Conventional Commits;
+   dropdown overrides), tags `vX.Y.Z` on `main`; the tag builds, pushes, deploys.
+4. Live at `https://<APP_NAME>.apps.quantum-badgers.ignition.theresnolimits.net/`.
 
-A plain `git push` to `main` does **not** deploy — only a release tag does.
-After the first deploy, Watchtower on `spitfire` rolls the app forward whenever
-that image tag gets a new digest (~60s).
+A plain `git push` to `main` does **not** deploy — only a release tag.
+Watchtower on `spitfire` then rolls the app forward on any new digest for that
+tag (~60s).
 
 ---
 
 ## Security notes
 
 - **No authentication anywhere but the consoles.** Every deployed app and every
-  zone's Forgejo web UI is open to anyone who resolves the domain. The consoles
-  require their bearer token; nothing else does.
-- **`IGN_ADMIN_TOKEN` is total control.** It's the bearer / session cookie for
-  `admin.ignition.theresnolimits.net`. Treat it like a root password; rotate it
-  after the demo (re-run the `ignition-control` compose with a new value).
-- **Client IPs are not visible to `spitfire`.** Every request arrives from
-  `10.44.0.1` (the `nft` masquerade), so per-client logging or IP allow-listing
-  won't work.
-- **`traefik-public` is one flat network on `spitfire`.** A deployed app
-  container can reach another zone's Forgejo by IP. The untrusted code is the
-  app container — don't run a demo with code you don't trust and expect the
-  network layer to isolate zones.
-- **When you're done:** delete the `*.ignition.theresnolimits.net` DNS record so
-  the names stop resolving, and hand `<DEMO_IP>` back in Robot.
+  zone's Forgejo web UI is open to anyone who resolves the domain.
+- **`IGN_ADMIN_TOKEN` is total control** — the bearer / session cookie for the
+  platform console. Rotate it after the demo.
+- **Client IPs:** `spitfire` sees every request from `10.44.0.1` (the tunnel).
+  Apache, reached via `ssl_preread`, sees `127.0.0.1` — if that matters for your
+  real sites' logs, add `proxy_protocol` to the nginx `proxy_pass` **and**
+  `RemoteIPProxyProtocol On` (Apache ≥ 2.4.31) on the loopback listener.
+- **`traefik-public` is one flat network on `spitfire`** — a deployed app can
+  reach another zone's Forgejo by IP. Don't demo with untrusted app code.
+- **When done:** delete the `*.ignition.theresnolimits.net` DNS record.
 
 ---
 
 ## Teardown
 
 ```sh
-# on spitfire — destroy every zone from the console first (Roster → Teardown), then:
+# spitfire — destroy every zone from the console first (Roster → Teardown), then:
 cd ignition
 docker compose -f templates/ignition-control-compose.yml down
-docker compose -f templates/traefik-core-compose.yml down -v      # -v also drops the ACME cert volume
+docker compose -f templates/traefik-core-compose.yml down -v
 docker network rm traefik-public
-
-# both machines
 systemctl disable --now wg-quick@wg0
 
 # hetzner
-rm /etc/wireguard/wg0.conf /etc/wireguard/forward.nft /etc/sysctl.d/99-ignition-demo.conf
-# remove the <DEMO_IP> drop-in from Step 3, the Robot-firewall row from Step 4,
-# any nft rules you appended in Step 6, then release <DEMO_IP> in Robot.
+systemctl disable --now nginx wg-quick@wg0
+apt purge nginx                                   # or keep it
+sed -i 's/^Listen 127.0.0.1:443/Listen 443/' /etc/apache2/ports.conf
+apachectl configtest && systemctl reload apache2
+rm /etc/wireguard/wg0.conf
+# remove the udp/51820 firewall rule you added
 
 # DNS: delete the *.ignition.theresnolimits.net record
 ```
@@ -416,28 +341,36 @@ rm /etc/wireguard/wg0.conf /etc/wireguard/forward.nft /etc/sysctl.d/99-ignition-
 | | this demo | [target model](docs/exposure.md) |
 |---|---|---|
 | TLS terminates on | `spitfire` | the public controller |
-| `hetzner` runs | `nft` DNAT only | edge Traefik + SSO gateway + `ignition-control` |
-| node reachability | `spitfire` holds `:443` behind the forward | node Traefik internal-only `:80`, edge routes by `Host` |
-| authentication | none | one `forward-auth` SSO gateway for all browser traffic |
+| `hetzner` runs | nginx SNI passthrough | edge Traefik + SSO gateway + `ignition-control` |
+| node reachability | `spitfire` holds `:443` behind the proxy | node Traefik internal-only `:80`, edge routes by `Host` |
+| authentication | none | one `forward-auth` SSO gateway |
 | control-plane location | on the node | on the controller |
 | compose-template changes | none | task 4 |
 
 Moving to the target model later reuses everything here: same DNS record, same
-certificates, same zones. You'd relocate `ignition-control` and the edge Traefik
-onto `hetzner`, make `spitfire`'s Traefik internal-only, and add the
-`forward-auth` container.
+certificates, same zones.
 
-### Alternative to the `nft` forwarder
+---
 
-An SSH reverse tunnel from `spitfire` does the same job (needs
-`GatewayPorts clientspecified` in `hetzner:/etc/ssh/sshd_config`):
+## Handling `http://` too (optional)
 
-```sh
-# on spitfire, ideally as a systemd unit using autossh
-ssh -N -R <DEMO_IP>:80:localhost:80 -R <DEMO_IP>:443:localhost:443 <you>@<PUBLIC_IP>
-```
+DNS-01 needs no `:80`, and every Ignition URL is `https`, so the minimal setup
+above leaves Apache on `:80` and simply doesn't answer `http://` for demo names.
+To redirect them, give nginx `:80` as well: `Listen 127.0.0.1:80` in
+`ports.conf`, then an `http {}` server on `<PUBLIC_IP>:80` that
+`return 301 https://$host$request_uri` for `~\.ignition\.theresnolimits\.net$`
+and `proxy_pass http://127.0.0.1:80` (with `X-Forwarded-For`) for everything
+else.
 
-Binding to `<DEMO_IP>` keeps it off Apache's `<PUBLIC_IP>`. Drop the `PostUp` /
-`PostDown` lines from `hetzner`'s `wg0.conf` if you use this. WireGuard + `nft`
-is steadier for an all-day demo; the SSH tunnel is faster to stand up for an
-hour.
+---
+
+## Alternative — a second dedicated IP (no Apache change)
+
+If you'd rather not put nginx in front of Apache, order a **second IPv4** for
+the server in Robot, bind it as `<DEMO_IP>/32` on `<IFACE>` *alongside* the main
+address, point `*.ignition.theresnolimits.net` at `<DEMO_IP>`, and forward just
+that IP's `:443` to `spitfire` with an isolated nftables DNAT table
+(`ip daddr <DEMO_IP> tcp dport 443 dnat to 10.44.0.11`, plus `masquerade`
+`oifname "wg0"`, plus `net.ipv4.ip_forward=1`). Apache, mail and SSH keep
+`<PUBLIC_IP>` and nothing about them changes. Costs a small monthly fee for the
+IP; needs no nginx and no Apache edit.
