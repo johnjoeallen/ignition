@@ -261,16 +261,12 @@ host. On a single host, one `*.<slug>.<event-domain>` record per zone covers
 it; across nodes, split git/apps from admin (automating this via the
 DNS-provider API is the top next task).
 
-This is the `public` exposure profile. A cluster with no inbound, a
-corp-internal audience, or no trusted-cert path uses a reverse tunnel, an
-internal CA, or plain HTTP instead — and app access can be gated by corporate
-SSO. See **[Exposure & access](exposure.md)**.
-
-!!! note "Single-ingress direction"
-    The design is moving to **all inbound terminating at the control-plane
-    box** — one Traefik / SSO edge that owns `:80/:443` for `*.<BASE_DOMAIN>`,
-    terminates TLS, and reverse-proxies by `Host` to the node running the zone.
-    Then DNS is a single wildcard → the control plane, all certs are issued
-    there, and worker nodes take no inbound. The per-node Traefik stays for
-    internal `Host` → container routing. See
-    [Exposure → Single ingress](exposure.md#single-ingress-the-control-plane-is-the-only-front-door).
+!!! warning "Being replaced by single-ingress"
+    The above is the current implementation. The design (**[Exposure &
+    access](exposure.md)**) is one front door: **the controller is the only
+    public machine and the only place TLS terminates**. It owns `:443`, runs
+    the SSO gateway, and reverse-proxies by `Host` over **WireGuard** to nodes
+    on a private network with **no inbound**. DNS is a single pre-registered
+    wildcard `*.<BASE_DOMAIN>` → the controller; all certs are issued there;
+    behind the edge everything is plain HTTP. The per-node Traefik stays,
+    internal-only, for the final `Host` → container hop.

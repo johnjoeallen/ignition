@@ -126,18 +126,20 @@ The compose templates the service renders (`zone-compose.yml.tmpl`,
 ## Rough edges
 
 - **DNS records for `git.<slug>` / `admin.<slug>` / `*.apps.<slug>` aren't
-  created for you** — wildcard `*.<slug>.ignition.example` for one node; automate
-  per-record across nodes.
+  created for you** — the target model pre-registers one wildcard
+  `*.ignition.example` → the controller (matches at any depth), so provisioning
+  adds zero DNS; until then it's a wildcard `*.<slug>.ignition.example` per node.
 - **`traefik-public` is one flat network** on a node — app and Forgejo
   containers can reach each other by IP.
 - **`ignition-control` holds every token** and drives every node's Docker
   daemon — it needs a locked-down deployment behind `admin.ignition.example`.
 - **The control plane and Watchtower pull images anonymously** — private
   packages need `docker login git.<slug>.ignition.example` on the node.
-- **Only the `public` exposure profile is built** — direct inbound + DNS-01
-  wildcard certs. Reverse tunnels, internal-CA certs, plain HTTP, and SSO
-  gating are designed in [`docs/exposure.md`](docs/exposure.md), not yet
-  implemented.
+- **Ingress is not the single-ingress model yet** — the code runs Traefik on
+  every node, needs a DNS record per zone, and has no SSO. The controller-only
+  edge (WireGuard to private nodes, plain HTTP inward, pre-registered wildcard
+  DNS, one SSO gateway) is designed in [`docs/exposure.md`](docs/exposure.md),
+  not yet implemented.
 - **No repo seeding** — the starter repo + repo vars/secrets are still set by
   hand per zone.
 - **No services catalogue yet** — an app's own infra (Postgres, Redis) belongs

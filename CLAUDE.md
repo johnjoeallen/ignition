@@ -107,19 +107,17 @@ subtree: `admin.<slug>.<BASE_DOMAIN>` (the zone console) and
 `<app>.apps.<slug>.<BASE_DOMAIN>` (one per deployed app). The platform admin is
 one host on the apex, `admin.<BASE_DOMAIN>`.
 
-TLS scope follows from this: a `*.<BASE_DOMAIN>` wildcard is single-label and
-misses anything two labels deep. So the control host's Traefik holds the apex
-cert (`<BASE_DOMAIN>` + `*.<BASE_DOMAIN>`, which covers `admin.<BASE_DOMAIN>`),
-and **each zone's own Forgejo router** additionally requests
-`*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` — covering that zone's
-git, admin, and every app with no per-name request. `admin.<slug>.<BASE_DOMAIN>`
-is served by `ignition-control` behind the control host's Traefik via a
-file-provider snippet (`state/control/dynamic/<slug>.yml`, written by
-`TraefikDynamicConfig` at provision time) that carries its own
-`*.<slug>.<BASE_DOMAIN>` cert request. DNS routes per name: `git.<slug>` /
-`*.apps.<slug>` A-records point at the node running that zone, `admin.<slug>`
-and `admin.<BASE_DOMAIN>` at the control host (single-host: wildcard
-`*.<slug>.<BASE_DOMAIN>`). Creating those records is a known gap.
+**Ingress: the controller is the only front door** (design — see task 4; the
+current code runs Traefik on every node). All inbound `:443` terminates at the
+controller's Traefik edge, which runs the SSO gateway and reverse-proxies by
+`Host` over WireGuard to the node running the zone; nodes have **no inbound**
+and their Traefik is internal-only (plain HTTP behind the edge). DNS is a
+**pre-registered** wildcard `*.<BASE_DOMAIN>` → the controller (RFC 4592
+matches at any depth, so no per-zone record — provisioning adds zero DNS). All
+certs are at the edge: `*.<BASE_DOMAIN>` plus, per zone, `*.<slug>.<BASE_DOMAIN>`
++ `*.apps.<slug>.<BASE_DOMAIN>` via ACME DNS-01 (cert wildcards *are*
+single-label). `ignition-control` writes the edge router + cert config per zone
+(the `state/control/dynamic/<slug>.yml` mechanism, extended).
 
 **App names are unique within a zone, not globally.** An app is
 `state/zones/<slug>/apps/<name>.env` recording its zone, node, and image.
@@ -207,13 +205,10 @@ command's stdout.
 - **No services catalogue.** A team that needs Postgres, a mock of an internal
   API, or a keyed proxy to an external one stands it up by hand. See task 3.
 - **`move` rebuilds the zone empty** — the Forgejo data volume doesn't follow.
-- **Only the `public` exposure profile exists** — direct inbound + DNS-01
-  wildcard certs, Traefik on every node with a DNS record per zone. Reverse
-  tunnels, corp-internal CA, plain-HTTP fallback, SSO gating, and the
-  **single-ingress** model (all inbound terminates at the control-plane edge,
-  which reverse-proxies by `Host` to the node — one wildcard DNS record, all
-  certs central, worker nodes take no inbound) are designed (`docs/exposure.md`)
-  but not built. See task 4.
+- **Ingress is not the single-ingress model yet.** The code still runs Traefik
+  on every node, needs a DNS record per zone, and has no SSO. The controller-
+  only edge (WireGuard to private nodes, plain HTTP inward, pre-registered
+  wildcard DNS, one SSO gateway) is designed in `docs/exposure.md` — task 4.
 
 ## Likely next tasks
 
@@ -242,40 +237,36 @@ command's stdout.
    Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
-4. **Exposure profiles** (`docs/exposure.md`). All self-hosted — no third-party
-   tunnel or mesh services. **Single ingress**: all inbound terminates at the
-   control-plane box — one Traefik / SSO edge owns `:80/:443` for
-   `*.<BASE_DOMAIN>`, terminates TLS, and reverse-proxies by `Host` to the node
-   running the zone (which keeps an internal-only Traefik for the final
-   `Host` → container hop). So DNS is one wildcard → the control plane, all
-   certs are issued there (`ignition-control` writes the router + cert config
-   per zone like it already writes `state/control/dynamic/<slug>.yml`), and
-   worker nodes take no inbound. The internal Ignition network
-   (`traefik-public`, `zone-<slug>` nets, DinD) is always isolated with no route
-   out. The control-plane box is multi-homed; `IGN_EXPOSE_ADDR` is which
-   interface the edge binds (corp-DMZ IP / public IP / LAN IP). Topologies A–E
-   in the doc. A cluster-level
-   `ignition.exposure.profile` — `public` (today) / `public-http01` / `relay` /
-   `internal-ca` / `http-only` — plus an `sso` layer (mandatory on a DMZ
-   interface). It decides the Traefik entrypoint (`websecure` vs `web`), the
-   cert resolver (`le-dns` / `le-http` / `internal` / none — the ACME CA is
-   configurable via `ACME_CA_SERVER`, so a self-hosted `step-ca` works), and
-   whether a `forward-auth` middleware is attached.
-   `traefik-core-compose.yml` gains an optional reverse-tunnel client
-   (`rathole` / `frp` / `ssh -R` to a relay host the operator runs) and an
-   optional `oauth2-proxy` / Authelia service, enabled by the profile.
-   `ComposeTemplate` renders the app / zone Traefik labels from
-   `profile × visibility`, where `visibility` (`public` / `corp` / `private`) is
-   a per-app field in the `/deploy` payload and the zone console.
-   `ignition-control` records the effective scheme + host so the console and
-   `/info` show the right URL.
+4. **Exposure & access** (`docs/exposure.md`) — one model, no per-topology
+   choices. **The controller is the only public machine and the only place TLS
+   terminates.** It runs the Traefik **edge**, an **SSO gateway**, and
+   `ignition-control`; it owns `:443` and reverse-proxies by `Host` over
+   **WireGuard** to nodes on a private network with **no inbound**
+   (`ignition-control` adds each node as a WG peer at registration). Behind the
+   edge everything is **plain HTTP** — the private link is the boundary. The
+   per-node Traefik stays, internal-only (`web` entrypoint, no TLS labels), for
+   the final `Host` → container hop.
 
-   **Auth model** (settled): one `forward-auth` gateway in front of **all
-   browser traffic** — platform console, zone console, Forgejo web UI, apps —
-   redirecting to the corp IdP; **zero software on the dev machine** (a browser
-   + corp login). "Managed devices only" is an IdP Conditional Access policy,
-   not an Ignition feature. `git push` / `docker push` can't do OIDC, so the
-   gateway **bypasses** HTTP-Basic / git-user-agent requests and lets Forgejo
-   authenticate them with a personal access token the dev mints after their
-   first SSO'd login (like a GitHub PAT, over HTTPS). Forgejo SSH stays
-   disabled. Contractors get an IdP guest account, not a carve-out.
+   - **DNS is pre-registered once**: `<BASE_DOMAIN>` delegated (NS) to a tiny
+     authoritative DNS the controller runs, answering `*.<BASE_DOMAIN> →
+     controller` at any depth (RFC 4592) — or a plain `*.<BASE_DOMAIN>` A-record
+     + a DNS API token for ACME. Provisioning a zone adds **zero** DNS records.
+   - **Certs**: the edge does DNS-01 for `*.<BASE_DOMAIN>` + per-zone
+     `*.<slug>.<BASE_DOMAIN>` / `*.apps.<slug>.<BASE_DOMAIN>` (cert wildcards are
+     single-label). CA is Let's Encrypt or a self-hosted `step-ca`
+     (`ACME_CA_SERVER`). `ignition-control` writes the edge router + cert config
+     per zone, like it already writes `state/control/dynamic/<slug>.yml`.
+     `http-only` (no cert, SSO refused) only for an offline demo.
+   - **SSO**: one `forward-auth` (`oauth2-proxy` / Authelia) in front of **all
+     browser traffic** — platform console, zone console, Forgejo web UI, apps —
+     to a self-hosted Keycloak or corp OIDC. **Zero software on the dev
+     machine.** "Managed devices only" is an IdP Conditional Access policy.
+     `git push` / `docker push` can't do OIDC, so the gateway **bypasses**
+     HTTP-Basic / git-user-agent requests and Forgejo authenticates them with a
+     personal access token the dev mints after their first SSO'd login (like a
+     GitHub PAT, HTTPS). Forgejo SSH stays disabled. Contractors get an IdP
+     guest account.
+   - **Per-app `visibility`** (`corp` default / `public` / `private`) — a field
+     in the `/deploy` payload and the zone console; decides whether the
+     `forward-auth` (and an `ip-allowlist`) middleware is on that app's edge
+     router.

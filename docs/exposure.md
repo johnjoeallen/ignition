@@ -1,320 +1,113 @@
 # Exposure & access
 
-The default — direct inbound on the node, wildcard certs from an ACME CA via
-the DNS-01 challenge — is one option among several. A cluster picks an
-**exposure profile** at install, and individual zones or apps can narrow it.
+One model. No per-topology choices, no hosted services.
 
-**No third-party services.** Everything here is self-hosted: a relay host *you*
-run, WireGuard, your own ACME / PKI, your own identity provider. No Cloudflare,
-Tailscale, ngrok, or any hosted tunnel.
+```
+                 internet
+                    │  :443 (and :80 for ACME / redirect)
+        ┌───────────▼────────────┐
+        │      controller        │   public IP
+        │  ── Traefik edge ──    │   • terminates TLS (the only place certs live)
+        │  ── SSO gateway ──     │   • one forward-auth to your IdP for browser traffic
+        │  ── ignition-control ──│   • routes by Host → the node running the zone
+        └───────────┬────────────┘
+                    │  WireGuard  (plain HTTP inward — no TLS behind the edge)
+     ┌──────────────┼──────────────┐
+     ▼              ▼              ▼
+ ┌────────┐    ┌────────┐    ┌────────┐   private network, NO inbound
+ │ node-1 │    │ node-2 │    │ node-3 │   • internal-only Traefik on :80
+ │ zones… │    │ zones… │    │ zones… │   • Forgejo / DinD / runner / apps
+ └────────┘    └────────┘    └────────┘
+```
 
-Three independent knobs:
+- The **controller** is the only machine with a public address and the only
+  thing that terminates TLS. It runs the Traefik **edge**, the **SSO gateway**,
+  and `ignition-control`.
+- **Nodes** sit on a private network with **no inbound at all**. The controller
+  reaches them over a **WireGuard** link (`ignition-control` adds each node as a
+  peer at registration). Everything behind the edge is **plain HTTP** — the
+  private link is the confidentiality boundary.
+- Every zone's `traefik-public` / `zone-<slug>` / DinD network is Docker-local
+  on its node, with no route out.
 
-1. **Reachability** — how a request gets to the node: direct **inbound**, or an
-   outbound **reverse tunnel** to a relay host you control (no inbound ports on
-   the cluster).
-2. **TLS** — a publicly-trusted cert from an ACME CA, a cert from your own
-   internal CA, or (last resort) plain HTTP.
-3. **Authorization** — open to anyone who can reach it, gated by **SSO** against
-   your identity provider, or reachable only over a private network (the tunnel
-   *is* the boundary).
+## DNS — pre-registered, once
 
-| Profile | Reachability | TLS | Typical audience |
-|---|---|---|---|
-| `public` (default) | inbound `:80/:443` on the node | ACME DNS-01 wildcard | the internet |
-| `public-http01` | inbound `:80/:443`, no DNS API | ACME HTTP-01, per host | the internet |
-| `relay` | outbound tunnel to your relay host | ACME on the relay, or your internal CA | wherever the relay lives — a VPS (internet) or a DMZ box (corp) |
-| `internal-ca` | inbound, private network only | your internal CA / ACME | corp devices |
-| `http-only` | inbound | none | closed demo network only |
+Set up **before** any event, never touched again:
 
-The `sso` layer is added on top of **any** of these.
+- **Delegate `<BASE_DOMAIN>` to the controller** (`<BASE_DOMAIN>  NS  <controller>`)
+  and let it run a tiny authoritative DNS (CoreDNS / Technitium). It answers a
+  wildcard `*.<BASE_DOMAIN>  →  <controller-public-IP>` at any depth (RFC 4592),
+  so `admin.<BASE_DOMAIN>`, `git.qb.<BASE_DOMAIN>`, and
+  `x.apps.qb.<BASE_DOMAIN>` all resolve to the controller with **no per-zone
+  record**. Provisioning a zone adds zero DNS.
+- Or, if you'd rather not delegate: pre-register `*.<BASE_DOMAIN>  A  <controller>`
+  in your existing DNS and hand the controller a DNS-provider API token so it
+  can still do the ACME challenge.
 
----
+Corporate machines resolve it through their normal resolver — it's just a
+public domain. If corp egress goes through an explicit HTTP proxy,
+`*.<BASE_DOMAIN>` has to be on its allow list.
 
-## The control-plane box is multi-homed
+## TLS — at the edge only
 
-All inbound terminates at the **control-plane box** (see "Single ingress"
-below), so this is about how *that* box is attached. The **internal Ignition
-network is always isolated**: `traefik-public`, every `zone-<slug>` network, and
-each zone's DinD engine are Docker networks with **no route out**. The audience
-only ever reaches the control-plane edge; it proxies inward.
+The edge obtains certs from an ACME CA (Let's Encrypt, or your own `step-ca` via
+`ACME_CA_SERVER`) using **DNS-01**:
 
-Exposure is which host interface the edge binds `:80/:443` to. The box
-typically has two or more attachments:
+- one `*.<BASE_DOMAIN>` cert (covers `admin.<BASE_DOMAIN>` and every single-label
+  name), plus
+- per zone, `*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` (cert
+  wildcards are single-label, so these are two labels deep). `ignition-control`
+  requests them as it provisions, alongside the router config.
 
-- **corporate DMZ** — so people on the corp network can reach the demos
-  (SSO + SSL mandatory here);
-- **the internal Ignition network** — the isolated per-zone stacks on the
-  worker nodes (never routable from outside);
-- optionally **a direct internet link** — a separate NIC / uplink for external
-  guests, used when corp can't accept inbound or run a tunnel to the box.
+DNS-01 means the CA never connects to the controller, so the SSO gateway can
+sit in front of literally everything with **nothing to bypass**. Behind the
+edge there is no TLS — node Traefik and the app containers speak plain HTTP over
+WireGuard.
 
-### Topologies
+If you truly cannot get a trusted cert (an offline demo, laptops in a room),
+run the edge on `:80` only; `ignition-control` marks every URL `http://` and
+refuses to enable SSO (an unauthenticated redirect over plain HTTP leaks the
+session).
 
-| # | Control-plane box attached to | Audience reaches the edge via | Profile | Notes |
-|---|---|---|---|---|
-| **A** | corp DMZ + internal | the **DMZ interface** | `public` (internal-CA or public ACME) **+ `sso`** | The common corporate case. `IGN_EXPOSE_ADDR` binds `:443` to the DMZ IP only. Certs from the corp `step-ca`, or public ACME if the names are delegatable. |
-| **B** | corp DMZ + internal + a direct internet link | **both** the DMZ and the public interface | `public` + `sso` for corp names, plus public ACME on the internet interface | Two entrypoints; external guests hit the public NIC, corp hits the DMZ NIC. Split or duplicate the router hostnames per interface. |
-| **C** | internet only (no corp link) | the **public interface** | `public` (public ACME) **± `sso`** | The box is just on the internet. SSO optional — self-hosted Keycloak with invited accounts to restrict to named guests. |
-| **D** | a local switch only (air-gapped) | the **LAN interface**, laptops in the room | `internal-ca` or `http-only` | No remote demo. Certs from a `step-ca` on the box, or plain HTTP. |
-| **E** | corp DMZ + internal, but no inbound allowed | outbound **tunnel** to a relay | `relay` (+ `sso`) | The box dials out to a relay (DMZ box or VPS); see below. |
-
-`IGN_EXPOSE_ADDR` (host IP or `0.0.0.0`) controls which interface the edge binds
-to; `ignition-control` records the resulting scheme + host so the console and
-`/info` show the URL the audience will actually use.
-
----
-
-## Single ingress: the control plane is the only front door
-
-**All inbound HTTP(S) terminates at the control-plane box.** It owns `:80` /
-`:443` on the exposure interface, terminates TLS, runs the SSO gateway, then
-routes **by `Host` header** to the node that runs the target zone — proxying
-over the internal Ignition network. Worker nodes take **no inbound** from
-outside; they only need to be reachable from the control plane on the internal
-network.
-
-Consequences:
-
-- **DNS is one record.** `*.<BASE_DOMAIN>  →  the control-plane box` (plus the
-  apex). DNS wildcards match at *any* depth (RFC 4592), so that single record
-  answers `admin.<BASE_DOMAIN>`, `git.qb.<BASE_DOMAIN>` and
-  `x.apps.qb.<BASE_DOMAIN>` alike — as long as no intermediate node
-  (`qb.<BASE_DOMAIN>`, `apps.qb.<BASE_DOMAIN>`) is explicitly defined. The
-  multi-node "record per zone" problem disappears.
-- **Certs are all in one place.** The control-plane Traefik does the DNS-01
-  challenge for `*.<BASE_DOMAIN>` and, per zone, `*.<slug>.<BASE_DOMAIN>` +
-  `*.apps.<slug>.<BASE_DOMAIN>` (still two labels deep — cert wildcards are
-  single-label). `ignition-control` writes the router + cert config as it
-  provisions, the same way it already writes `state/control/dynamic/<slug>.yml`.
-- **SSO is one gateway** in front of that one Traefik.
-- **The node keeps a Traefik**, but **internal-only** (no published ports). It
-  does the final `Host` → container routing from the Docker labels, exactly as
-  today. The control-plane edge forwards `git.<slug>.…` /
-  `<app>.apps.<slug>.…` to `http://<node-internal-addr>` with the `Host` header
-  preserved.
-
-### How corporate machines resolve it
-
-`BASE_DOMAIN` must be a domain the org **owns**. The audience resolves the
-names through whatever resolver they already use; you place the one wildcard:
-
-- **Public domain, box on a corp-routable or public IP** → the wildcard goes in
-  your public authoritative DNS. Corp machines resolve it by normal recursion,
-  **no corp DNS change**.
-- **Names only inside the corp network (DMZ)** → split horizon: ask the corp
-  DNS team for `*.<BASE_DOMAIN>  A  <box-DMZ-IP>` in their internal zone, or an
-  `NS` delegation of `<BASE_DOMAIN>` to a tiny authoritative DNS the box runs
-  (CoreDNS / Technitium). The name then resolves only inside, to an address
-  only reachable inside.
-- **The corp HTTP proxy**: resolving isn't enough if corp machines egress
-  through an explicit proxy — `*.<BASE_DOMAIN>` has to be on its allow list.
-
-> This supersedes the earlier "Traefik on every node, one A-record per zone"
-> model. The per-node Traefik stays for internal routing; only the control
-> plane faces the audience.
-
----
-
-## One SSO gateway, no software on the dev machine
+## SSO — one gateway, no software on the dev machine
 
 Every **browser** request — the platform console, the zone console, Forgejo's
-web UI (PRs, CI logs, Actions), and the deployed apps — goes through one
-`forward-auth` gateway that redirects to your IdP. A developer needs only a
-browser and their corporate login; nothing is installed on their machine. If
-you want to restrict that to managed devices, add a **device-compliance
-Conditional Access policy at the IdP** — still zero dev-box tech from Ignition's
-side.
+web UI (PRs, CI logs, Actions), and the deployed apps — passes through one
+`forward-auth` gateway at the edge that redirects to your IdP. A developer
+needs only a browser and a corporate login; nothing is installed on their
+machine. "Managed devices only" is a **Conditional Access policy at the IdP**,
+not an Ignition feature.
 
-**`git push` / `docker push` can't do the OIDC redirect**, so those go straight
-to Forgejo with a **personal access token** the developer mints in the Forgejo
-UI (after their first SSO'd browser login) — exactly like a GitHub PAT, over
-plain HTTPS. The gateway is configured to **bypass** requests that carry HTTP
-Basic auth or a git/registry user-agent and let Forgejo authenticate them; the
-browser paths still get OIDC.
+- **Traefik `forwardAuth` → `oauth2-proxy`** (or **Authelia**), against your
+  OIDC provider — self-hosted **Keycloak**, or an existing corp Entra ID / Okta
+  / LDAP. Cookie domain `.<BASE_DOMAIN>`, so one session covers everything.
+- **Allow-list** by email domain or IdP group (e.g. a `hackathon-judges`
+  group). Contractors get an IdP guest account, not a carve-out.
 
-Consequences:
+**`git push` / `docker push` can't do OIDC.** The gateway **bypasses** requests
+carrying HTTP Basic auth or a git/registry user-agent and lets Forgejo
+authenticate them with a **personal access token** the developer mints in the
+Forgejo UI after their first SSO'd login — exactly like a GitHub PAT, over
+HTTPS. Forgejo SSH stays disabled.
 
-- A dev works from **any machine** for `git push` (the token is device-agnostic
-  — which is the point) and uses a corp-authenticated browser for everything
-  else.
-- Contractors / external participants: give them an IdP guest account (or a
-  separate Keycloak realm) rather than a carve-out in Ignition.
-- Ignition's SSH access to Forgejo stays **disabled** — HTTPS + token only, so
-  there's no extra inbound port and no key management.
-
-`ignition-control` carries the `sso` config (IdP issuer, client, allow-list,
-and the bypass rules) once for the cluster; per-app **`visibility`** still
-decides whether an individual app is behind it (see below).
-
----
-
-## 1. Public inbound (`public`, `public-http01`)
-
-The node's Traefik owns `:80` / `:443`; requests arrive directly.
-
-- **DNS**: `git.<slug>` / `*.apps.<slug>` A-records → the node running the zone;
-  `admin.<slug>` and `admin.<BASE_DOMAIN>` → the control host.
-- **Certs — DNS-01 wildcard (`public`, preferred)**: Traefik answers the ACME
-  challenge by writing a TXT record through the DNS provider's API, so it gets
-  `*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` with **zero inbound
-  reachability during issuance**. The ACME CA can be Let's Encrypt or your own
-  ACME endpoint (`step-ca`) — set `ACME_CA_SERVER`. This is what
-  `traefik-core-compose.yml` does today.
-- **Certs — HTTP-01 (`public-http01`)**: no DNS API → per-hostname HTTP-01. The
-  CA connects to `:80` for each `<app>.apps.<slug>.<BASE_DOMAIN>` as it first
-  appears. Needs `:80` open and a real A-record per app (no wildcard). Slower,
-  rate-limited, first-request handshake delay per new app.
-
-Use when the cluster has a routable IP and you control the DNS zone.
-
-## 2. Reverse tunnel to your relay (`relay`)
-
-The cluster has **no inbound** (home connection, NAT, a locked-down VLAN). A
-lightweight tunnel client on the control host dials **out** to a **relay host
-you run** — a small public VPS for an internet audience, or a box in the
-corporate DMZ for an internal one. The relay has the public/routable address;
-the cluster never opens a port.
-
-Pick one transport (all OSS, all self-hosted):
-
-- **`rathole`** or **`frp`** — a purpose-built reverse-tunnel pair: `…-server`
-  on the relay, `…-client` on the control host, one shared token. Forwards the
-  relay's `:443` to `traefik:443` (or `:80`) on `traefik-public`.
-- **WireGuard** — the control host and the relay are WireGuard peers; the relay
-  runs nginx / HAProxy / Traefik and `proxy_pass`es over the tunnel to the
-  cluster's Traefik. More moving parts, but it's just WireGuard.
-- **`ssh -R`** — `ssh -R 443:traefik:443 relay` from the control host (with
-  `autossh` / a systemd unit). Zero extra software on the relay. Fine for one
-  or two events.
-
-- **DNS**: `*.apps.<slug>.<BASE_DOMAIN>` (and the `admin.*` / `git.*` hosts) →
-  the **relay's** address. For a corp audience, put those records only in the
-  corp resolver (split-horizon) so the names don't resolve outside.
-- **TLS**: terminate on the **relay**. Either run Traefik/Caddy there with ACME
-  (DNS-01 against your zone, or HTTP-01 — the relay *does* have inbound), or
-  hand it a cert from your internal CA. The cluster's Traefik can then speak
-  plain HTTP over the tunnel, or you pass TLS straight through (SNI routing) and
-  let the cluster terminate — either works.
-
-`ignition-control` records the effective scheme + host so the console and
-`/info` show the relay URL, not the node's.
-
-## 3. Inbound on a private network, internal CA (`internal-ca`)
-
-Everything stays inside the perimeter: the cluster is reachable from the corp
-network (directly, or via a subnet route / WireGuard you manage), and certs
-come from **your own CA**.
-
-- **Certs**: point Traefik's ACME resolver at a **self-hosted ACME** —
-  `step-ca` (smallstep) is a single Go binary; or an ADCS instance with an ACME
-  responder. Managed devices already trust the chain, so browsers are happy on
-  any hostname with no internet involved. Set `ACME_CA_SERVER` +
-  `ACME_CA_ROOT` (the resolver's trusted root).
-- **DNS**: corp resolvers answer `git.<slug>` / `*.apps.<slug>` /
-  `admin.<slug>` with the node / control-host addresses; nothing is published
-  publicly.
-- No inbound from the internet at all.
-
-## 4. Plain HTTP (`http-only`)
-
-When there is genuinely no trusted-cert path and the audience is on a closed
-network you control:
-
-- Traefik serves the `web` entrypoint only — no HTTPS redirect, no cert
-  resolver.
-- `ignition-control` marks every app URL `http://…` in the console and on
-  `/info`, and **refuses to enable `sso`** (an unauthenticated redirect over
-  plain HTTP leaks the session).
-- Never for anything carrying credentials or judging feedback.
-
-## TLS options, summarised
-
-| Option | Needs | Gives |
-|---|---|---|
-| **ACME DNS-01 wildcard** | DNS-provider API token + an ACME CA (public or your own) | one `*.<slug>` + `*.apps.<slug>` cert per zone, issued with zero inbound |
-| **ACME HTTP-01 per host** | `:80` reachable by the CA, an A-record per app | a cert per app, on first request |
-| **Internal ACME (`step-ca`)** | one self-hosted binary reachable from the node | trusted-on-managed-devices certs, any hostname, no internet |
-| **Terminate on the relay** | Traefik/Caddy + ACME (or an internal-CA cert) on the relay host | trusted cert at the relay; cluster speaks plain HTTP or passes TLS through |
-| **none** | — | plain HTTP only |
-
-### ACME with SSO in front of everything
-
-The gateway is a Traefik **middleware**, not a front proxy, so:
-
-- **DNS-01 (the `public` default)** — Let's Encrypt never connects to the box;
-  it checks a `_acme-challenge` TXT record that Traefik writes through the DNS
-  API. **Nothing to bypass.** Keep SSO on every hostname. Wildcards mean one
-  challenge per zone, not per app. This is the recommended answer.
-- **HTTP-01 (`public-http01`)** — Traefik serves `/.well-known/acme-challenge/*`
-  from its **own internal handler**, before any router or middleware runs, so
-  the forward-auth middleware never sees it. It works even though `:80`
-  redirects to `:443` (Traefik exempts the challenge path from the redirect).
-  Set `--certificatesresolvers.le.acme.httpchallenge.entrypoint=web`; the only
-  requirement is that `:80` is reachable from Let's Encrypt.
-- If you deliberately put a **separate** auth proxy (oauth2-proxy / Authelia) in
-  front of Traefik instead of using the middleware, add one unauthenticated
-  bypass: path prefix `^/\.well-known/acme-challenge/`, plain HTTP, no session.
-
-## SSO — the mechanism
-
-**Mandatory whenever the box is on the corporate DMZ** (topologies A / B / E):
-the DMZ interface is reachable by the whole corp network, so its routers must be
-gated. Optional for a purely public box (C) with a closed guest list.
-
-- **Traefik `forwardAuth` middleware → `oauth2-proxy`**, or **Authelia**
-  (self-contained: OIDC/LDAP, 2FA, access-control rules), configured against
-  **your** OIDC provider — **Keycloak** (self-hosted), or an existing corp
-  Entra ID / Okta / LDAP.
-- Runs as a **core service** on `traefik-public` (one on the control host,
-  reached over the shared network). Cookie domain `.<BASE_DOMAIN>` so one
-  session covers every zone's browser surface.
-- **Allow-list** by email domain (`@corp.com`) or IdP group — e.g. only a
-  `hackathon-judges` group. **Managed-device only** is a Conditional Access
-  policy at the IdP, not here.
-- **Bypass rules** let `git` / `docker` (HTTP Basic, or the git/registry
-  user-agent) fall through to Forgejo's own token auth — see "One SSO gateway"
-  above.
-- Not available under `http-only` (an unauthenticated redirect over plain HTTP
-  leaks the session).
-
-## Per-zone / per-app visibility
+## Per-app visibility
 
 The deploy payload and the zone console carry a `visibility`:
 
-| `visibility` | Router entrypoint | Middleware | Reachable by |
-|---|---|---|---|
-| `public` | as per the cluster profile | none | anyone who can reach the node/relay |
-| `corp` | same | `forward-auth` (SSO) | signed-in, allow-listed users |
-| `private` | same | `ip-allowlist` or none | only over the tunnel / private network |
+| `visibility` | Behind the SSO gateway? | Reachable by |
+|---|---|---|
+| `corp` (default) | yes | signed-in, allow-listed users |
+| `public` | no | anyone who can reach the controller |
+| `private` | yes + an IP allow-list | a named CIDR only |
 
-`ignition-control` renders the app-compose Traefik labels from
-`cluster-profile × visibility`: the entrypoint (`websecure` vs `web`), the cert
-resolver (`le-dns` / `le-http` / `internal` / none), and whether the
-`forward-auth` middleware is attached.
-
-## Decision guide
-
-Start from the topology (above), then:
-
-- **Box on the corp DMZ, corp audience** (topology A) → `public` + `sso`, bind
-  `IGN_EXPOSE_ADDR` to the DMZ IP. Certs from the corp `step-ca`, or public ACME
-  if the DMZ names are delegatable.
-- **Corp DMZ + a direct internet link** (B) → the above for corp names, plus
-  public ACME + `public` on the internet interface for external guests.
-- **Internet only, no corp link** (C) → `public` (DNS-01 wildcard, public ACME).
-  Add `sso` (self-hosted Keycloak, invited accounts) if the guest list is
-  closed.
-- **Air-gapped, laptops in the room** (D) → `internal-ca` (`step-ca` on the box)
-  or `http-only`. No remote demo.
-- **Corp DMZ but no inbound allowed** (E) → `relay`: the box dials out to a
-  relay you run (a DMZ box, or a VPS for an external audience); TLS terminates
-  on the relay; split-horizon DNS.
-- **Public IP but no DNS API** → `public-http01` (per-host HTTP-01).
+`ignition-control` renders the app router config accordingly — it's just
+whether the `forward-auth` (and `ip-allowlist`) middleware is attached; the
+entrypoint and cert are always the edge's.
 
 ## Status
 
-Ignition today implements **`public` (DNS-01 wildcard)** only. The profiles
-above are the design for making exposure a per-cluster choice — see
-[`CLAUDE.md`](https://github.com/johnjoeallen/ignition/blob/main/CLAUDE.md)
-"Likely next tasks".
+Ignition today runs Traefik on every node with a DNS record per zone and no
+SSO. The model above — controller-only ingress, WireGuard to private nodes,
+plain HTTP inward, pre-registered wildcard DNS, one SSO gateway — is the design;
+see [`CLAUDE.md`](https://github.com/johnjoeallen/ignition/blob/main/CLAUDE.md)
+task 4.

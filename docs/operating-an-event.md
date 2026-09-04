@@ -9,11 +9,12 @@ Everything an operator does is in the **platform console** at
   Docker daemon (local socket, `ssh://`, or `tcp://`+TLS).
 - **Nodes** — hosts with Docker, each with the shared network created:
   `docker network create traefik-public`.
-- **DNS** (`BASE_DOMAIN` is the apex, e.g. `ignition.example`):
-  `admin.<BASE_DOMAIN>` → the control host, and `git.<slug>.<BASE_DOMAIN>` /
-  `admin.<slug>.<BASE_DOMAIN>` / `<app>.apps.<slug>.<BASE_DOMAIN>` → whichever
-  node runs that zone. On a single node, `*.<slug>.<BASE_DOMAIN>` A-records cover
-  it; across nodes, a record per zone/app.
+- **DNS** (`BASE_DOMAIN` is the apex, e.g. `ignition.example`): one
+  pre-registered wildcard `*.<BASE_DOMAIN>` → the control host, set up once and
+  never touched again. It matches at any depth (RFC 4592), so
+  `admin.<BASE_DOMAIN>`, `git.<slug>.<BASE_DOMAIN>`,
+  `admin.<slug>.<BASE_DOMAIN>`, and `<app>.apps.<slug>.<BASE_DOMAIN>` all
+  resolve with no per-zone record. Provisioning a zone adds zero DNS.
 - API credentials for **your** DNS provider so Traefik can answer the ACME
   DNS-01 challenge (`ACME_DNS_PROVIDER` + the matching vars in `acme.env` —
   any of Traefik's ~100 providers, including `rfc2136` for a self-run DNS).
@@ -24,11 +25,10 @@ Everything an operator does is in the **platform console** at
 
 Traefik terminates TLS everywhere, so no `insecure-registries` entry is needed.
 
-The above is the **`public`** exposure profile — direct inbound + DNS-01
-wildcard certs. If the cluster has no inbound, or the audience is corporate
-only, or you can't get trusted certs, see **[Exposure & access](exposure.md)**
-for a self-hosted reverse tunnel, internal-CA certs, plain-HTTP fallback, and
-SSO gating.
+Today Ignition runs Traefik on every node. The target model — the controller as
+the only public machine and only TLS terminator, WireGuard to private nodes with
+no inbound, plain HTTP inward, and one SSO gateway — is described in
+**[Exposure & access](exposure.md)**.
 
 ## Standing up the event
 
@@ -106,8 +106,9 @@ capacity per node.
 ## Rough edges
 
 - **DNS records for `git.<slug>` / `admin.<slug>` / `*.apps.<slug>` aren't
-  created for you** — wildcard `*.<slug>.<BASE_DOMAIN>` for one node; automate
-  per-record across nodes.
+  created for you** — the target model pre-registers one wildcard
+  `*.<BASE_DOMAIN>` → the controller (matches at any depth), so provisioning
+  adds zero DNS; until then it's a wildcard `*.<slug>.<BASE_DOMAIN>` per node.
 - **`traefik-public` is one flat network** — app containers and Forgejo
   instances on a node can reach each other by IP.
 - **`ignition-control` holds every token** and drives every node's Docker
