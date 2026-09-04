@@ -9,6 +9,7 @@ import net.dublinux.ignition.auth.ZoneAccessService;
 import net.dublinux.ignition.node.Node;
 import net.dublinux.ignition.node.NodeService;
 import net.dublinux.ignition.provisioning.ProvisioningService;
+import net.dublinux.ignition.zone.TeamNameSuggester;
 import net.dublinux.ignition.zone.ZoneService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -34,16 +35,18 @@ public class PlatformConsoleController {
     private final ProvisioningService provisioning;
     private final CurrentUser currentUser;
     private final ZoneAccessService access;
+    private final TeamNameSuggester nameSuggester;
 
     public PlatformConsoleController(NodeService nodes, ZoneService zones, AppService apps,
                                      ProvisioningService provisioning, CurrentUser currentUser,
-                                     ZoneAccessService access) {
+                                     ZoneAccessService access, TeamNameSuggester nameSuggester) {
         this.nodes = nodes;
         this.zones = zones;
         this.apps = apps;
         this.provisioning = provisioning;
         this.currentUser = currentUser;
         this.access = access;
+        this.nameSuggester = nameSuggester;
     }
 
     @GetMapping("/nodes")
@@ -91,8 +94,19 @@ public class PlatformConsoleController {
     }
 
     @GetMapping("/zones/new")
-    public String newZone() {
+    public String newZone(Model model) {
+        var suggestion = nameSuggester.suggest();
+        model.addAttribute("suggestedName", suggestion.name());
+        model.addAttribute("suggestedSlug", suggestion.slug());
         return "zone-form";
+    }
+
+    /** A fresh, still-available name/slug pair for the "suggest another" button — never one already taken. */
+    @GetMapping("/zones/suggest-name")
+    @ResponseBody
+    public Map<String, String> suggestName() {
+        var suggestion = nameSuggester.suggest();
+        return Map.of("name", suggestion.name(), "slug", suggestion.slug());
     }
 
     @PostMapping("/zones")

@@ -14,8 +14,21 @@
           <div class="alert alert-danger" th:if="${error != null}" th:text="${error}">bad input</div>
           <form method="post" th:action="@{/zones}">
             <div class="mb-3">
+              <label class="form-label">Name</label>
+              <div class="d-flex gap-2">
+                <input class="form-control" id="teamName" th:value="${suggestedName}" placeholder="Hairy Badgers">
+                <button class="btn btn-outline-secondary text-nowrap" type="button" id="suggestAnother">
+                  <i class="bi bi-shuffle"></i> Suggest another
+                </button>
+              </div>
+              <div class="form-text">Feel free to change it — the slug below follows along.</div>
+            </div>
+            <div class="mb-3">
               <label class="form-label">Slug</label>
-              <input class="form-control" name="slug" required placeholder="quantum-badgers">
+              <input class="form-control" name="slug" id="teamSlug" required
+                     th:value="${suggestedSlug}" placeholder="hairy-badgers">
+              <div class="form-text">This is what shows up in URLs (<code>git.hairy-badgers.…</code>) — edit
+                directly if you want something other than what the name suggests.</div>
             </div>
             <div class="mb-3">
               <label class="form-label">Node</label>
@@ -29,6 +42,41 @@
           </form>
         </div>
       </div>
+      <script>
+        (function () {
+          const nameInput = document.getElementById('teamName');
+          const slugInput = document.getElementById('teamSlug');
+          const suggestBtn = document.getElementById('suggestAnother');
+          let slugFollowsName = true; // stops the moment someone hand-edits the slug
+
+          function slugify(name) {
+            return name.trim().toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/(^-+|-+$)/g, '');
+          }
+
+          nameInput.addEventListener('input', function () {
+            if (slugFollowsName) {
+              slugInput.value = slugify(nameInput.value);
+            }
+          });
+          slugInput.addEventListener('input', function () {
+            slugFollowsName = false;
+          });
+
+          suggestBtn.addEventListener('click', function () {
+            suggestBtn.disabled = true;
+            fetch('/zones/suggest-name')
+              .then(function (res) { return res.json(); })
+              .then(function (s) {
+                nameInput.value = s.name;
+                slugInput.value = s.slug;
+                slugFollowsName = true;
+              })
+              .finally(function () { suggestBtn.disabled = false; });
+          });
+        })();
+      </script>
     </main>
   </div>
 </body>
