@@ -1,0 +1,87 @@
+package net.dublinux.ignition.auth;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Who can reach a team's console, and at what role. Deliberately <b>not</b> a
+ * signup path — "add a member" attaches an existing, already-registered
+ * {@link AppUser} to the zone; it never creates one. (Onboarding a brand-new
+ * person is {@code /signup} + platform-admin approval, or a platform admin's
+ * invite — separate from team membership.)
+ */
+@Service
+public class ZoneAccessService {
+
+    private final AppUserRepository users;
+    private final ZoneMemberRepository members;
+
+    public ZoneAccessService(AppUserRepository users, ZoneMemberRepository members) {
+        this.users = users;
+        this.members = members;
+    }
+
+    /** A member row joined with the account it points at, for display. */
+    public record MemberView(UUID userId, String email, ZoneMember.Role role, boolean platformAdmin) {}
+
+    public List<MemberView> membersOf(String slug) {
+        return members.findByZoneSlug(slug).stream()
+                .map(m -> users.findById(m.userId())
+                        .map(u -> new MemberView(u.id(), u.email(), m.role(), u.isPlatformAdmin()))
+                        .orElse(null))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(MemberView::email))
+                .toList();
+    }
+
+    /**
+     * Attaches an existing account to the zone at the given role (or changes
+     * their role, if they're already a member).
+     */
+    @Transactional
+    public void addMember(String slug, String email, ZoneMember.Role role) {
+        String e = email == null ? "" : email.strip().toLowerCase();
+        AppUser u = users.findByEmailIgnoreCase(e)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "no Ignition account for " + e + " — they need to sign up (or be invited) first"));
+        ZoneMember m = members.findByZoneSlugAndUserId(slug, u.id())
+                .orElseGet(() -> new ZoneMember(slug, u.id(), role));
+        m.setRole(role);
+        members.save(m);
+    }
+
+    @Transactional
+    public void setRole(String slug, UUID userId, ZoneMember.Role role) {
+        ZoneMember m = members.findByZoneSlugAndUserId(slug, userId)
+                .orElseThrow(() -> new IllegalArgumentException("not a member of this team"));
+        if (m.role() == ZoneMember.Role.ZONE_ADMIN && role != ZoneMember.Role.ZONE_ADMIN) {
+            guardLastZoneAdmin(slug, userId);
+        }
+        m.setRole(role);
+        members.save(m);
+    }
+
+    @Transactional
+    public void removeMember(String slug, UUID userId) {
+        ZoneMember m = members.findByZoneSlugAndUserId(slug, userId)
+                .orElseThrow(() -> new IllegalArgumentException("not a member of this team"));
+        if (m.role() == ZoneMember.Role.ZONE_ADMIN) {
+            guardLastZoneAdmin(slug, userId);
+        }
+        members.delete(m);
+    }
+
+    private void guardLastZoneAdmin(String slug, UUID exceptId) {
+        long others = members.findByZoneSlug(slug).stream()
+                .filter(m -> m.role() == ZoneMember.Role.ZONE_ADMIN && !m.userId().equals(exceptId))
+                .count();
+        if (others == 0) {
+            throw new IllegalStateException("cannot remove the team's last admin");
+        }
+    }
+}

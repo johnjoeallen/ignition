@@ -10,6 +10,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
+import java.util.UUID;
+
+import net.dublinux.ignition.auth.ZoneMember;
+import net.dublinux.ignition.auth.ZoneMemberRepository;
 import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.config.IgnitionProperties.Quotas;
 import net.dublinux.ignition.docker.DockerCli;
@@ -57,13 +61,14 @@ public class ProvisioningService {
     private final TraefikDynamicConfig traefik;
     private final DockerCli docker;
     private final ProvisioningStatusRepository statuses;
+    private final ZoneMemberRepository zoneMembers;
 
     private final ExecutorService pool;
 
     public ProvisioningService(IgnitionProperties props, ZoneRepository zones, NodeRepository nodes,
                                Scheduler scheduler, RenderService render,
                                TraefikDynamicConfig traefik, DockerCli docker,
-                               ProvisioningStatusRepository statuses,
+                               ProvisioningStatusRepository statuses, ZoneMemberRepository zoneMembers,
                                @org.springframework.beans.factory.annotation.Value(
                                        "${ignition.provisioning.concurrency:3}") int concurrency) {
         java.util.concurrent.atomic.AtomicInteger seq = new java.util.concurrent.atomic.AtomicInteger();
@@ -80,6 +85,7 @@ public class ProvisioningService {
         this.traefik = traefik;
         this.docker = docker;
         this.statuses = statuses;
+        this.zoneMembers = zoneMembers;
     }
 
     public enum State { RUNNING, DONE, FAILED }
@@ -98,8 +104,15 @@ public class ProvisioningService {
         statuses.save(e);
     }
 
-    /** Queue a provision. Returns immediately; watch {@link #status(String)}. */
-    public void submit(String slug, String nodeOverride, String label) {
+    /**
+     * Queue a provision. Returns immediately; watch {@link #status(String)}.
+     * {@code creator} becomes the zone's {@code ZONE_ADMIN} the moment it's
+     * created (a platform admin, so also gets in via {@code PLATFORM_ADMIN} —
+     * this just means they show up in the team's own member list too, and can
+     * hand admin off). {@code null} on a re-provision (move) of an existing
+     * zone — membership is untouched then.
+     */
+    public void submit(String slug, String nodeOverride, String label, UUID creator) {
         if (!SLUG.matcher(slug).matches()) {
             throw new IllegalArgumentException("slug must be [a-z0-9-], 2–40 chars, no leading/trailing dash");
         }
@@ -111,7 +124,7 @@ public class ProvisioningService {
         setStatus(slug, State.RUNNING, "queued");
         pool.submit(() -> {
             try {
-                String node = provision(slug, nodeOverride, label);
+                String node = provision(slug, nodeOverride, label, creator);
                 setStatus(slug, State.DONE, "provisioned on " + node);
             } catch (RuntimeException e) {
                 log.warn("provisioning zone {} failed", slug, e);
@@ -122,7 +135,7 @@ public class ProvisioningService {
 
     // ---------------------------------------------------------------- the flow
 
-    String provision(String slug, String nodeOverride, String label) {
+    String provision(String slug, String nodeOverride, String label, UUID creator) {
         Quotas q = props.getQuotas();
         double zoneCpus = q.getCpuForgejo() + q.getCpuDind() + q.getCpuRunner() + q.getCpuApp();
         double zoneMemGb = gb(q.getMemForgejo()) + gb(q.getMemDind()) + gb(q.getMemRunner()) + gb(q.getMemApp());
@@ -135,15 +148,20 @@ public class ProvisioningService {
         String zadminHost = "admin." + slug + "." + base;
 
         Zone zone = zones.find(slug).orElse(null);
-        if (zone == null) {
+        boolean isNew = zone == null;
+        if (isNew) {
             zone = new Zone(slug, node, base, zoneCpus, zoneMemGb, gitHost, zadminHost,
                     "https://" + gitHost + "/", "https://" + zadminHost + "/",
                     "apps." + slug + "." + base);
+            zone.setCreatedBy(creator);
         } else {
             zone.setNode(node);
         }
         zone.touch();
         zone = zones.save(zone);
+        if (isNew && creator != null) {
+            zoneMembers.save(new ZoneMember(slug, creator, ZoneMember.Role.ZONE_ADMIN));
+        }
 
         traefik.writePlatformRouter();
         traefik.writeZoneRouter(zone);

@@ -7,6 +7,9 @@ import java.util.Map;
 
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.app.DeployedApp;
+import net.dublinux.ignition.auth.CurrentUser;
+import net.dublinux.ignition.auth.ZoneAccessService;
+import net.dublinux.ignition.auth.ZoneMember;
 import net.dublinux.ignition.forgejo.ForgejoClient;
 import net.dublinux.ignition.release.ReleaseService;
 import net.dublinux.ignition.zone.Zone;
@@ -20,20 +23,28 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * The zone console: Users, Apps (an app <em>is</em> its repo — creating one
- * creates and seeds the repo; Release deploys it), runner restart. The zone is
- * passed as {@code ?z=<slug>} (a platform admin picks it; AUTH-DESIGN step 6
- * will scope this to the caller's zone memberships).
+ * The team console: Members (who has Ignition console access to this team,
+ * and at what role), Users (Forgejo git accounts), Apps (an app <em>is</em>
+ * its repo — creating one creates and seeds the repo; Release deploys it),
+ * runner restart. The zone is passed as {@code ?z=<slug>} — access is
+ * enforced by {@code ZoneAuthorizationManager} (a platform admin, or a
+ * {@code MEMBER}/{@code ZONE_ADMIN} of that zone); member-management actions
+ * here additionally require {@link CurrentUser#isZoneAdmin}.
  */
 @Controller
 public class ZoneConsoleController {
 
     private final ZoneService zones;
     private final AppService apps;
+    private final ZoneAccessService access;
+    private final CurrentUser currentUser;
 
-    public ZoneConsoleController(ZoneService zones, AppService apps) {
+    public ZoneConsoleController(ZoneService zones, AppService apps, ZoneAccessService access,
+                                 CurrentUser currentUser) {
         this.zones = zones;
         this.apps = apps;
+        this.access = access;
+        this.currentUser = currentUser;
     }
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
@@ -70,19 +81,69 @@ public class ZoneConsoleController {
         model.addAttribute("apps", rows);
         model.addAttribute("users", zones.users(slug));
         model.addAttribute("botUser", zones.botUser(slug));
+        model.addAttribute("members", access.membersOf(slug));
+        model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
         return "zone";
+    }
+
+    @PostMapping("/z/members")
+    public String addMember(@RequestParam(name = "z") String z,
+                            @RequestParam String email,
+                            @RequestParam ZoneMember.Role role) {
+        String slug = requireZoneAdmin(z);
+        try {
+            access.addMember(slug, email, role);
+            return redirect(slug, email + " added as " + role.name().toLowerCase());
+        } catch (IllegalArgumentException e) {
+            return redirect(slug, e.getMessage());
+        }
+    }
+
+    @PostMapping("/z/members/role")
+    public String setMemberRole(@RequestParam(name = "z") String z,
+                                @RequestParam java.util.UUID userId,
+                                @RequestParam ZoneMember.Role role) {
+        String slug = requireZoneAdmin(z);
+        try {
+            access.setRole(slug, userId, role);
+            return redirect(slug, "role changed to " + role.name().toLowerCase());
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return redirect(slug, e.getMessage());
+        }
+    }
+
+    @PostMapping("/z/members/delete")
+    public String removeMember(@RequestParam(name = "z") String z, @RequestParam java.util.UUID userId) {
+        String slug = requireZoneAdmin(z);
+        try {
+            access.removeMember(slug, userId);
+            return redirect(slug, "member removed");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return redirect(slug, e.getMessage());
+        }
+    }
+
+    /** Member-management actions need team-admin rights, not just team access. */
+    private String requireZoneAdmin(String z) {
+        String slug = require(z);
+        if (!currentUser.isZoneAdmin(slug)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can manage members");
+        }
+        return slug;
     }
 
     @PostMapping("/z/users")
     public String createUser(@RequestParam(name = "z") String z,
                              @RequestParam String email,
                              @RequestParam String password) {
-        return back(z, zones.createUser(require(z), email, password), "user " + email + " created");
+        String slug = requireZoneAdmin(z);
+        return back(slug, zones.createUser(slug, email, password), "user " + email + " created");
     }
 
     @PostMapping("/z/users/delete")
     public String deleteUser(@RequestParam(name = "z") String z, @RequestParam String login) {
-        return back(z, zones.deleteUser(require(z), login), "user " + login + " removed");
+        String slug = requireZoneAdmin(z);
+        return back(slug, zones.deleteUser(slug, login), "user " + login + " removed");
     }
 
     @PostMapping("/z/apps")

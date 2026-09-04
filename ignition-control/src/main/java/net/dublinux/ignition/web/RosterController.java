@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import net.dublinux.ignition.auth.CurrentUser;
 import net.dublinux.ignition.provisioning.ProvisioningService;
 import net.dublinux.ignition.sweep.IdleSweeper;
 import net.dublinux.ignition.zone.ZoneService;
@@ -25,11 +26,14 @@ public class RosterController {
     private final ProvisioningService provisioning;
     private final ZoneService zones;
     private final IdleSweeper sweeper;
+    private final CurrentUser currentUser;
 
-    public RosterController(ProvisioningService provisioning, ZoneService zones, IdleSweeper sweeper) {
+    public RosterController(ProvisioningService provisioning, ZoneService zones, IdleSweeper sweeper,
+                            CurrentUser currentUser) {
         this.provisioning = provisioning;
         this.zones = zones;
         this.sweeper = sweeper;
+        this.currentUser = currentUser;
     }
 
     @GetMapping("/roster")
@@ -41,13 +45,14 @@ public class RosterController {
     public String apply(@RequestParam String slugs, Model model) {
         List<String> report = new ArrayList<>();
         Set<String> existing = new LinkedHashSet<>(zones.list().stream().map(z -> z.slug()).toList());
+        var creator = currentUser.get().map(u -> u.id()).orElse(null);
         for (String slug : parse(slugs)) {
             if (existing.contains(slug)) {
                 report.add(slug + " — already a zone, skipped");
                 continue;
             }
             try {
-                provisioning.submit(slug, "", "");
+                provisioning.submit(slug, "", "", creator);
                 report.add(slug + " — queued");
             } catch (RuntimeException e) {
                 report.add(slug + " — " + e.getMessage());

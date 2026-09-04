@@ -2,6 +2,7 @@ package net.dublinux.ignition.config;
 
 import net.dublinux.ignition.auth.IgnitionUserDetailsService;
 import net.dublinux.ignition.security.DeployTokenFilter;
+import net.dublinux.ignition.security.ZoneAuthorizationManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -23,7 +24,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, DeployTokenFilter deployFilter) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http, DeployTokenFilter deployFilter,
+                                    ZoneAuthorizationManager zoneAuthz) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/error",
@@ -31,8 +33,10 @@ public class SecurityConfig {
                                 "/signup", "/activate", "/forgot", "/reset",
                                 "/css/**", "/js/**", "/vendor/**", "/img/**", "/favicon.ico").permitAll()
                         .requestMatchers(HttpMethod.POST, "/deploy", "/undeploy").hasRole("DEPLOY")
-                        // AUTH-DESIGN step 6 opens /z to zone members; for now platform-only.
-                        .requestMatchers("/z/**", "/roster/**", "/sweep").hasAuthority("PLATFORM_ADMIN")
+                        // Any team member reaches /z (their own zone, checked against ?z=<slug> —
+                        // see ZoneAuthorizationManager); a platform admin reaches everything else.
+                        .requestMatchers("/z/**").access(zoneAuthz)
+                        .requestMatchers("/roster/**", "/sweep").hasAuthority("PLATFORM_ADMIN")
                         .anyRequest().hasAuthority("PLATFORM_ADMIN"))
                 .formLogin(form -> form
                         .loginPage("/login")

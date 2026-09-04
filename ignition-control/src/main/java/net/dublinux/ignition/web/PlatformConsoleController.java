@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import net.dublinux.ignition.app.AppService;
+import net.dublinux.ignition.auth.CurrentUser;
 import net.dublinux.ignition.node.Node;
 import net.dublinux.ignition.node.NodeService;
 import net.dublinux.ignition.provisioning.ProvisioningService;
@@ -30,13 +31,15 @@ public class PlatformConsoleController {
     private final ZoneService zones;
     private final AppService apps;
     private final ProvisioningService provisioning;
+    private final CurrentUser currentUser;
 
     public PlatformConsoleController(NodeService nodes, ZoneService zones, AppService apps,
-                                     ProvisioningService provisioning) {
+                                     ProvisioningService provisioning, CurrentUser currentUser) {
         this.nodes = nodes;
         this.zones = zones;
         this.apps = apps;
         this.provisioning = provisioning;
+        this.currentUser = currentUser;
     }
 
     @GetMapping("/")
@@ -75,7 +78,8 @@ public class PlatformConsoleController {
                              @RequestParam(required = false, defaultValue = "") String label,
                              Model model) {
         try {
-            provisioning.submit(slug.strip(), node.strip(), label.strip());
+            var creator = currentUser.get().map(u -> u.id()).orElse(null);
+            provisioning.submit(slug.strip(), node.strip(), label.strip(), creator);
             return "redirect:/teams?m=provisioning+" + slug.strip();
         } catch (RuntimeException e) {
             model.addAttribute("error", e.getMessage());
@@ -105,7 +109,7 @@ public class PlatformConsoleController {
     public String moveZone(@PathVariable String slug, @RequestParam String node) {
         try {
             zones.prepareMove(slug, node.strip());
-            provisioning.submit(slug, node.strip(), "");
+            provisioning.submit(slug, node.strip(), "", null);
             return "redirect:/teams?m=moving+" + slug + "+to+" + node.strip();
         } catch (RuntimeException e) {
             return "redirect:/teams?m=" + enc(e.getMessage());

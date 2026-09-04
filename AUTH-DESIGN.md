@@ -459,10 +459,17 @@ removed; a `pg_dump` (plus the AES key) is the backup.
    `/signup`, `/activate`, `/forgot`, `/reset` pages.
 5. **Bootstrap.** `SetupController` + `setup.html`; startup bootstrap-code
    logger; `/setup` gated on zero users.
-6. **Zone membership.** `ZoneAccessService`; `ProvisioningService` takes an
-   initial admin and writes the `ZONE_ADMIN` `zone_member` row;
-   `AdminController` (approvals/users/zones); `ZoneMembersController`;
-   `ZoneConsoleController` + `RosterController` auth via membership; pages.
+6. **Zone membership.** ~~Done, partially~~ — `ZoneAccessService` (add/remove/
+   setRole, last-zone-admin guard), `ZoneAuthorizationManager` gating `/z/**`
+   on `MEMBER:<slug>`/`PLATFORM_ADMIN`, `ProvisioningService` taking the
+   creator and writing their `ZONE_ADMIN` row, and a Members section on the
+   existing team console (add is "attach an existing account", not an invite —
+   see `ZoneAccessService` javadoc). **Still missing**: `AdminController`
+   (approvals/users/zones — there's no UI yet to approve a `PENDING_APPROVAL`
+   signup or browse all platform users); a dedicated `ZoneMembersController`/
+   page (members live inline on the team console instead); `RosterController`
+   is still platform-admin-only (bulk apply doesn't take a creator/admin
+   picker beyond "whoever ran it"). Step 7 (visibility) untouched.
 7. **Zone visibility.** `visibility` on `zone`; `zone_viewer`; `AuthzController`
    (`/authz/zone/{slug}`); `TraefikDynamicConfig` emits `forwardAuth` for
    `PRIVATE`; session cookie `Domain=.<BASE_DOMAIN>`; UI to toggle visibility

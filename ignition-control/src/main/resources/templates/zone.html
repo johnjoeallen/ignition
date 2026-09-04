@@ -81,8 +81,63 @@
         </table>
       </div>
 
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Users</h2>
-      <form method="post" th:action="@{/z/users}" class="row g-2 align-items-end mb-3" autocomplete="off">
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Members <span class="fw-normal">· console access</span></h2>
+      <p class="text-body-secondary small">Who can open this team's console, and at what role. <b>Admin</b>
+        manages members and Forgejo users below; <b>member</b> gets everything else here (apps, releases).
+        Adding someone attaches their existing Ignition account — they sign up (or a platform admin invites
+        them) first.</p>
+      <form th:if="${canManageMembers}" method="post" th:action="@{/z/members}"
+            class="row g-2 align-items-end mb-3" autocomplete="off">
+        <input type="hidden" name="z" th:value="${zoneSlug}">
+        <div class="col-auto">
+          <label class="form-label small mb-1">email</label>
+          <input class="form-control form-control-sm" name="email" type="email" required>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">role</label>
+          <select class="form-select form-select-sm" name="role">
+            <option value="MEMBER">member</option>
+            <option value="ZONE_ADMIN">admin</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Add member</button>
+        </div>
+      </form>
+      <div class="table-card mb-4">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>email</th><th>role</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="m : ${members}">
+              <td th:text="${m.email}">alice@example.com</td>
+              <td>
+                <span class="badge" th:classappend="${m.role.name() == 'ZONE_ADMIN'} ? 'text-bg-success' : 'text-bg-secondary'"
+                      th:text="${m.role.name() == 'ZONE_ADMIN'} ? 'admin' : 'member'">member</span>
+                <span th:if="${m.platformAdmin}" class="badge text-bg-secondary">platform admin</span>
+              </td>
+              <td class="text-end text-nowrap" th:if="${canManageMembers}">
+                <form method="post" th:action="@{/z/members/role}" class="d-inline">
+                  <input type="hidden" name="z" th:value="${zoneSlug}">
+                  <input type="hidden" name="userId" th:value="${m.userId}">
+                  <input type="hidden" name="role" th:value="${m.role.name() == 'ZONE_ADMIN'} ? 'MEMBER' : 'ZONE_ADMIN'">
+                  <button class="btn btn-sm btn-outline-secondary"
+                          th:text="${m.role.name() == 'ZONE_ADMIN'} ? 'demote' : 'make admin'">role</button>
+                </form>
+                <form method="post" th:action="@{/z/members/delete}" class="d-inline">
+                  <input type="hidden" name="z" th:value="${zoneSlug}">
+                  <input type="hidden" name="userId" th:value="${m.userId}">
+                  <button class="btn btn-sm btn-outline-danger">remove</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${members.isEmpty()}"><td colspan="3" class="text-body-secondary text-center py-4">no members yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Forgejo users <span class="fw-normal">· git access</span></h2>
+      <form th:if="${canManageMembers}" method="post" th:action="@{/z/users}"
+            class="row g-2 align-items-end mb-3" autocomplete="off">
         <input type="hidden" name="z" th:value="${zoneSlug}">
         <div class="col-auto">
           <label class="form-label small mb-1">email</label>
@@ -105,7 +160,7 @@
               <td th:text="${u.login}">alice</td>
               <td th:text="${u.email}">a@x</td>
               <td><span th:if="${u.admin}" class="badge text-bg-secondary">admin</span></td>
-              <td class="text-end">
+              <td class="text-end" th:if="${canManageMembers}">
                 <form method="post" th:action="@{/z/users/delete}" class="d-inline">
                   <input type="hidden" name="z" th:value="${zoneSlug}">
                   <input type="hidden" name="login" th:value="${u.login}">
