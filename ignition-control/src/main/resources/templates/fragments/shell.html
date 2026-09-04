@@ -19,7 +19,7 @@
             <span>Ignition</span>
           </a>
           <nav class="nav flex-column flex-grow-1 pt-2">
-            <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'teams'} ? ' active'" href="/">
+            <a class="nav-link" th:classappend="${active == 'teams'} ? ' active'" href="/">
               <i class="bi bi-people"></i> Teams</a>
             <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'users'} ? ' active'" href="/users">
               <i class="bi bi-person-gear"></i> Users</a>
