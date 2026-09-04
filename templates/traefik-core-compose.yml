@@ -3,6 +3,8 @@
 #
 #   export BASE_DOMAIN=example.com ACME_EMAIL=ops@example.com ACME_DNS_PROVIDER=<your dns host>
 #   # put the DNS API creds for ACME_DNS_PROVIDER in ./acme.env (see below)
+#   docker network create traefik-public
+#   docker volume  create ignition-dynamic     # shared with ignition-control
 #   docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 #
 # ACME_DNS_PROVIDER is any of Traefik's ~100 DNS providers — whatever hosts

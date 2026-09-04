@@ -172,6 +172,7 @@ cp demo/out/ignition.env .env      && chmod 600 .env
 cp demo/out/acme.env    acme.env   && chmod 600 acme.env
 
 docker network create traefik-public
+docker volume  create ignition-dynamic   # shared: ignition-control writes it, traefik reads it
 mkdir -p ssh-empty                        # node is 'local'; no remote-node SSH keys
 
 docker compose --project-directory . -f templates/traefik-core-compose.yml up -d

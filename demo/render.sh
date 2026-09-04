@@ -115,6 +115,8 @@ Generated $(date -u +%FT%TZ). Put each file where it belongs:
 PART 1 — spitfire  (run from the repo root of your ignition clone)
   ignition.env  ->  .env            (chmod 600)
   acme.env      ->  acme.env        (chmod 600)
+  docker network create traefik-public
+  docker volume  create ignition-dynamic
   mkdir -p ssh-empty
   docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
   docker compose --project-directory . -f templates/ignition-control-compose.yml up -d

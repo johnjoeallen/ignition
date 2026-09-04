@@ -9,8 +9,9 @@ Everything an operator does is in the **platform console** at
   owns `:443`, terminates all TLS, runs the SSO gateway, and reaches each node
   over WireGuard.
 - **Nodes** — hosts with Docker on a private network with **no inbound**, each
-  with the shared network created: `docker network create traefik-public`, and a
-  WireGuard peer to the controller.
+  with `docker network create traefik-public` and `docker volume create
+  ignition-dynamic` (the shared Traefik-config volume), and a WireGuard peer to
+  the controller.
 - **DNS** (`BASE_DOMAIN` is the apex, e.g. `ignition.example`): one
   pre-registered wildcard `*.<BASE_DOMAIN>` → the controller, set up once and
   never touched again. It matches at any depth (RFC 4592), so
@@ -33,6 +34,8 @@ picture.
 ```sh
 # 1. Core services (internal Traefik + Watchtower) — once per node,
 #    on the private network. No public ports, no certs here.
+docker network create traefik-public
+docker volume  create ignition-dynamic
 docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 
 # 2. The controller — once, the only public machine. Runs the edge

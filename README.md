@@ -81,6 +81,8 @@ everything is plain HTTP — no `insecure-registries` entry is needed.
 ```sh
 # 1. Core services (internal Traefik + Watchtower) — once per node, on the
 #    private network. No public ports, no certs here.
+docker network create traefik-public
+docker volume  create ignition-dynamic        # shared with the control plane
 docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 
 # 2. The controller — once, the only public machine. Runs the edge (owns :443,
