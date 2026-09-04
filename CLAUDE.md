@@ -208,8 +208,12 @@ command's stdout.
   API, or a keyed proxy to an external one stands it up by hand. See task 3.
 - **`move` rebuilds the zone empty** — the Forgejo data volume doesn't follow.
 - **Only the `public` exposure profile exists** — direct inbound + DNS-01
-  wildcard certs. Reverse tunnels, corp-internal CA, plain-HTTP fallback, and
-  SSO gating are designed (`docs/exposure.md`) but not built. See task 4.
+  wildcard certs, Traefik on every node with a DNS record per zone. Reverse
+  tunnels, corp-internal CA, plain-HTTP fallback, SSO gating, and the
+  **single-ingress** model (all inbound terminates at the control-plane edge,
+  which reverse-proxies by `Host` to the node — one wildcard DNS record, all
+  certs central, worker nodes take no inbound) are designed (`docs/exposure.md`)
+  but not built. See task 4.
 
 ## Likely next tasks
 
@@ -239,11 +243,18 @@ command's stdout.
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
 4. **Exposure profiles** (`docs/exposure.md`). All self-hosted — no third-party
-   tunnel or mesh services. The Ignition box is **multi-homed**: the internal
-   Ignition network (`traefik-public`, `zone-<slug>` nets, DinD) is always
-   isolated with no route out; exposure is which host interface Traefik binds
-   (`IGN_EXPOSE_ADDR` — the corp-DMZ IP, a public IP, or a LAN IP) and how the
-   audience reaches it. Topologies A–E in the doc. A cluster-level
+   tunnel or mesh services. **Single ingress**: all inbound terminates at the
+   control-plane box — one Traefik / SSO edge owns `:80/:443` for
+   `*.<BASE_DOMAIN>`, terminates TLS, and reverse-proxies by `Host` to the node
+   running the zone (which keeps an internal-only Traefik for the final
+   `Host` → container hop). So DNS is one wildcard → the control plane, all
+   certs are issued there (`ignition-control` writes the router + cert config
+   per zone like it already writes `state/control/dynamic/<slug>.yml`), and
+   worker nodes take no inbound. The internal Ignition network
+   (`traefik-public`, `zone-<slug>` nets, DinD) is always isolated with no route
+   out. The control-plane box is multi-homed; `IGN_EXPOSE_ADDR` is which
+   interface the edge binds (corp-DMZ IP / public IP / LAN IP). Topologies A–E
+   in the doc. A cluster-level
    `ignition.exposure.profile` — `public` (today) / `public-http01` / `relay` /
    `internal-ca` / `http-only` — plus an `sso` layer (mandatory on a DMZ
    interface). It decides the Traefik entrypoint (`websecure` vs `web`), the

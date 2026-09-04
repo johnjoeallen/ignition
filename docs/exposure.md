@@ -31,38 +31,88 @@ The `sso` layer is added on top of **any** of these.
 
 ---
 
-## The Ignition box is multi-homed
+## The control-plane box is multi-homed
 
-Whatever the topology, the **internal Ignition network is always isolated**:
-`traefik-public`, every `zone-<slug>` network, and each zone's DinD engine are
-Docker bridge networks that live on the box and have **no route to the
-corporate network or the internet inbound**. Corp users never touch a zone's
-Forgejo, runner, or build engine — only the app routers Traefik publishes.
+All inbound terminates at the **control-plane box** (see "Single ingress"
+below), so this is about how *that* box is attached. The **internal Ignition
+network is always isolated**: `traefik-public`, every `zone-<slug>` network, and
+each zone's DinD engine are Docker networks with **no route out**. The audience
+only ever reaches the control-plane edge; it proxies inward.
 
-Exposure is therefore a question of **which interface Traefik binds `:80/:443`
-to**, and how a request reaches it. The box typically has two or more
-attachments:
+Exposure is which host interface the edge binds `:80/:443` to. The box
+typically has two or more attachments:
 
 - **corporate DMZ** — so people on the corp network can reach the demos
   (SSO + SSL mandatory here);
-- **the internal Ignition network** — the isolated per-zone stacks (never
-  routable from outside);
+- **the internal Ignition network** — the isolated per-zone stacks on the
+  worker nodes (never routable from outside);
 - optionally **a direct internet link** — a separate NIC / uplink for external
   guests, used when corp can't accept inbound or run a tunnel to the box.
 
 ### Topologies
 
-| # | Box is attached to | App traffic reaches it via | Profile | Notes |
+| # | Control-plane box attached to | Audience reaches the edge via | Profile | Notes |
 |---|---|---|---|---|
-| **A** | corp DMZ + internal | Traefik on the **DMZ interface** | `public` (internal-CA or public ACME) **+ `sso`** | The common corporate case. `IGN_EXPOSE_ADDR` binds `:443` to the DMZ IP only. Certs from the corp internal CA (`step-ca`) or public ACME if the DMZ names are delegatable. |
-| **B** | corp DMZ + internal + a direct internet link | Traefik on **both** the DMZ and the public interface | `public` + `sso` for corp names, plus public ACME on the internet interface | Two entrypoints / two sets of routers; external guests hit the public NIC, corp hits the DMZ NIC. Split the router hostnames or duplicate them per interface. |
-| **C** | internet only (no corp link at all) | Traefik on the **public interface** | `public` (public ACME) **± `sso`** | The box is just on the internet. SSO optional — a self-hosted Keycloak with invited accounts if you want to restrict to named guests. |
-| **D** | a local switch only (air-gapped) | Traefik on the **LAN interface**, laptops in the room | `internal-ca` or `http-only` | No remote demo. Certs from a `step-ca` you run on the box, or plain HTTP. |
-| **E** | corp DMZ + internal, but corp won't route inbound to the DMZ | outbound **tunnel** from the box to a relay | `relay` (+ `sso`) | Box dials out to a relay (DMZ box or VPS); see below. |
+| **A** | corp DMZ + internal | the **DMZ interface** | `public` (internal-CA or public ACME) **+ `sso`** | The common corporate case. `IGN_EXPOSE_ADDR` binds `:443` to the DMZ IP only. Certs from the corp `step-ca`, or public ACME if the names are delegatable. |
+| **B** | corp DMZ + internal + a direct internet link | **both** the DMZ and the public interface | `public` + `sso` for corp names, plus public ACME on the internet interface | Two entrypoints; external guests hit the public NIC, corp hits the DMZ NIC. Split or duplicate the router hostnames per interface. |
+| **C** | internet only (no corp link) | the **public interface** | `public` (public ACME) **± `sso`** | The box is just on the internet. SSO optional — self-hosted Keycloak with invited accounts to restrict to named guests. |
+| **D** | a local switch only (air-gapped) | the **LAN interface**, laptops in the room | `internal-ca` or `http-only` | No remote demo. Certs from a `step-ca` on the box, or plain HTTP. |
+| **E** | corp DMZ + internal, but no inbound allowed | outbound **tunnel** to a relay | `relay` (+ `sso`) | The box dials out to a relay (DMZ box or VPS); see below. |
 
-`IGN_EXPOSE_ADDR` (host IP or `0.0.0.0`) controls which interface the Traefik
-ports bind to; `ignition-control` records the resulting scheme + host so the
-console and `/info` show the URL the audience will actually use.
+`IGN_EXPOSE_ADDR` (host IP or `0.0.0.0`) controls which interface the edge binds
+to; `ignition-control` records the resulting scheme + host so the console and
+`/info` show the URL the audience will actually use.
+
+---
+
+## Single ingress: the control plane is the only front door
+
+**All inbound HTTP(S) terminates at the control-plane box.** It owns `:80` /
+`:443` on the exposure interface, terminates TLS, runs the SSO gateway, then
+routes **by `Host` header** to the node that runs the target zone — proxying
+over the internal Ignition network. Worker nodes take **no inbound** from
+outside; they only need to be reachable from the control plane on the internal
+network.
+
+Consequences:
+
+- **DNS is one record.** `*.<BASE_DOMAIN>  →  the control-plane box` (plus the
+  apex). DNS wildcards match at *any* depth (RFC 4592), so that single record
+  answers `admin.<BASE_DOMAIN>`, `git.qb.<BASE_DOMAIN>` and
+  `x.apps.qb.<BASE_DOMAIN>` alike — as long as no intermediate node
+  (`qb.<BASE_DOMAIN>`, `apps.qb.<BASE_DOMAIN>`) is explicitly defined. The
+  multi-node "record per zone" problem disappears.
+- **Certs are all in one place.** The control-plane Traefik does the DNS-01
+  challenge for `*.<BASE_DOMAIN>` and, per zone, `*.<slug>.<BASE_DOMAIN>` +
+  `*.apps.<slug>.<BASE_DOMAIN>` (still two labels deep — cert wildcards are
+  single-label). `ignition-control` writes the router + cert config as it
+  provisions, the same way it already writes `state/control/dynamic/<slug>.yml`.
+- **SSO is one gateway** in front of that one Traefik.
+- **The node keeps a Traefik**, but **internal-only** (no published ports). It
+  does the final `Host` → container routing from the Docker labels, exactly as
+  today. The control-plane edge forwards `git.<slug>.…` /
+  `<app>.apps.<slug>.…` to `http://<node-internal-addr>` with the `Host` header
+  preserved.
+
+### How corporate machines resolve it
+
+`BASE_DOMAIN` must be a domain the org **owns**. The audience resolves the
+names through whatever resolver they already use; you place the one wildcard:
+
+- **Public domain, box on a corp-routable or public IP** → the wildcard goes in
+  your public authoritative DNS. Corp machines resolve it by normal recursion,
+  **no corp DNS change**.
+- **Names only inside the corp network (DMZ)** → split horizon: ask the corp
+  DNS team for `*.<BASE_DOMAIN>  A  <box-DMZ-IP>` in their internal zone, or an
+  `NS` delegation of `<BASE_DOMAIN>` to a tiny authoritative DNS the box runs
+  (CoreDNS / Technitium). The name then resolves only inside, to an address
+  only reachable inside.
+- **The corp HTTP proxy**: resolving isn't enough if corp machines egress
+  through an explicit proxy — `*.<BASE_DOMAIN>` has to be on its allow list.
+
+> This supersedes the earlier "Traefik on every node, one A-record per zone"
+> model. The per-node Traefik stays for internal routing; only the control
+> plane faces the audience.
 
 ---
 
