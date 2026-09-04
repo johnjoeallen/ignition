@@ -258,3 +258,13 @@ command's stdout.
    a per-app field in the `/deploy` payload and the zone console.
    `ignition-control` records the effective scheme + host so the console and
    `/info` show the right URL.
+
+   **Auth model** (settled): one `forward-auth` gateway in front of **all
+   browser traffic** — platform console, zone console, Forgejo web UI, apps —
+   redirecting to the corp IdP; **zero software on the dev machine** (a browser
+   + corp login). "Managed devices only" is an IdP Conditional Access policy,
+   not an Ignition feature. `git push` / `docker push` can't do OIDC, so the
+   gateway **bypasses** HTTP-Basic / git-user-agent requests and lets Forgejo
+   authenticate them with a personal access token the dev mints after their
+   first SSO'd login (like a GitHub PAT, over HTTPS). Forgejo SSH stays
+   disabled. Contractors get an IdP guest account, not a carve-out.

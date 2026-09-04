@@ -66,6 +66,39 @@ console and `/info` show the URL the audience will actually use.
 
 ---
 
+## One SSO gateway, no software on the dev machine
+
+Every **browser** request — the platform console, the zone console, Forgejo's
+web UI (PRs, CI logs, Actions), and the deployed apps — goes through one
+`forward-auth` gateway that redirects to your IdP. A developer needs only a
+browser and their corporate login; nothing is installed on their machine. If
+you want to restrict that to managed devices, add a **device-compliance
+Conditional Access policy at the IdP** — still zero dev-box tech from Ignition's
+side.
+
+**`git push` / `docker push` can't do the OIDC redirect**, so those go straight
+to Forgejo with a **personal access token** the developer mints in the Forgejo
+UI (after their first SSO'd browser login) — exactly like a GitHub PAT, over
+plain HTTPS. The gateway is configured to **bypass** requests that carry HTTP
+Basic auth or a git/registry user-agent and let Forgejo authenticate them; the
+browser paths still get OIDC.
+
+Consequences:
+
+- A dev works from **any machine** for `git push` (the token is device-agnostic
+  — which is the point) and uses a corp-authenticated browser for everything
+  else.
+- Contractors / external participants: give them an IdP guest account (or a
+  separate Keycloak realm) rather than a carve-out in Ignition.
+- Ignition's SSH access to Forgejo stays **disabled** — HTTPS + token only, so
+  there's no extra inbound port and no key management.
+
+`ignition-control` carries the `sso` config (IdP issuer, client, allow-list,
+and the bypass rules) once for the cluster; per-app **`visibility`** still
+decides whether an individual app is behind it (see below).
+
+---
+
 ## 1. Public inbound (`public`, `public-http01`)
 
 The node's Traefik owns `:80` / `:443`; requests arrive directly.
@@ -155,27 +188,27 @@ network you control:
 | **Terminate on the relay** | Traefik/Caddy + ACME (or an internal-CA cert) on the relay host | trusted cert at the relay; cluster speaks plain HTTP or passes TLS through |
 | **none** | — | plain HTTP only |
 
-## SSO
+## SSO — the mechanism
 
-Independent of reachability, but **mandatory whenever the box is on the
-corporate DMZ** (topologies A / B / E) — the DMZ interface is reachable by the
-whole corp network, so app routers there must be gated. Optional for a purely
-public box (C) if the guest list is closed.
-
-An identity proxy sits in front of the app routers; unauthenticated requests
-bounce to your IdP.
+**Mandatory whenever the box is on the corporate DMZ** (topologies A / B / E):
+the DMZ interface is reachable by the whole corp network, so its routers must be
+gated. Optional for a purely public box (C) with a closed guest list.
 
 - **Traefik `forwardAuth` middleware → `oauth2-proxy`**, or **Authelia**
   (self-contained: OIDC/LDAP, 2FA, access-control rules), configured against
   **your** OIDC provider — **Keycloak** (self-hosted), or an existing corp
   Entra ID / Okta / LDAP.
-- The proxy runs as a **core service** on `traefik-public` (one per node, or one
-  on the control host reached over the shared network). Cookie domain
-  `.<BASE_DOMAIN>` so a session covers every zone's apps.
+- Runs as a **core service** on `traefik-public` (one on the control host,
+  reached over the shared network). Cookie domain `.<BASE_DOMAIN>` so one
+  session covers every zone's browser surface.
 - **Allow-list** by email domain (`@corp.com`) or IdP group — e.g. only a
-  `hackathon-judges` group can open the apps.
-- Applied per **zone** or per **app** (see below).
-- Not available under `http-only`.
+  `hackathon-judges` group. **Managed-device only** is a Conditional Access
+  policy at the IdP, not here.
+- **Bypass rules** let `git` / `docker` (HTTP Basic, or the git/registry
+  user-agent) fall through to Forgejo's own token auth — see "One SSO gateway"
+  above.
+- Not available under `http-only` (an unauthenticated redirect over plain HTTP
+  leaks the session).
 
 ## Per-zone / per-app visibility
 
