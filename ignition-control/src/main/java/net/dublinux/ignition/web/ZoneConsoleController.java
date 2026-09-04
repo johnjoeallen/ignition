@@ -28,7 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
  * what role — and, not a separate thing, their Forgejo git login, provisioned
  * automatically from their email), Apps (an app <em>is</em> its repo —
  * creating one creates and seeds the repo; Release deploys it), runner
- * restart. The team is the {@code {slug}} path variable, {@code /zones/<slug>} —
+ * restart. The team is the {@code {slug}} path variable, {@code /teams/<slug>} —
  * access is enforced by {@code ZoneAuthorizationManager} (a platform admin, or a
  * {@code MEMBER}/{@code ZONE_ADMIN} of that team); member-management actions
  * here additionally require {@link CurrentUser#isZoneAdmin}.
@@ -53,7 +53,7 @@ public class ZoneConsoleController {
     public record AppRow(String name, String htmlUrl, String version, boolean deployed,
                          String image, String url, String deployId) {}
 
-    @GetMapping("/zones/{slug}")
+    @GetMapping("/teams/{slug}")
     public String zone(@PathVariable String slug, Model model) {
         Zone zone = zones.get(slug)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such zone"));
@@ -109,7 +109,7 @@ public class ZoneConsoleController {
         return "zone";
     }
 
-    @PostMapping("/zones/{slug}/members")
+    @PostMapping("/teams/{slug}/members")
     public String addMember(@PathVariable String slug,
                             @RequestParam String email,
                             @RequestParam ZoneMember.Role role) {
@@ -124,7 +124,7 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/zones/{slug}/members/role")
+    @PostMapping("/teams/{slug}/members/role")
     public String setMemberRole(@PathVariable String slug,
                                 @RequestParam java.util.UUID userId,
                                 @RequestParam ZoneMember.Role role) {
@@ -138,7 +138,7 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/zones/{slug}/members/delete")
+    @PostMapping("/teams/{slug}/members/delete")
     public String removeMember(@PathVariable String slug, @RequestParam java.util.UUID userId) {
         requireZoneAdmin(slug);
         try {
@@ -153,7 +153,7 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/zones/{slug}/members/reset-git-password")
+    @PostMapping("/teams/{slug}/members/reset-git-password")
     public String resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId) {
         requireZoneAdmin(slug);
         String email = access.emailOf(userId)
@@ -171,13 +171,13 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/zones/{slug}/apps")
+    @PostMapping("/teams/{slug}/apps")
     public String createApp(@PathVariable String slug, @RequestParam String name) {
         return back(slug, zones.createApp(slug, name),
                 "app " + name + " created — clone it, push, then Release");
     }
 
-    @PostMapping("/zones/{slug}/repos/release")
+    @PostMapping("/teams/{slug}/repos/release")
     public String release(@PathVariable String slug,
                           @RequestParam(name = "repo") String name,
                           @RequestParam(defaultValue = "auto") String bump) {
@@ -192,13 +192,13 @@ public class ZoneConsoleController {
         }
     }
 
-    @PostMapping("/zones/{slug}/runner/restart")
+    @PostMapping("/teams/{slug}/runner/restart")
     public String restartRunner(@PathVariable String slug) {
         boolean ok = zones.restartRunner(slug);
         return redirect(slug, ok ? "runner restarted" : "runner restart failed");
     }
 
-    @PostMapping("/zones/{slug}/apps/delete")
+    @PostMapping("/teams/{slug}/apps/delete")
     public String deleteApp(@PathVariable String slug, @RequestParam String name) {
         try {
             apps.undeploy(slug, name);
@@ -214,7 +214,7 @@ public class ZoneConsoleController {
     }
 
     private static String redirect(String slug, String msg) {
-        return "redirect:/zones/" + enc(slug) + "?m=" + enc(msg);
+        return "redirect:/teams/" + enc(slug) + "?m=" + enc(msg);
     }
 
     private static String enc(String s) {

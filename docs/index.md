@@ -35,7 +35,7 @@ subdomain:
 
 | host | what |
 |---|---|
-| `ignition.example` | the console — a team's own view is `/zones/<slug>` on this same host |
+| `ignition.example` | the console — a team's own view is `/teams/<slug>` on this same host |
 | `git.<slug>.ignition.example` | that team's Forgejo — git, PRs, Actions, registry |
 | `<app>.apps.<slug>.ignition.example` | a deployed app (a team can run many; names unique within the team) |
 

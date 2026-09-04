@@ -10,7 +10,7 @@ import org.springframework.security.web.access.intercept.RequestAuthorizationCon
 import org.springframework.stereotype.Component;
 
 /**
- * Gates the team console + its actions, {@code /zones/{slug}/...} — scoped by
+ * Gates the team console + its actions, {@code /teams/{slug}/...} — scoped by
  * the {@code {slug}} path variable on the matched request pattern, not a
  * plain {@code hasAuthority(...)} matcher's static path. A platform admin
  * gets in everywhere; anyone else needs a {@code MEMBER:<slug>} authority for

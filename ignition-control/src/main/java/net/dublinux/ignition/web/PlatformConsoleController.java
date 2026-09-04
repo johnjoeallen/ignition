@@ -93,7 +93,7 @@ public class PlatformConsoleController {
         return "teams";
     }
 
-    @GetMapping("/zones/new")
+    @GetMapping("/teams/new")
     public String newZone(Model model) {
         var suggestion = nameSuggester.suggest();
         model.addAttribute("suggestedName", suggestion.name());
@@ -102,14 +102,14 @@ public class PlatformConsoleController {
     }
 
     /** A fresh, still-available name/slug pair for the "suggest another" button — never one already taken. */
-    @GetMapping("/zones/suggest-name")
+    @GetMapping("/teams/suggest-name")
     @ResponseBody
     public Map<String, String> suggestName() {
         var suggestion = nameSuggester.suggest();
         return Map.of("name", suggestion.name(), "slug", suggestion.slug());
     }
 
-    @PostMapping("/zones")
+    @PostMapping("/teams")
     public String createZone(@RequestParam String slug,
                              @RequestParam(required = false, defaultValue = "") String node,
                              @RequestParam(required = false, defaultValue = "") String label,
@@ -124,7 +124,7 @@ public class PlatformConsoleController {
         }
     }
 
-    @GetMapping("/zones/{slug}/status")
+    @GetMapping("/teams/{slug}/status")
     @ResponseBody
     public ResponseEntity<Map<String, String>> zoneStatus(@PathVariable String slug) {
         return provisioning.status(slug)
@@ -132,7 +132,7 @@ public class PlatformConsoleController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PostMapping("/zones/{slug}/destroy")
+    @PostMapping("/teams/{slug}/destroy")
     public String destroyZone(@PathVariable String slug) {
         try {
             zones.destroy(slug, false);
@@ -142,7 +142,7 @@ public class PlatformConsoleController {
         }
     }
 
-    @PostMapping("/zones/{slug}/move")
+    @PostMapping("/teams/{slug}/move")
     public String moveZone(@PathVariable String slug, @RequestParam String node) {
         try {
             zones.prepareMove(slug, node.strip());
@@ -157,9 +157,9 @@ public class PlatformConsoleController {
     public String stopApp(@PathVariable String zone, @PathVariable String name) {
         try {
             apps.undeploy(zone, name);
-            return "redirect:/zones/" + enc(zone) + "?m=app+" + name + "+stopped";
+            return "redirect:/teams/" + enc(zone) + "?m=app+" + name + "+stopped";
         } catch (RuntimeException e) {
-            return "redirect:/zones/" + enc(zone) + "?m=" + enc(e.getMessage());
+            return "redirect:/teams/" + enc(zone) + "?m=" + enc(e.getMessage());
         }
     }
 

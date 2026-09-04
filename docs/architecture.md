@@ -21,7 +21,7 @@ by role, not hostname — sits on the bare apex; each team owns the whole
 
 | host | serves |
 |---|---|
-| `ignition.example` | the console (`ignition-control`) — a team's own view is `/zones/<slug>` on this same host |
+| `ignition.example` | the console (`ignition-control`) — a team's own view is `/teams/<slug>` on this same host |
 | `git.<slug>.ignition.example` | that team's Forgejo — one origin for web UI, git, Actions, **and the container registry** |
 | `<app>.apps.<slug>.ignition.example` | one deployed app; a team can run many, names unique within the team |
 
@@ -158,7 +158,7 @@ So each team's Forgejo owns `git.<slug>.<domain>` **entirely** — web UI,
 git-over-HTTPS, the Actions API, and the registry. Apps sit alongside it under
 the same subtree, `<app>.apps.<slug>.<domain>`, so a team runs as many as it
 likes and each has a clean host. The console — for every role — is the one
-`<domain>`; a team's own view is `<domain>/zones/<slug>`.
+`<domain>`; a team's own view is `<domain>/teams/<slug>`.
 
 ## Decision 2 — apps are deployed from the controller
 

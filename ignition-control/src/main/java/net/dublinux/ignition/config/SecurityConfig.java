@@ -43,12 +43,12 @@ public class SecurityConfig {
                         // The team console + its actions — any member reaches their own team
                         // (checked against the {slug} path variable, see
                         // ZoneAuthorizationManager); a platform admin reaches everything else.
-                        // Zone-*management* actions (status/destroy/move) stay under /zones/{slug}/...
+                        // Zone-*management* actions (status/destroy/move) stay under /teams/{slug}/...
                         // too but keep distinct final segments, so they fall through to the
                         // PLATFORM_ADMIN catch-all below untouched.
-                        .requestMatchers("/zones/{slug}").access(zoneAuthz)
-                        .requestMatchers("/zones/{slug}/members/**", "/zones/{slug}/apps/**",
-                                "/zones/{slug}/repos/**", "/zones/{slug}/runner/**").access(zoneAuthz)
+                        .requestMatchers("/teams/{slug}").access(zoneAuthz)
+                        .requestMatchers("/teams/{slug}/members/**", "/teams/{slug}/apps/**",
+                                "/teams/{slug}/repos/**", "/teams/{slug}/runner/**").access(zoneAuthz)
                         .requestMatchers("/roster/**", "/sweep").hasAuthority("PLATFORM_ADMIN")
                         .anyRequest().hasAuthority("PLATFORM_ADMIN"))
                 .formLogin(form -> form

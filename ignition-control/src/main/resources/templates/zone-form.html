@@ -12,7 +12,7 @@
             runner on a node, mints the bot account and the console / CI tokens.
             Runs in the background — watch it on the Teams page.</p>
           <div class="alert alert-danger" th:if="${error != null}" th:text="${error}">bad input</div>
-          <form method="post" th:action="@{/zones}">
+          <form method="post" th:action="@{/teams}">
             <div class="mb-3">
               <label class="form-label">Name</label>
               <div class="d-flex gap-2">
@@ -66,7 +66,7 @@
 
           suggestBtn.addEventListener('click', function () {
             suggestBtn.disabled = true;
-            fetch('/zones/suggest-name')
+            fetch('/teams/suggest-name')
               .then(function (res) { return res.json(); })
               .then(function (s) {
                 nameInput.value = s.name;

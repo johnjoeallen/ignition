@@ -8,7 +8,7 @@
         <h1 class="h4 mb-0"><i class="bi bi-people"></i> <span th:text="${isPlatformAdmin} ? 'Teams' : 'Your teams'">Teams</span></h1>
         <div class="d-flex gap-2" th:if="${isPlatformAdmin}">
           <a class="btn btn-outline-secondary btn-sm" href="/roster"><i class="bi bi-list-check"></i> Roster</a>
-          <a class="btn btn-accent btn-sm" href="/zones/new"><i class="bi bi-plus-lg"></i> New team</a>
+          <a class="btn btn-accent btn-sm" href="/teams/new"><i class="bi bi-plus-lg"></i> New team</a>
         </div>
       </div>
       <div class="alert alert-success" th:if="${param.m != null}" th:text="${#strings.replace(param.m[0],'+',' ')}">ok</div>
@@ -23,7 +23,7 @@
           </thead>
           <tbody>
             <tr th:each="z : ${zones}">
-              <td><a class="fw-semibold" th:href="@{/zones/{slug}(slug=${z.slug})}" th:text="${z.slug}">quantum-badgers</a></td>
+              <td><a class="fw-semibold" th:href="@{/teams/{slug}(slug=${z.slug})}" th:text="${z.slug}">quantum-badgers</a></td>
               <td>
                 <span class="badge" th:if="${myRoles.get(z.slug) != null}"
                       th:classappend="${myRoles.get(z.slug).name() == 'ZONE_ADMIN'} ? 'text-bg-success' : 'text-bg-secondary'"
@@ -40,15 +40,15 @@
               </td>
               <td><a th:href="${z.forgejoUrl + z.slug}" th:text="${z.forgejoUrl + z.slug}" class="small">git…</a></td>
               <td class="text-end text-nowrap" th:if="${isPlatformAdmin}">
-                <form method="post" th:action="@{'/zones/' + ${z.slug} + '/move'}" class="d-inline">
+                <form method="post" th:action="@{'/teams/' + ${z.slug} + '/move'}" class="d-inline">
                   <select name="node" class="form-select form-select-sm d-inline-block w-auto">
                     <option th:each="n : ${nodeNames}" th:value="${n}" th:text="${n}"
                             th:disabled="${n == z.node}">node</option>
                   </select>
                   <button class="btn btn-sm btn-outline-secondary">move</button>
                 </form>
-                <form method="post" th:action="@{'/zones/' + ${z.slug} + '/destroy'}" class="d-inline"
-                      onsubmit="return confirm('Destroy team ' + this.action.split('/zones/')[1].split('/')[0] + ' and every app it deployed?')">
+                <form method="post" th:action="@{'/teams/' + ${z.slug} + '/destroy'}" class="d-inline"
+                      onsubmit="return confirm('Destroy team ' + this.action.split('/teams/')[1].split('/')[0] + ' and every app it deployed?')">
                   <button class="btn btn-sm btn-outline-danger">destroy</button>
                 </form>
               </td>

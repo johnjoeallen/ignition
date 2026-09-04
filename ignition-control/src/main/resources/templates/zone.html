@@ -22,7 +22,7 @@
             <div class="text-body-secondary small">Stack</div>
             <code th:text="${stack}">—</code>
           </div>
-          <form method="post" th:action="@{/zones/{slug}/runner/restart(slug=${zoneSlug})}" class="ms-auto">
+          <form method="post" th:action="@{/teams/{slug}/runner/restart(slug=${zoneSlug})}" class="ms-auto">
             <button class="btn btn-sm btn-outline-secondary">Restart runner</button>
           </form>
         </div>
@@ -36,7 +36,7 @@
         deploy workflow, already wired with this team's registry and deploy token.
         Clone it, push, then <b>Release</b>. A plain push to <code>main</code> never
         deploys — only a release does.</p>
-      <form method="post" th:action="@{/zones/{slug}/apps(slug=${zoneSlug})}" class="row g-2 align-items-end mb-3">
+      <form method="post" th:action="@{/teams/{slug}/apps(slug=${zoneSlug})}" class="row g-2 align-items-end mb-3">
         <div class="col-auto">
           <label class="form-label small mb-1">name</label>
           <input class="form-control form-control-sm" name="name" required>
@@ -61,7 +61,7 @@
                 <span th:unless="${a.deployed}" class="text-body-secondary">not deployed yet</span>
               </td>
               <td class="text-end text-nowrap">
-                <form method="post" th:action="@{/zones/{slug}/repos/release(slug=${zoneSlug})}" class="d-inline">
+                <form method="post" th:action="@{/teams/{slug}/repos/release(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="repo" th:value="${a.name}">
                   <select name="bump" class="form-select form-select-sm d-inline-block w-auto">
                     <option value="auto">auto (from commits)</option>
@@ -69,7 +69,7 @@
                   </select>
                   <button class="btn btn-sm btn-outline-secondary">Release</button>
                 </form>
-                <form th:if="${a.deployed}" method="post" th:action="@{/zones/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline">
+                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-danger">stop</button>
                 </form>
@@ -88,7 +88,7 @@
         (or a platform admin invites them) first. Your own git password and personal access token (for
         <code>git clone</code>/<code>push</code> or the API) are in your own row below — nobody else's,
         including other admins, are shown here.</p>
-      <form th:if="${canManageMembers}" method="post" th:action="@{/zones/{slug}/members(slug=${zoneSlug})}"
+      <form th:if="${canManageMembers}" method="post" th:action="@{/teams/{slug}/members(slug=${zoneSlug})}"
             class="row g-2 align-items-end mb-3" autocomplete="off">
         <div class="col-auto">
           <label class="form-label small mb-1">email</label>
@@ -142,11 +142,11 @@
                 <span th:if="${m.platformAdmin}" class="badge text-bg-secondary">platform admin</span>
               </td>
               <td class="text-end text-nowrap" th:if="${canManageMembers}">
-                <form method="post" th:action="@{/zones/{slug}/members/reset-git-password(slug=${zoneSlug})}" class="d-inline">
+                <form method="post" th:action="@{/teams/{slug}/members/reset-git-password(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="userId" th:value="${m.userId}">
                   <button class="btn btn-sm btn-outline-secondary">reset git password</button>
                 </form>
-                <form method="post" th:action="@{/zones/{slug}/members/role(slug=${zoneSlug})}" class="d-inline">
+                <form method="post" th:action="@{/teams/{slug}/members/role(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="userId" th:value="${m.userId}">
                   <input type="hidden" name="role" th:value="${m.role.name() == 'ZONE_ADMIN'} ? 'MEMBER' : 'ZONE_ADMIN'">
                   <button class="btn btn-sm btn-outline-secondary"
@@ -154,7 +154,7 @@
                           th:title="${m.role.name() == 'ZONE_ADMIN' and m.userId == currentUserId} ? 'ask another team admin to demote you' : ''"
                           th:text="${m.role.name() == 'ZONE_ADMIN'} ? 'demote' : 'make admin'">role</button>
                 </form>
-                <form method="post" th:action="@{/zones/{slug}/members/delete(slug=${zoneSlug})}" class="d-inline">
+                <form method="post" th:action="@{/teams/{slug}/members/delete(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="userId" th:value="${m.userId}">
                   <button class="btn btn-sm btn-outline-danger">remove</button>
                 </form>

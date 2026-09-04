@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  * per-zone {@code admin.<slug>.<BASE_DOMAIN>} router to the same backend;
  * dropped — a hostname was never what gated who could do what, the session's
  * role always was, so it added an ACME cert request per zone for nothing. A
- * team's console is {@code /zones/<slug>} on this same host now.
+ * team's console is {@code /teams/<slug>} on this same host now.
  * {@link #removeZoneRouter} stays, to clean up any {@code <slug>.yml} a
  * pre-existing deployment still has lying around.)
  *
