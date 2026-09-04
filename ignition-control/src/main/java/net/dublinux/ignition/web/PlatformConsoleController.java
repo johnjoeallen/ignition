@@ -19,9 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * The platform-admin console at {@code admin.<BASE_DOMAIN>}. Nodes
- * (register / drain / remove), zones (provision / move / destroy), apps (stop).
- * The roster (bulk create/destroy) and a "sweep now" button land next
+ * The platform-admin views on the one console, at the bare {@code <BASE_DOMAIN>}.
+ * Nodes (register / drain / remove), zones (provision / move / destroy), apps
+ * (stop). The roster (bulk create/destroy) and a "sweep now" button land next
  * (DESIGN.md step 7).
  */
 @Controller

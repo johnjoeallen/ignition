@@ -14,20 +14,20 @@ in `DESIGN.md` and [`ignition-control/`](https://github.com/johnjoeallen/ignitio
 ## The domain scheme
 
 `BASE_DOMAIN` is the apex (`ignition.example` in these docs — a placeholder; use any
-apex your org controls whose DNS serves names two labels deep). The platform
-admin sits on the apex; each zone owns the whole `<slug>.ignition.example` subtree
-under it:
+apex your org controls whose DNS serves names two labels deep). The **one
+console** — every role, platform admin down to team member, what you see/do is
+by role, not hostname — sits on the bare apex; each zone owns the whole
+`<slug>.ignition.example` subtree under it:
 
 | host | serves |
 |---|---|
-| `admin.ignition.example` | the platform admin control plane (`ignition-control`) |
+| `ignition.example` | the console (`ignition-control`) — a team's own view is `/z?z=<slug>` on this same host |
 | `git.<slug>.ignition.example` | that zone's Forgejo — one origin for web UI, git, Actions, **and the container registry** |
-| `admin.<slug>.ignition.example` | that zone's admin view (same `ignition-control`, zone-scoped) |
 | `<app>.apps.<slug>.ignition.example` | one deployed app; a zone can run many, names unique within the zone |
 
 A forge needs a whole origin because Docker registry clients hit `/v2/…` at the
 domain *root* and ignore path prefixes. Giving each zone its own subtree keeps
-git, admin, and every app on one clean per-zone namespace. A single
+git and every app on one clean per-zone namespace. A single
 pre-registered DNS wildcard `*.<BASE_DOMAIN>` → the controller resolves all of
 it at any depth (RFC 4592), so provisioning a zone adds no DNS. TLS wildcards,
 which are single-label, are handled at the edge — see
@@ -157,8 +157,8 @@ flowchart TB
 So each zone's Forgejo owns `git.<slug>.<domain>` **entirely** — web UI,
 git-over-HTTPS, the Actions API, and the registry. Apps sit alongside it under
 the same subtree, `<app>.apps.<slug>.<domain>`, so a zone runs as many as it
-likes and each has a clean host. The zone admin view is `admin.<slug>.<domain>`;
-the platform control plane is `admin.<domain>`.
+likes and each has a clean host. The console — for every role — is the one
+`<domain>`; a team's own view is `<domain>/z?z=<slug>`.
 
 ## Decision 2 — apps are deployed from the controller
 
@@ -208,9 +208,9 @@ build sandbox stays isolated, the serving layer does not.
 Everything is routed by hostname — the controller's edge terminates it and, for
 `git.<slug>.<domain>` and `<app>.apps.<slug>.<domain>`, forwards over WireGuard
 to that node's internal Traefik, which does the final hop to Forgejo or the app;
-`admin.<slug>.<domain>` and `admin.<domain>` are served by `ignition-control`
-itself. Nothing binds a host port per zone — no allocation table, no range to
-exhaust.
+the bare `<domain>` is served by `ignition-control` itself — the one console
+for every role. Nothing binds a host port per zone — no allocation table, no
+range to exhaust.
 
 And there is **one** `ignition-control`, not an agent per node. It already needs to
 orchestrate across nodes (place a zone, move a zone, deploy an app to whichever
@@ -249,7 +249,7 @@ runs the zone. Nodes have **no inbound at all**; behind the edge everything is
 
 **DNS** is a single pre-registered wildcard `*.<BASE_DOMAIN>` → the controller,
 set up once and never touched. It matches at any depth (RFC 4592), so
-`admin.<BASE_DOMAIN>`, `git.<slug>.<BASE_DOMAIN>`, and
+`<BASE_DOMAIN>` itself, `git.<slug>.<BASE_DOMAIN>`, and
 `<app>.apps.<slug>.<BASE_DOMAIN>` all resolve to the controller with no
 per-zone record.
 

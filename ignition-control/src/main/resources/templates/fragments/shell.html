@@ -15,12 +15,12 @@
         </div>
         <div class="offcanvas-body d-flex flex-column p-0">
           <nav class="nav flex-column flex-grow-1 pt-2">
-            <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'nodes'} ? ' active'" href="/">
-              <i class="bi bi-hdd-stack"></i> Nodes</a>
             <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'teams'} ? ' active'" href="/teams">
               <i class="bi bi-people"></i> Teams</a>
             <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'users'} ? ' active'" href="/users">
               <i class="bi bi-person-gear"></i> Users</a>
+            <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'nodes'} ? ' active'" href="/">
+              <i class="bi bi-hdd-stack"></i> Nodes</a>
           </nav>
         </div>
       </div>

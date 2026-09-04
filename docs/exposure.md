@@ -37,7 +37,7 @@ Set up **before** any event, never touched again:
 - **Delegate `<BASE_DOMAIN>` to the controller** (`<BASE_DOMAIN>  NS  <controller>`)
   and let it run a tiny authoritative DNS (CoreDNS / Technitium). It answers a
   wildcard `*.<BASE_DOMAIN>  →  <controller-public-IP>` at any depth (RFC 4592),
-  so `admin.<BASE_DOMAIN>`, `git.qb.<BASE_DOMAIN>`, and
+  so `<BASE_DOMAIN>` itself, `git.qb.<BASE_DOMAIN>`, and
   `x.apps.qb.<BASE_DOMAIN>` all resolve to the controller with **no per-zone
   record**. Provisioning a zone adds zero DNS.
 - Or, if you'd rather not delegate: pre-register `*.<BASE_DOMAIN>  A  <controller>`
@@ -53,7 +53,7 @@ public domain. If corp egress goes through an explicit HTTP proxy,
 The edge obtains certs from an ACME CA (Let's Encrypt, or your own `step-ca` via
 `ACME_CA_SERVER`) using **DNS-01**:
 
-- one `*.<BASE_DOMAIN>` cert (covers `admin.<BASE_DOMAIN>` and every single-label
+- one `*.<BASE_DOMAIN>` cert (covers `<BASE_DOMAIN>` and every single-label
   name), plus
 - per zone, `*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` (cert
   wildcards are single-label, so these are two labels deep). `ignition-control`

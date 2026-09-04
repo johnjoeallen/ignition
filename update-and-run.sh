@@ -67,5 +67,5 @@ log "status"
 if setup_line="$("${CONTROL[@]}" logs ignition-control 2>&1 | grep 'IGNITION SETUP' | tail -1)"; then
     echo
     echo "$setup_line"
-    echo "(first run only — open ${base_url:-https://admin.<BASE_DOMAIN>}/setup)"
+    echo "(first run only — open ${base_url:-https://<BASE_DOMAIN>}/setup)"
 fi

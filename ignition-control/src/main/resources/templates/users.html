@@ -42,6 +42,8 @@
                 <form method="post" th:action="@{'/users/' + ${u.id} + '/admin'}" class="d-inline">
                   <input type="hidden" name="value" th:value="${!u.platformAdmin}">
                   <button class="btn btn-sm btn-outline-secondary"
+                          th:disabled="${u.platformAdmin and u.id == currentUserId}"
+                          th:title="${u.platformAdmin and u.id == currentUserId} ? 'ask another admin to revoke your own access' : ''"
                           th:text="${u.platformAdmin} ? 'revoke admin' : 'make admin'">admin</button>
                 </form>
               </td>

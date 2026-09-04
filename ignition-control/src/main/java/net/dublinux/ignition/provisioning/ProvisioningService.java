@@ -145,14 +145,12 @@ public class ProvisioningService {
 
         String base = props.getBaseDomain();
         String gitHost = "git." + slug + "." + base;
-        String zadminHost = "admin." + slug + "." + base;
 
         Zone zone = zones.find(slug).orElse(null);
         boolean isNew = zone == null;
         if (isNew) {
-            zone = new Zone(slug, node, base, zoneCpus, zoneMemGb, gitHost, zadminHost,
-                    "https://" + gitHost + "/", "https://" + zadminHost + "/",
-                    "apps." + slug + "." + base);
+            zone = new Zone(slug, node, base, zoneCpus, zoneMemGb, gitHost,
+                    "https://" + gitHost + "/", "apps." + slug + "." + base);
             zone.setCreatedBy(creator);
         } else {
             zone.setNode(node);
@@ -164,7 +162,6 @@ public class ProvisioningService {
         }
 
         traefik.writePlatformRouter();
-        traefik.writeZoneRouter(zone);
 
         Path compose = render.zoneCompose(zone);
 

@@ -103,19 +103,20 @@ they are.
 
 Traefik is a reverse proxy. On `spitfire` it owns ports 80 and 443, holds the
 TLS certificates, and routes each request to the right container by
-**hostname**: `admin.…` → `ignition-control`, and later `git.<team>.…` →
+**hostname**: the bare apex → `ignition-control`, and later `git.<team>.…` →
 that team's Forgejo, `<app>.apps.<team>.…` → that app.
 
 ### `ignition-control` and first-run setup
 
-`ignition-control` is the whole Ignition application — one Java service serving
-two web consoles (a **platform** console for you, a **zone** console per team),
-backed by a PostgreSQL it manages, and driving Docker to build and tear down
-teams and apps.
+`ignition-control` is the whole Ignition application — one Java service, one
+web console (what a signed-in user sees is by their role — platform admin,
+team admin, team member — not a separate URL per role), backed by a
+PostgreSQL it manages, and driving Docker to build and tear down teams and
+apps.
 
 On the **first** start it has no accounts, so it logs a one-time **setup code**
 (`IGNITION SETUP — ... enter code: <code>`). You open
-`https://admin.ignition.classesarecode.net/setup`, enter that code plus your
+`https://ignition.classesarecode.net/setup`, enter that code plus your
 email and a password, and that creates the **platform admin**. After that,
 `/setup` is gone and you sign in with email + password.
 
@@ -195,7 +196,7 @@ next to the compose file (`templates/`), not from the repo root.
 
 Skip the generator and set the same variables yourself: write a `.env` with
 `BASE_DOMAIN=ignition.classesarecode.net`, `ACME_EMAIL=…`,
-`ACME_DNS_PROVIDER=…`, `IGN_PUBLIC_URL=https://admin.ignition.classesarecode.net`,
+`ACME_DNS_PROVIDER=…`, `IGN_PUBLIC_URL=https://ignition.classesarecode.net`,
 `IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)`,
 `POSTGRES_PASSWORD=$(openssl rand -hex 24)`, and the four `IGN_SMTP_*` values;
 and an `acme.env` with the provider lines from Step 1 (Option A: `JOKER_API_MODE=SVC`
@@ -211,7 +212,7 @@ docker compose --project-directory . -f templates/ignition-control-compose.yml \
   logs ignition-control | grep "IGNITION SETUP"
 ```
 
-Open `https://admin.ignition.classesarecode.net/setup`, enter that code + your
+Open `https://ignition.classesarecode.net/setup`, enter that code + your
 email + a password. (Reaching the URL: see Step 3.)
 
 Watch the first certificate get issued — DNS-01 can take a few minutes while
@@ -235,17 +236,17 @@ test from — a laptop on the same LAN:
 
 ```
 # add to /etc/hosts  (Linux/macOS)  or  C:\Windows\System32\drivers\etc\hosts
-<SPITFIRE_LAN_IP>   admin.ignition.classesarecode.net
+<SPITFIRE_LAN_IP>   ignition.classesarecode.net
 ```
 
 Check the cert and reach the console:
 
 ```sh
-curl -I https://admin.ignition.classesarecode.net/actuator/health
+curl -I https://ignition.classesarecode.net/actuator/health
 # → HTTP/2 200, no TLS warning = the real Let's Encrypt cert is being served
 ```
 
-Open **`https://admin.ignition.classesarecode.net/`** — if you haven't done
+Open **`https://ignition.classesarecode.net/`** — if you haven't done
 `/setup` yet it redirects there; otherwise sign in with the email + password
 you set. Then:
 

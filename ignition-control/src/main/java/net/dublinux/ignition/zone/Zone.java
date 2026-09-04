@@ -34,14 +34,8 @@ public class Zone {
     @Column(name = "git_host", nullable = false)
     private String gitHost;
 
-    @Column(name = "zadmin_host", nullable = false)
-    private String zadminHost;
-
     @Column(name = "forgejo_url", nullable = false)
     private String forgejoUrl;
-
-    @Column(name = "zadmin_url", nullable = false)
-    private String zadminUrl;
 
     @Column(name = "apps_base", nullable = false)
     private String appsBase;
@@ -63,16 +57,14 @@ public class Zone {
     }
 
     public Zone(String slug, String node, String baseDomain, double zoneCpus, double zoneMemGb,
-               String gitHost, String zadminHost, String forgejoUrl, String zadminUrl, String appsBase) {
+               String gitHost, String forgejoUrl, String appsBase) {
         this.slug = slug;
         this.node = node;
         this.baseDomain = baseDomain;
         this.zoneCpus = zoneCpus;
         this.zoneMemGb = zoneMemGb;
         this.gitHost = gitHost;
-        this.zadminHost = zadminHost;
         this.forgejoUrl = forgejoUrl;
-        this.zadminUrl = zadminUrl;
         this.appsBase = appsBase;
     }
 
@@ -82,9 +74,7 @@ public class Zone {
     public double zoneCpus() { return zoneCpus; }
     public double zoneMemGb() { return zoneMemGb; }
     public String gitHost() { return gitHost; }
-    public String zadminHost() { return zadminHost; }
     public String forgejoUrl() { return forgejoUrl; }
-    public String zadminUrl() { return zadminUrl; }
     public String appsBase() { return appsBase; }
     public Visibility visibility() { return visibility; }
     public Instant lastActivity() { return lastActivity; }

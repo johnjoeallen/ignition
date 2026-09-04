@@ -121,6 +121,8 @@
                   <input type="hidden" name="userId" th:value="${m.userId}">
                   <input type="hidden" name="role" th:value="${m.role.name() == 'ZONE_ADMIN'} ? 'MEMBER' : 'ZONE_ADMIN'">
                   <button class="btn btn-sm btn-outline-secondary"
+                          th:disabled="${m.role.name() == 'ZONE_ADMIN' and m.userId == currentUserId}"
+                          th:title="${m.role.name() == 'ZONE_ADMIN' and m.userId == currentUserId} ? 'ask another team admin to demote you' : ''"
                           th:text="${m.role.name() == 'ZONE_ADMIN'} ? 'demote' : 'make admin'">role</button>
                 </form>
                 <form method="post" th:action="@{/z/members/delete}" class="d-inline">

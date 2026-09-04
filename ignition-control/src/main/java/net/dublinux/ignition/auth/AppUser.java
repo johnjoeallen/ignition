@@ -64,6 +64,7 @@ public class AppUser {
 
     public void setStatus(Status status) { this.status = status; }
     public void setPlatformAdmin(boolean platformAdmin) { this.platformAdmin = platformAdmin; }
+    public void setPreapproved(boolean preapproved) { this.preapproved = preapproved; }
 
     /**
      * Set the (already-encoded) password after email verification. An

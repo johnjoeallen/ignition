@@ -13,7 +13,8 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 
 /**
- * Sends the three transactional mails. The {@link JavaMailSender} is built
+ * Sends the two transactional mails (activation link, password reset). The
+ * {@link JavaMailSender} is built
  * straight from {@link SmtpProperties} so the one config surface is the
  * {@code ignition.smtp.*} block.
  */
@@ -42,14 +43,6 @@ public class MailService {
 
                 The link is valid for 24 hours. If this wasn't you, ignore this mail.
                 """.formatted(link));
-    }
-
-    public void sendApproved(String email) {
-        send(email, "Your Ignition account is approved", """
-                A platform admin has approved your Ignition account.
-
-                Sign in: %s/login
-                """.formatted(props.getPublicUrl()));
     }
 
     public void sendReset(String email, String rawToken) {

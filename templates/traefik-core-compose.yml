@@ -22,23 +22,24 @@
 # Traefik owns :80 / :443 on the node.
 #
 # Domain scheme:
-#   admin.${BASE_DOMAIN}                 the platform admin control plane
+#   ${BASE_DOMAIN}                        the one console — every role (platform
+#                                          admin, team admin, team member) signs
+#                                          in here; what you see/do is by role,
+#                                          not by hostname. A team's console is
+#                                          ${BASE_DOMAIN}/z?z=<slug> on this host.
 #   <slug>.${BASE_DOMAIN}                a zone owns this whole subtree:
 #     git.<slug>.${BASE_DOMAIN}            the zone's Forgejo
-#     admin.<slug>.${BASE_DOMAIN}          the zone admin's control-plane view
 #     <app>.apps.<slug>.${BASE_DOMAIN}     a deployed app (name unique per zone)
 #
 # The control host's Traefik holds the apex cert (${BASE_DOMAIN} + a
-# *.${BASE_DOMAIN} SAN, which covers admin.${BASE_DOMAIN}) and fronts ignition-control
-# on the loopback. Each zone's own Forgejo router (see the bundled zone-compose.yml.tmpl)
+# *.${BASE_DOMAIN} SAN) and fronts ignition-control on the loopback. Each
+# zone's own Forgejo router (see the bundled zone-compose.yml.tmpl)
 # additionally requests *.<slug>.${BASE_DOMAIN} + *.apps.<slug>.${BASE_DOMAIN},
-# since those are two labels deep. ignition-control drops a dynamic router
-# snippet in state/control/dynamic/<slug>.yml so admin.<slug>.${BASE_DOMAIN}
-# reaches ignition-control with its own cert.
+# since those are two labels deep.
 #
-# DNS: admin.${BASE_DOMAIN} -> the control host. Per zone, git.<slug> /
-# admin.<slug> / *.apps.<slug> -> whichever node runs that zone (single node:
-# one *.<slug>.${BASE_DOMAIN} record covers all three).
+# DNS: ${BASE_DOMAIN} -> the control host. Per zone, git.<slug> /
+# *.apps.<slug> -> whichever node runs that zone (single node:
+# one *.<slug>.${BASE_DOMAIN} record covers both).
 
 name: ignition-core
 

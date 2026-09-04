@@ -83,6 +83,7 @@ public class ZoneConsoleController {
         model.addAttribute("botUser", zones.botUser(slug));
         model.addAttribute("members", access.membersOf(slug));
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
+        model.addAttribute("currentUserId", currentUser.get().map(u -> u.id()).orElse(null));
         return "zone";
     }
 
@@ -105,7 +106,8 @@ public class ZoneConsoleController {
                                 @RequestParam ZoneMember.Role role) {
         String slug = requireZoneAdmin(z);
         try {
-            access.setRole(slug, userId, role);
+            java.util.UUID actingUserId = currentUser.get().map(u -> u.id()).orElse(null);
+            access.setRole(slug, userId, role, actingUserId);
             return redirect(slug, "role changed to " + role.name().toLowerCase());
         } catch (IllegalArgumentException | IllegalStateException e) {
             return redirect(slug, e.getMessage());

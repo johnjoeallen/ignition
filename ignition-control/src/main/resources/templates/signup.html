@@ -5,16 +5,18 @@
   <div th:replace="~{fragments/auth :: auth(~{::main})}">
     <main>
       <h1 class="h4 mb-3">Request an account</h1>
-      <div class="alert alert-success" th:if="${sent}">If that address can have an account, an activation link is on its way.</div>
+      <div class="alert alert-success" th:if="${sent}">Request sent. If a platform admin approves it, you'll get an
+        email with a link to set your password.</div>
       <div class="alert alert-danger" th:if="${error}" th:text="${error}">error</div>
       <form method="post" th:action="@{/signup}" th:unless="${sent}">
         <div class="mb-3">
           <label class="form-label">Email</label>
           <input class="form-control" name="email" type="email" autofocus required>
         </div>
-        <button class="btn btn-accent w-100" type="submit">Send activation link</button>
+        <button class="btn btn-accent w-100" type="submit">Request an account</button>
       </form>
-      <p class="text-body-secondary small mt-3 mb-0">A platform admin approves new accounts after you set a password.
+      <p class="text-body-secondary small mt-3 mb-0">A platform admin reviews requests before you get an activation
+        link — nothing is sent until then.
         <a href="/login">Back to sign in</a></p>
     </main>
   </div>

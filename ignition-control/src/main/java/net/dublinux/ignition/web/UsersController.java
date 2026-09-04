@@ -7,6 +7,7 @@ import java.util.UUID;
 import net.dublinux.ignition.auth.AccountService;
 import net.dublinux.ignition.auth.AppUser;
 import net.dublinux.ignition.auth.AppUserRepository;
+import net.dublinux.ignition.auth.CurrentUser;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,10 +26,12 @@ public class UsersController {
 
     private final AppUserRepository users;
     private final AccountService accounts;
+    private final CurrentUser currentUser;
 
-    public UsersController(AppUserRepository users, AccountService accounts) {
+    public UsersController(AppUserRepository users, AccountService accounts, CurrentUser currentUser) {
         this.users = users;
         this.accounts = accounts;
+        this.currentUser = currentUser;
     }
 
     @GetMapping("/users")
@@ -37,6 +40,7 @@ public class UsersController {
                 .sorted(Comparator.comparing(AppUser::email))
                 .toList();
         model.addAttribute("users", all);
+        model.addAttribute("currentUserId", currentUser.get().map(AppUser::id).orElse(null));
         return "users";
     }
 
@@ -52,12 +56,13 @@ public class UsersController {
 
     @PostMapping("/users/{id}/approve")
     public String approve(@PathVariable UUID id) {
-        return act(id, () -> accounts.approve(id), "approved");
+        return act(id, () -> accounts.approve(id), "approved — activation email sent");
     }
 
     @PostMapping("/users/{id}/admin")
     public String setAdmin(@PathVariable UUID id, @RequestParam boolean value) {
-        return act(id, () -> accounts.setPlatformAdmin(id, value),
+        UUID actingUserId = currentUser.get().map(AppUser::id).orElse(null);
+        return act(id, () -> accounts.setPlatformAdmin(id, value, actingUserId),
                 value ? "made a platform admin" : "platform admin revoked");
     }
 

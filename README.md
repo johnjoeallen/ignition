@@ -15,14 +15,14 @@ Every platform-admin and zone-admin operation is in its web UI — there is no
 CLI. See [`ignition-control/`](ignition-control/) and [`DESIGN.md`](DESIGN.md).
 
 `BASE_DOMAIN` is the apex where Ignition is hosted (e.g. `ignition.example`).
-Each zone owns the whole `<slug>.ignition.example` subtree; the platform admin
-sits on the apex:
+Each zone owns the whole `<slug>.ignition.example` subtree; the **one console**
+sits on the bare apex — everyone signs in there, and what they see/do is by
+role (platform admin, team admin, team member), not by hostname:
 
 | host | what |
 |---|---|
-| `admin.ignition.example` | the platform console (`ignition-control`) |
+| `ignition.example` | the console (`ignition-control`) — a team's own view is `/z?z=<slug>` on this same host |
 | `git.<slug>.ignition.example` | that zone's Forgejo — git, PRs, Actions, container registry |
-| `admin.<slug>.ignition.example` | that zone's console (same service, zone-scoped) |
 | `<app>.apps.<slug>.ignition.example` | a deployed app — a zone can run many; names are unique within the zone |
 
 `ignition.example` is a placeholder — set `BASE_DOMAIN` to any apex your
@@ -44,13 +44,22 @@ Read **[CLAUDE.md](CLAUDE.md)** for the design decisions before changing anythin
 
 ## Roles
 
+A signed-in user's role is a union: **platform admin** (global) plus, per
+zone, **team admin** or **team member** — so someone can be a platform admin
+overall and also just a team admin of one specific zone. All three sign in at
+the same place, email + password (first run is `/setup`); what they see and
+can do is entirely by role, not by which URL they hit.
+
 - **Platform admin** — registers nodes, provisions / moves / destroys zones,
-  runs the roster, sees every zone and app. Works entirely in the **platform
-  console** at `admin.ignition.example` (email + password; first run is `/setup`).
-- **Zone admin** — one per zone (the team lead). Adds users, creates repos,
-  cuts releases (automated semver bumps), manages the zone's apps, restarts the
-  runner — all from the **zone console** at `admin.<slug>.ignition.example`, for
-  *their* zone only. They never touch a Forgejo admin screen.
+  runs the roster, sees every zone and app, manages every Ignition account.
+  Implicitly a team admin of every zone too.
+- **Team admin** — the team lead(s), one or more per zone. Adds/removes team
+  members and their roles, adds Forgejo users, creates repos, cuts releases
+  (automated semver bumps), manages the zone's apps, restarts the runner — for
+  *their* zone only, at `/z?z=<slug>` on the console. They never touch a
+  Forgejo admin screen.
+- **Team member** — the rest of the team. Same zone console, everything but
+  member/user management.
 
 **Forgejo, not Gitea:** community-governed (Codeberg e.V.), FOSS-first, no
 open-core drift. Server `codeberg.org/forgejo/forgejo:11` (LTS), runner
@@ -66,7 +75,7 @@ open-core drift. Server `codeberg.org/forgejo/forgejo:11` (LTS), runner
   on each.
 - **DNS**: one pre-registered wildcard `*.ignition.example` → the controller,
   set up once. It matches at any depth (RFC 4592), so every
-  `git.<slug>` / `admin.<slug>` / `*.apps.<slug>` name resolves with no per-zone
+  `git.<slug>` / `*.apps.<slug>` name resolves with no per-zone
   record.
 - A DNS-provider API token for the edge's ACME DNS-01 challenge. The edge
   fetches `ignition.example` + `*.ignition.example` and, per zone,
@@ -90,22 +99,23 @@ docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env       # DNS API creds for the ACME challenge
 export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)   # zone-secret AES key — keep it
-export IGN_PUBLIC_URL=https://admin.ignition.example
+export IGN_PUBLIC_URL=https://ignition.example
 export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
 docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 ```
 
 First run logs a one-time setup code (`IGNITION SETUP …`). Open
-**`https://admin.ignition.example/setup`**, enter it plus an email and password
+**`https://ignition.example/setup`**, enter it plus an email and password
 to create the platform admin. Then from the console:
 
 - **Nodes → Register** — add each host (`local`, `ssh://ops@10.0.0.2`, or
   `tcp://host:2376`) with its CPU / memory.
 - **Provision a zone** — a slug; the scheduler places it, or pin a node. It
-  stands up Forgejo + DinD + a runner and mints the zone-admin and CI tokens.
-  Hand the team lead the **zone token** (their console sign-in) and the
-  **deploy token** (`DEPLOY_TOKEN` repo secret).
+  stands up Forgejo + DinD + a runner, and makes you that team's admin. From
+  **Users**, invite the team lead an Ignition account (if they don't have one
+  yet); from the team's console, add them as a team admin — they take it from
+  there.
 - **Roster** — paste a slug list to bulk-provision or bulk-destroy an event.
 - Per zone: **move**, **destroy**; per app: **stop**; **sweep idle zones now**.
 

@@ -45,30 +45,36 @@ tree of `.env` files under `state/`. This change:
 ## Account lifecycle
 
 ```
-                    ┌──────────────────────┐
- signup / invite ─► │ PENDING_VERIFICATION │  (activation email sent)
-                    └─────────┬────────────┘
+                    ┌──────────────────┐        admin approves,
+   self-signup ───► │ PENDING_APPROVAL │        activation email sent
+                    └────────┬─────────┘        (sets preapproved)
+                             │
+                    ┌────────▼──────────────┐
+   admin invite ──► │ PENDING_VERIFICATION  │
+                    └────────┬───────────────┘
               click link, set password
-                    ┌─────────▼────────────┐        admin approves
-   self-signup ───► │  PENDING_APPROVAL    │ ──────────────────────┐
-                    └──────────────────────┘                       │
-   admin invite ─────────────────────────────────────────────►┌────▼─────┐
-                                                              │  ACTIVE  │
-                                                              └────┬─────┘
-                                              admin disables       │
-                                                              ┌────▼─────┐
-                                                              │ DISABLED │
-                                                              └──────────┘
+                    ┌────────▼─┐
+                    │  ACTIVE  │
+                    └────┬─────┘
+     admin disables      │
+                    ┌────▼─────┐
+                    │ DISABLED │
+                    └──────────┘
 ```
 
-- **Self-signup** (`/signup`): email → user `PENDING_VERIFICATION`, no roles →
-  activation email → set password → `PENDING_APPROVAL` → platform admin approves
-  → `ACTIVE`. Still in no zone.
+- **Self-signup** (`/signup`): email → user `PENDING_APPROVAL`, no roles, **no
+  mail sent** — a platform admin has to look at the request first. They
+  approve it → the account is marked `preapproved` and moves to
+  `PENDING_VERIFICATION`, *now* the activation email goes out → click link,
+  set password → `ACTIVE` straight away (the approval already happened; no
+  second gate). Still in no zone. The email is deliberately withheld until
+  approval — nothing is sent for a request nobody's looked at yet.
 - **Admin invite** (from a zone's members page, or the users page): email →
-  user `PENDING_VERIFICATION` (+ a pending zone membership if invited into a
-  zone) → activation email → set password → `ACTIVE` (no approval step — an
-  admin initiated it). If the email already belongs to an `ACTIVE` user,
-  "invite into zone" just adds the membership.
+  user `PENDING_VERIFICATION`, `preapproved` from creation (+ a pending zone
+  membership if invited into a zone) → activation email sent immediately →
+  click link, set password → `ACTIVE` (no approval step — an admin already
+  initiated it). If the email already belongs to an `ACTIVE` user, "invite
+  into zone" just adds the membership.
 - **Password reset** (`/forgot`): email → reset link (same token table,
   `purpose = RESET`) → set new password.
 - **Disable / re-enable**: platform admin only. A `DISABLED` user can't log in;
@@ -274,7 +280,7 @@ IGN_SMTP_USERNAME  (required)
 IGN_SMTP_PASSWORD  (required)
 IGN_SMTP_FROM      (required, e.g. "Ignition <ignition@classesarecode.net>")
 IGN_SMTP_STARTTLS  (default true)
-IGN_PUBLIC_URL     (required, e.g. https://admin.ignition.classesarecode.net — builds links)
+IGN_PUBLIC_URL     (required, e.g. https://ignition.classesarecode.net — builds links)
 ```
 
 Also required at startup: **`IGN_SECRET_KEY`** (32 bytes base64, for

@@ -125,7 +125,7 @@ PART 1 — spitfire  (run from the repo root of your ignition clone)
   first run: grab the setup code and create the platform admin —
     docker compose --project-directory . -f templates/ignition-control-compose.yml \
       logs ignition-control | grep "IGNITION SETUP"
-    then open  https://admin.<BASE_DOMAIN>/setup
+    then open  https://<BASE_DOMAIN>/setup
 
 PART 2 — hetzner
   hetzner-wg0.conf           -> /etc/wireguard/wg0.conf   (chmod 600)

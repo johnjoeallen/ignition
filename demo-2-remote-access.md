@@ -136,7 +136,7 @@ Option A, deSEC/Cloudflare if Option B:
 ignition.classesarecode.net.     A   <PUBLIC_IP>     # optional: the bare apex
 ```
 
-One record covers every depth (`admin.…`, `git.<slug>.…`,
+One record covers every depth (the bare apex itself, `git.<slug>.…`,
 `x.apps.<slug>.…`) — provisioning a zone adds no DNS. The certificate from
 part 1 is unaffected (DNS-01 doesn't care where the `A` record points).
 
@@ -288,7 +288,7 @@ path — `spitfire` always sees the tunnel address either way.
 Verify from a machine **off your LAN**:
 
 ```sh
-curl -I https://admin.ignition.classesarecode.net/actuator/health   # → spitfire
+curl -I https://ignition.classesarecode.net/actuator/health   # → spitfire
 curl -kI https://your-existing-site.com/                            # → Apache, unchanged
 ```
 
@@ -323,7 +323,7 @@ tunnel needs nothing.
 
 ## Step 6 — flip to the public path
 
-Remove the `admin.ignition.classesarecode.net` line from your laptop's
+Remove the `ignition.classesarecode.net` line from your laptop's
 `/etc/hosts` (added in part 1). The name now resolves to `<PUBLIC_IP>` and
 routes through nginx for real.
 
@@ -331,14 +331,16 @@ routes through nginx for real.
 
 ## Step 7 — provision a zone and deploy an app
 
-In the platform console (`https://admin.ignition.classesarecode.net/`):
+In the console (`https://ignition.classesarecode.net/`):
 
-1. **Zones → Provision** — a slug, e.g. `quantum-badgers`. The scheduler places
+1. **Teams → New team** — a slug, e.g. `quantum-badgers`. The scheduler places
    it on `spitfire` (the only node): Forgejo + a private build engine + a
-   runner + a `ignition-bot` account + two tokens (~1–2 min). Bulk: **Roster**.
-2. Copy the zone's **zone token** (team-lead console sign-in at
-   `https://admin.quantum-badgers.ignition.classesarecode.net/`) and **deploy
-   token** (CI).
+   runner + an `ignition-bot` account (~1–2 min). Bulk: **Roster**. You're now
+   that team's admin.
+2. From **Users**, invite the team lead an Ignition account if they don't have
+   one; from the team's own console (`/z?z=quantum-badgers` — no separate
+   hostname, it's the same one console) add them as a team admin. They sign in
+   with email + password like everyone else; their role scopes what they see.
 
 Each zone auto-requests its own `*.quantum-badgers.ignition.classesarecode.net`
 + `*.apps.quantum-badgers.ignition.classesarecode.net` cert (two labels below

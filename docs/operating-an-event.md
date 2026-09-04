@@ -1,7 +1,8 @@
 # Operating an Event
 
-Everything an operator does is in the **platform console** at
-`https://admin.<BASE_DOMAIN>/`. There is no CLI.
+Everything is in the **one console**, at `https://<BASE_DOMAIN>/` — every
+role (platform admin, team admin, team member) signs in there; what you see
+and can do is by role, not by which URL you hit. There is no CLI.
 
 ## Prerequisites
 
@@ -15,9 +16,9 @@ Everything an operator does is in the **platform console** at
 - **DNS** (`BASE_DOMAIN` is the apex, e.g. `ignition.example`): one
   pre-registered wildcard `*.<BASE_DOMAIN>` → the controller, set up once and
   never touched again. It matches at any depth (RFC 4592), so
-  `admin.<BASE_DOMAIN>`, `git.<slug>.<BASE_DOMAIN>`,
-  `admin.<slug>.<BASE_DOMAIN>`, and `<app>.apps.<slug>.<BASE_DOMAIN>` all
-  resolve with no per-zone record. Provisioning a zone adds zero DNS.
+  `<BASE_DOMAIN>` itself, `git.<slug>.<BASE_DOMAIN>`, and
+  `<app>.apps.<slug>.<BASE_DOMAIN>` all resolve with no per-zone record.
+  Provisioning a zone adds zero DNS.
 - API credentials for **your** DNS provider so the edge can answer the ACME
   DNS-01 challenge (`ACME_DNS_PROVIDER` + the matching vars in `acme.env` —
   any of Traefik's ~100 providers, including `rfc2136` for a self-run DNS).
@@ -43,14 +44,14 @@ docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env          # DNS API creds for the ACME challenge
 export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)   # zone-secret AES key — keep it
-export IGN_PUBLIC_URL=https://admin.ignition.example
+export IGN_PUBLIC_URL=https://ignition.example
 export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
 docker compose --project-directory . -f templates/ignition-control-compose.yml up -d
 ```
 
 First run logs a setup code (`docker compose … logs ignition-control | grep "IGNITION SETUP"`).
-Open `https://admin.ignition.example/setup`, enter it plus an email and
+Open `https://ignition.example/setup`, enter it plus an email and
 password to create the platform admin. Then sign in and:
 
 3. **Nodes → Register** each host — `local`, `ssh://ops@10.0.0.2`, or
@@ -60,11 +61,12 @@ password to create the platform admin. Then sign in and:
    Forgejo + DinD + a runner, creates the `ignition-bot` account, and mints the
    tokens. For a whole roster at once use **Roster** and paste the slug list.
 
-Each zone's page shows its **zone token** and **deploy token**. Hand the team
-lead only the **zone token** — they sign in with it at
-`https://admin.<slug>.ignition.example/`, the zone console, and that's their
-whole surface. (`zone-admin.txt` is `ignition-control`'s service credential;
-it never leaves the controller.)
+Provisioning makes you that zone's team admin. From **Users**, invite the team
+lead an Ignition account if they don't have one yet; from the team's console
+(`/z?z=<slug>` on the same host — no separate URL), add them as a team admin.
+They take it from there — same console, scoped to their zone by role, not by
+a token. (`zone-admin.txt` is `ignition-control`'s own Forgejo service
+credential; it never leaves the controller, and nobody signs in as it.)
 
 In each repo they want deployed they add `.forgejo/workflows/deploy.yml` (from
 `examples/deploy.yml`) with its variables/secrets — `REGISTRY`, `CONTROL_URL`,

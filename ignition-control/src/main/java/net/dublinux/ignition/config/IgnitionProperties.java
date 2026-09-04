@@ -26,7 +26,7 @@ public class IgnitionProperties {
     /** 32 bytes base64 — AES-GCM key for {@code zone_secret} values. */
     private String secretKey = "";
 
-    /** Public origin, e.g. {@code https://admin.ignition.example} — used to build email links. */
+    /** Public origin, e.g. {@code https://ignition.example} — used to build email links. */
     private String publicUrl = "http://localhost:8790";
 
     /** Skip TLS verification when calling a zone's Forgejo (pre-cert). */

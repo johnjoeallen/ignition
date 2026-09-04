@@ -20,14 +20,14 @@ port history are in **[DESIGN.md](DESIGN.md)**; the module is
 [`ignition-control/`](ignition-control/).
 
 `BASE_DOMAIN` is the apex where Ignition is hosted (e.g. `ignition.example`).
-Each zone owns the whole `<slug>.<BASE_DOMAIN>` subtree; the platform admin
-sits on the apex:
+Each zone owns the whole `<slug>.<BASE_DOMAIN>` subtree; the **one console**
+sits on the bare apex — every role signs in there, and what they see/do is by
+role (platform admin / team admin / team member), not by hostname:
 
 | host | what |
 |---|---|
-| `admin.<BASE_DOMAIN>` | the platform console (`ignition-control`) |
+| `<BASE_DOMAIN>` | the console (`ignition-control`) — a team's own view is `/z?z=<slug>` on this same host |
 | `git.<slug>.<BASE_DOMAIN>` | that zone's Forgejo — git, PRs, Actions, registry |
-| `admin.<slug>.<BASE_DOMAIN>` | that zone's console (same service, zone-scoped) |
 | `<app>.apps.<slug>.<BASE_DOMAIN>` | a deployed app (name unique within the zone) |
 
 `ignition.example` in the docs is a placeholder; `BASE_DOMAIN` is whatever apex
@@ -43,17 +43,23 @@ Per zone:
 - **any number of live apps** — CI builds + pushes an image on a release, then
   POSTs the control plane, which runs it at `<app>.apps.<slug>.<BASE_DOMAIN>`
 
-Two admin roles:
+Three roles, a union — a user can be a platform admin **and** a team admin of
+one specific zone, both at once (see AUTH-DESIGN.md):
 
-- **Platform admin** — registers **nodes**, provisions/moves/destroys **zones**,
-  runs the roster, sees everything. Works in the **platform console** at
-  `admin.<BASE_DOMAIN>` (bearer = `IGN_ADMIN_TOKEN`).
-- **Zone admin** — one per zone (the team lead). Manages *their* zone only —
-  add/remove users, create repos, **cut releases** (the console's *Release*
-  button derives the bump from the commits since the last release and tags the
-  next `vX.Y.Z` on `main` — a dropdown overrides), restart the runner, stop
-  apps, watch status — through the **zone console** at
-  `admin.<slug>.<BASE_DOMAIN>`, which proxies that zone's own Forgejo admin API.
+- **Platform admin** — global. Registers **nodes**, provisions/moves/destroys
+  **zones**, runs the roster, manages every Ignition account, sees everything.
+  Implicitly a team admin of every zone too.
+- **Team admin** — one or more per zone (the team lead(s)). Manages *their*
+  zone only — add/remove team members and their roles, add/remove Forgejo
+  users, create repos, **cut releases** (the console's *Release* button
+  derives the bump from the commits since the last release and tags the next
+  `vX.Y.Z` on `main` — a dropdown overrides), restart the runner, stop apps,
+  watch status.
+- **Team member** — the rest of the team. Same zone console, everything but
+  member/user management.
+
+All three sign in at the one console (`/z?z=<slug>` is a team's own view, on
+the same host); access is enforced by role, not by which URL is hit.
 
 ## Repo layout
 
@@ -85,8 +91,7 @@ state/
                                   #   zone-admin.txt, zone-token, deploy-token, last-activity
   zones/<slug>/apps/<name>.env    # app registry (APP_NAME, ZONE, NODE, IMAGE, PORT, DEPLOY_ID)
   zones/<slug>/apps/<name>-compose.yml   # rendered per-app compose
-  control/dynamic/*.yml           # Traefik file-provider snippets: admin.<BASE_DOMAIN> +
-                                  #   admin.<slug>.<BASE_DOMAIN> -> ignition-control
+  control/dynamic/*.yml           # Traefik file-provider snippet: <BASE_DOMAIN> -> ignition-control
 ```
 
 `state/` is generated, never source; `nodes/`, `zones/`, `control/` are gitignored.
@@ -105,9 +110,9 @@ Docker hits `/v2/...` at the domain *root* for registry operations and ignores
 path prefixes, so a forge at `<slug>.<domain>/git` would break `docker push`
 against its own registry. Each Forgejo therefore owns a whole origin,
 `git.<slug>.<BASE_DOMAIN>`. Everything else for the zone hangs off the same
-subtree: `admin.<slug>.<BASE_DOMAIN>` (the zone console) and
-`<app>.apps.<slug>.<BASE_DOMAIN>` (one per deployed app). The platform admin is
-one host on the apex, `admin.<BASE_DOMAIN>`.
+subtree: `<app>.apps.<slug>.<BASE_DOMAIN>` (one per deployed app). The
+console — every role — is the bare apex, `<BASE_DOMAIN>`; a team's own view is
+`<BASE_DOMAIN>/z?z=<slug>`, not a separate host.
 
 **Ingress: the controller is the only front door.** All inbound `:443` terminates at the
 controller's Traefik edge, which runs the SSO gateway and reverse-proxies by

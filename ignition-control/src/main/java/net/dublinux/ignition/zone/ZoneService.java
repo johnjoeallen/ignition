@@ -410,7 +410,7 @@ public class ZoneService {
         putFile(slug, name, "index.html", scaffold("index.html"), "ignition: starter page");
 
         setVar(slug, name, "REGISTRY", zone.gitHost());
-        setVar(slug, name, "CONTROL_URL", zone.zadminUrl().replaceAll("/+$", ""));
+        setVar(slug, name, "CONTROL_URL", props.getPublicUrl().replaceAll("/+$", ""));
         setVar(slug, name, "APP_NAME", name);
         setVar(slug, name, "APP_PORT", Integer.toString(APP_PORT));
         setSecret(slug, name, "DEPLOY_TOKEN", zones.secret(slug, "deploy-token"));

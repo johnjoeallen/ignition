@@ -62,14 +62,25 @@ class AccountServiceTest {
     }
 
     @Test
-    void signupCreatesPendingUserAndMailsActivation() {
+    void signupFilesRequestWithNoMailYet() {
         svc.signup("Alex@example.com");
         assertThat(userStore.values()).singleElement()
                 .satisfies(u -> {
                     assertThat(u.email()).isEqualTo("alex@example.com");
-                    assertThat(u.status()).isEqualTo(Status.PENDING_VERIFICATION);
+                    assertThat(u.status()).isEqualTo(Status.PENDING_APPROVAL);
                     assertThat(u.isPreapproved()).isFalse();
                 });
+        // nothing goes out until a platform admin approves the request
+        verify(mail, never()).sendActivation(anyString(), anyString());
+    }
+
+    @Test
+    void approveSendsActivationAndPreapproves() {
+        AppUser u = new AppUser("alex@example.com", Status.PENDING_APPROVAL, false, false);
+        userStore.put(u.id(), u);
+        svc.approve(u.id());
+        assertThat(u.status()).isEqualTo(Status.PENDING_VERIFICATION);
+        assertThat(u.isPreapproved()).isTrue();
         verify(mail).sendActivation(eq("alex@example.com"), anyString());
     }
 
@@ -90,7 +101,11 @@ class AccountServiceTest {
     }
 
     @Test
-    void selfSignupUserActivatesToPendingApproval() {
+    void unapprovedActivationLandsInPendingApproval() {
+        // AppUser.activate()'s own defensive fallback — not reachable through
+        // AccountService today (approve() always sets preapproved before a
+        // PENDING_VERIFICATION user can get this far), but the entity
+        // shouldn't silently activate an unapproved account if that ever changes.
         AppUser u = new AppUser("s@example.com", Status.PENDING_VERIFICATION, false, false);
         u.activate("{enc}pw");
         assertThat(u.status()).isEqualTo(Status.PENDING_APPROVAL);
@@ -106,8 +121,22 @@ class AccountServiceTest {
     void lastPlatformAdminCannotBeDemoted() {
         AppUser admin = new AppUser("boss@example.com", Status.ACTIVE, true, true);
         userStore.put(admin.id(), admin);
-        assertThatThrownBy(() -> svc.setPlatformAdmin(admin.id(), false))
+        // acted on by someone else (a null actor here) — otherwise the self-revocation
+        // guard below would fire first and mask what this test is actually checking.
+        assertThatThrownBy(() -> svc.setPlatformAdmin(admin.id(), false, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("last platform admin");
+    }
+
+    @Test
+    void cannotRevokeYourOwnPlatformAdmin() {
+        AppUser admin = new AppUser("boss@example.com", Status.ACTIVE, true, true);
+        AppUser other = new AppUser("deputy@example.com", Status.ACTIVE, true, true);
+        userStore.put(admin.id(), admin);
+        userStore.put(other.id(), other);
+        // another admin exists, so this isn't the last-admin case — it's still refused.
+        assertThatThrownBy(() -> svc.setPlatformAdmin(admin.id(), false, admin.id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("your own");
     }
 }

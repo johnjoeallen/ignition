@@ -62,7 +62,13 @@ public class AccountService {
 
     // --- signup / invite -----------------------------------------------------
 
-    /** Self-service. Silent whether or not the address is new (no enumeration). */
+    /**
+     * Self-service. Just files the request, {@code PENDING_APPROVAL} — no mail
+     * goes out yet. A platform admin has to look at it first ({@link #approve})
+     * before this address gets an activation link; that's the whole point of
+     * gating self-signup at all. Silent whether or not the address is new (no
+     * enumeration).
+     */
     @Transactional
     public void signup(String email) {
         String e = requireEmail(email);
@@ -70,8 +76,7 @@ public class AccountService {
             log.info("signup for existing address {} — no mail", e);
             return;
         }
-        AppUser u = users.save(new AppUser(e, Status.PENDING_VERIFICATION, false, false));
-        mail.sendActivation(e, issue(u.id(), Purpose.ACTIVATE, ACTIVATE_TTL));
+        users.save(new AppUser(e, Status.PENDING_APPROVAL, false, false));
     }
 
     /**
@@ -143,15 +148,23 @@ public class AccountService {
 
     // --- admin actions ---------------------------------------------------
 
+    /**
+     * Approves a self-signup request. This is the gate — from here on the
+     * address is trusted the same as an admin invite, so it goes out with the
+     * activation link now (not a separate "you're approved" mail): set
+     * {@code preapproved} so the eventual {@link AppUser#activate} lands them
+     * straight in {@code ACTIVE}.
+     */
     @Transactional
     public void approve(UUID userId) {
         AppUser u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("no such user"));
         if (u.status() != Status.PENDING_APPROVAL) {
-            throw new IllegalStateException("user is not pending approval");
+            throw new IllegalStateException("user is not a pending signup request");
         }
-        u.setStatus(Status.ACTIVE);
+        u.setPreapproved(true);
+        u.setStatus(Status.PENDING_VERIFICATION);
         users.save(u);
-        mail.sendApproved(u.email());
+        mail.sendActivation(u.email(), issue(u.id(), Purpose.ACTIVATE, ACTIVATE_TTL));
     }
 
     @Transactional
@@ -165,8 +178,18 @@ public class AccountService {
         users.save(u);
     }
 
+    /**
+     * @param actingUserId who's making the change — {@code null} if the
+     *                      caller doesn't know or care (e.g. a script).
+     *                      Revoking your <em>own</em> platform-admin flag is
+     *                      refused outright, even with other admins around:
+     *                      it's always someone else's call to make.
+     */
     @Transactional
-    public void setPlatformAdmin(UUID userId, boolean value) {
+    public void setPlatformAdmin(UUID userId, boolean value, UUID actingUserId) {
+        if (!value && userId.equals(actingUserId)) {
+            throw new IllegalStateException("you can't revoke your own platform admin access — ask another admin");
+        }
         AppUser u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("no such user"));
         if (!value && u.isPlatformAdmin()) {
             guardLastPlatformAdmin(userId);

@@ -4,7 +4,7 @@
 # and AUTH-DESIGN.md.
 #
 #   export BASE_DOMAIN=ignition.example
-#   export IGN_PUBLIC_URL=https://admin.ignition.example      # builds the links in emails
+#   export IGN_PUBLIC_URL=https://ignition.example      # builds the links in emails
 #   export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64) # zone_secret AES key — keep it
 #   export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 #   # SMTP is required — the service will not start without it:
