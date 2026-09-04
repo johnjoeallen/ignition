@@ -338,7 +338,7 @@ In the console (`https://ignition.classesarecode.net/`):
    runner + an `ignition-bot` account (~1–2 min). Bulk: **Roster**. You're now
    that team's admin.
 2. From **Users**, invite the team lead an Ignition account if they don't have
-   one; from the team's own console (`/z?z=quantum-badgers` — no separate
+   one; from the team's own console (`/zones/quantum-badgers` — no separate
    hostname, it's the same one console) add them as a team admin. They sign in
    with email + password like everyone else; their role scopes what they see.
 

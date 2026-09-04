@@ -21,7 +21,7 @@ role (platform admin, team admin, team member), not by hostname:
 
 | host | what |
 |---|---|
-| `ignition.example` | the console (`ignition-control`) — a team's own view is `/z?z=<slug>` on this same host |
+| `ignition.example` | the console (`ignition-control`) — a team's own view is `/zones/<slug>` on this same host |
 | `git.<slug>.ignition.example` | that team's Forgejo — git, PRs, Actions, container registry |
 | `<app>.apps.<slug>.ignition.example` | a deployed app — a team can run many; names are unique within the team |
 
@@ -56,7 +56,7 @@ can do is entirely by role, not by which URL they hit.
 - **Team admin** — the team lead(s), one or more per team. Adds/removes team
   members and their roles, creates repos, cuts releases (automated semver
   bumps), manages the team's apps, restarts the runner — for *their* team
-  only, at `/z?z=<slug>` on the console. Git access isn't a separate step:
+  only, at `/zones/<slug>` on the console. Git access isn't a separate step:
   adding someone as a member provisions their Forgejo login too, as their
   sanitized email. They never touch a Forgejo admin screen.
 - **Team member** — the rest of the team. Same team console, everything but

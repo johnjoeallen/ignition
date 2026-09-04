@@ -63,7 +63,7 @@ password to create the platform admin. Then sign in and:
 
 Provisioning makes you that team's admin. From **Users**, invite the team
 lead an Ignition account if they don't have one yet; from the team's console
-(`/z?z=<slug>` on the same host — no separate URL), add them as a team admin.
+(`/zones/<slug>` on the same host — no separate URL), add them as a team admin.
 They take it from there — same console, scoped to their team by role, not by
 a token. (`zone-admin.txt` is `ignition-control`'s own Forgejo service
 credential; it never leaves the controller, and nobody signs in as it.)

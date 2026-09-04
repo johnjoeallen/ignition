@@ -26,7 +26,7 @@ role (platform admin / team admin / team member), not by hostname:
 
 | host | what |
 |---|---|
-| `<BASE_DOMAIN>` | the console (`ignition-control`) — a team's own view is `/z?z=<slug>` on this same host |
+| `<BASE_DOMAIN>` | the console (`ignition-control`) — a team's own view is `/zones/<slug>` on this same host |
 | `git.<slug>.<BASE_DOMAIN>` | that zone's Forgejo — git, PRs, Actions, registry |
 | `<app>.apps.<slug>.<BASE_DOMAIN>` | a deployed app (name unique within the zone) |
 
@@ -58,7 +58,7 @@ one specific zone, both at once (see AUTH-DESIGN.md):
 - **Team member** — the rest of the team. Same zone console, everything but
   member/user management.
 
-All three sign in at the one console (`/z?z=<slug>` is a team's own view, on
+All three sign in at the one console (`/zones/<slug>` is a team's own view, on
 the same host); access is enforced by role, not by which URL is hit.
 
 ## Repo layout
@@ -112,7 +112,7 @@ against its own registry. Each Forgejo therefore owns a whole origin,
 `git.<slug>.<BASE_DOMAIN>`. Everything else for the zone hangs off the same
 subtree: `<app>.apps.<slug>.<BASE_DOMAIN>` (one per deployed app). The
 console — every role — is the bare apex, `<BASE_DOMAIN>`; a team's own view is
-`<BASE_DOMAIN>/z?z=<slug>`, not a separate host.
+`<BASE_DOMAIN>/zones/<slug>`, not a separate host.
 
 **Ingress: the controller is the only front door.** All inbound `:443` terminates at the
 controller's Traefik edge, which runs the SSO gateway and reverse-proxies by
