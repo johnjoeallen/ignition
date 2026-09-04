@@ -24,7 +24,7 @@
 #                (must match the zone's registry exactly — ignition-control checks it)
 #   CONTROL_URL  https://admin.<slug>.<BASE_DOMAIN>  the zone's control endpoint
 #   APP_NAME     my-app                              -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
-#   APP_PORT     8080                                the port your app listens on
+#   APP_PORT     8080                                fixed by ignition (Create app) — listen on $PORT/8080
 # Repo secrets (Settings -> Actions -> Secrets):
 #   DEPLOY_TOKEN   the zone's CI token (state/zones/<slug>/deploy-token)
 #   FORGEJO_TOKEN  optional — a token with package:write for the registry. If

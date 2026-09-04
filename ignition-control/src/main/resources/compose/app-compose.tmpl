@@ -19,6 +19,8 @@ services:
     container_name: app-${ZONE_SLUG}-${APP_NAME}
     restart: unless-stopped
     networks: [traefik-public]
+    environment:
+      PORT: "${APP_PORT}"
     labels:
       ignition.app: ${APP_NAME}
       ignition.zone: ${ZONE_SLUG}

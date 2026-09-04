@@ -353,6 +353,16 @@ public class ZoneService {
      * hides work from the rest of the team for no benefit.
      */
     /**
+     * Every app listens on this port inside its container — Traefik routes
+     * to it directly over the docker network (no host port is ever
+     * published, so there's nothing to "expose"). Not user-configurable:
+     * one fewer knob that has to agree with the Dockerfile's {@code EXPOSE}.
+     * The container also gets it as a {@code PORT} env var, so an app can
+     * just honor {@code $PORT} instead of hardcoding it.
+     */
+    public static final int APP_PORT = 8080;
+
+    /**
      * "Create an app" — an app <em>is</em> its repo. Creates the repo in the
      * zone's org (always public: no SSO, so a private repo just hides work
      * from teammates), then seeds it with a starter {@code Dockerfile} +
@@ -360,7 +370,7 @@ public class ZoneService {
      * workflow needs — so the team can clone, push, and hit Release with
      * nothing to configure by hand.
      */
-    public ForgejoClient.Response createApp(String slug, String name, int port) {
+    public ForgejoClient.Response createApp(String slug, String name) {
         ensureOrg(slug);
         ForgejoClient.Response repo = forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
                 "name", name, "private", false, "auto_init", true));
@@ -372,12 +382,13 @@ public class ZoneService {
         putFile(slug, name, ".forgejo/workflows/deploy.yml", scaffold("deploy.yml"),
                 "ignition: add the deploy workflow");
         putFile(slug, name, "Dockerfile", scaffold("Dockerfile"), "ignition: starter Dockerfile");
+        putFile(slug, name, "nginx.conf", scaffold("nginx.conf"), "ignition: starter nginx config");
         putFile(slug, name, "index.html", scaffold("index.html"), "ignition: starter page");
 
         setVar(slug, name, "REGISTRY", zone.gitHost());
         setVar(slug, name, "CONTROL_URL", zone.zadminUrl().replaceAll("/+$", ""));
         setVar(slug, name, "APP_NAME", name);
-        setVar(slug, name, "APP_PORT", Integer.toString(port));
+        setVar(slug, name, "APP_PORT", Integer.toString(APP_PORT));
         setSecret(slug, name, "DEPLOY_TOKEN", zones.secret(slug, "deploy-token"));
 
         return repo;

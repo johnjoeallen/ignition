@@ -88,9 +88,8 @@ public class ZoneConsoleController {
 
     @PostMapping("/z/apps")
     public String createApp(@RequestParam(name = "z") String z,
-                            @RequestParam String name,
-                            @RequestParam(defaultValue = "8080") int port) {
-        return back(z, zones.createApp(require(z), name, port),
+                            @RequestParam String name) {
+        return back(z, zones.createApp(require(z), name),
                 "app " + name + " created — clone it, push, then Release");
     }
 
