@@ -57,33 +57,35 @@ public class PlatformConsoleController {
     }
 
     /**
-     * The landing page every login redirects to — has to make sense for
-     * whoever's signed in, not just a platform admin. A platform admin gets
-     * the full Teams management page; anyone else (this is the only page
-     * they can reach that isn't a specific team's own console) gets a plain
-     * list of the teams they're actually on, since they have no reason to
-     * see or manage every team on the platform.
+     * The landing page every login redirects to — one template for every
+     * role, not two different pages, so a platform admin's own teams look
+     * the same as anyone else's: same columns, same "your role" badge, same
+     * team links. Only the platform-admin-only bits (every other team, New
+     * team / Roster, move / destroy) differ, gated on {@code isPlatformAdmin}
+     * in the template itself.
      */
     @GetMapping("/")
     public String home(Model model) {
-        if (currentUser.isPlatformAdmin()) {
-            return teamsAdmin(model);
-        }
+        boolean admin = currentUser.isPlatformAdmin();
         var userId = currentUser.get().map(u -> u.id()).orElse(null);
-        model.addAttribute("myZones", userId == null ? List.of() : access.zonesFor(userId));
-        return "my-teams";
-    }
+        Map<String, net.dublinux.ignition.auth.ZoneMember.Role> myRoles = userId == null ? Map.of()
+                : access.zonesFor(userId).stream().collect(java.util.stream.Collectors.toMap(
+                        ZoneAccessService.MyZone::slug, ZoneAccessService.MyZone::role));
 
-    private String teamsAdmin(Model model) {
+        List<net.dublinux.ignition.zone.Zone> zoneList = admin
+                ? zones.list()
+                : zones.list().stream().filter(z -> myRoles.containsKey(z.slug())).toList();
+
         List<NodeRow> nodeRows = nodes.list().stream().map(n -> {
             var a = nodes.allocation(n.name());
             return new NodeRow(n, a.cpus(), a.memGb(), a.zones());
         }).toList();
         Map<String, ProvisioningService.Status> provisioningRows = new java.util.LinkedHashMap<>();
-        zones.list().forEach(z ->
-                provisioning.status(z.slug()).ifPresent(s -> provisioningRows.put(z.slug(), s)));
+        zoneList.forEach(z -> provisioning.status(z.slug()).ifPresent(s -> provisioningRows.put(z.slug(), s)));
+
         model.addAttribute("nodeNames", nodeRows.stream().map(r -> r.node().name()).toList());
-        model.addAttribute("zones", zones.list());
+        model.addAttribute("zones", zoneList);
+        model.addAttribute("myRoles", myRoles);
         model.addAttribute("provisioning", provisioningRows);
         return "teams";
     }
