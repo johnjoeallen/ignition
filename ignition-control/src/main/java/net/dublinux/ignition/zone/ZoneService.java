@@ -220,7 +220,9 @@ public class ZoneService {
      * {@code Owners} team id, or -1 if it couldn't be found.
      */
     private int ensureOrg(String slug) {
-        forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "private"));
+        forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "public"));
+        // idempotent — also fixes an org created before this was "public"
+        forgejo.patch(slug, "/orgs/" + slug, Map.of("visibility", "public"));
         var teams = forgejo.get(slug, "/orgs/" + slug + "/teams?limit=50");
         if (teams.ok() && teams.body() != null && teams.body().isArray()) {
             for (JsonNode t : teams.body()) {
@@ -256,11 +258,15 @@ public class ZoneService {
         return out;
     }
 
-    /** New repos always belong to the zone's org, not the zoneadmin user. */
-    public ForgejoClient.Response createRepo(String slug, String name, boolean priv) {
+    /**
+     * New repos always belong to the zone's org, not the zoneadmin user, and
+     * are always public — this demo has no SSO, and a private repo/org just
+     * hides work from the rest of the team for no benefit.
+     */
+    public ForgejoClient.Response createRepo(String slug, String name) {
         ensureOrg(slug);
         return forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
-                "name", name, "private", priv, "auto_init", true));
+                "name", name, "private", false, "auto_init", true));
     }
 
     public ReleaseService.Result release(String slug, String owner, String repo, String kind) {

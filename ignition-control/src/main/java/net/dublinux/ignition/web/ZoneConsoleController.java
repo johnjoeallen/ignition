@@ -68,9 +68,8 @@ public class ZoneConsoleController {
 
     @PostMapping("/z/repos")
     public String createRepo(@RequestParam(name = "z") String z,
-                             @RequestParam String name,
-                             @RequestParam(required = false) String priv) {
-        return back(z, zones.createRepo(require(z), name, "on".equals(priv)), "repo " + name + " created");
+                             @RequestParam String name) {
+        return back(z, zones.createRepo(require(z), name), "repo " + name + " created");
     }
 
     @PostMapping("/z/repos/release")

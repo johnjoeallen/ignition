@@ -64,6 +64,10 @@ public class ForgejoClient {
         return send(slug, "PUT", path, body);
     }
 
+    public Response patch(String slug, String path, Map<String, ?> body) {
+        return send(slug, "PATCH", path, body);
+    }
+
     public Response delete(String slug, String path) {
         return send(slug, "DELETE", path, null);
     }
