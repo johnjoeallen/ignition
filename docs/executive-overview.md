@@ -77,8 +77,8 @@ Ignition is built around four properties that only matter once the team count is
 large:
 
 **1. Hard isolation, not politeness.**
-Every team gets a **zone** — its own git, CI, build engine, images, and
-network. One zone cannot see, reach, or disrupt another — not by convention, by
+Every team gets its own fully isolated stack — its own git, CI, build engine,
+images, and network. One team cannot see, reach, or disrupt another — not by convention, by
 construction. That gives you failure containment (one team's runaway build or
 bad migration never touches another), a clean identical starting point for
 everyone, and quota-fenced capacity so no team can starve the rest. It also
@@ -87,15 +87,15 @@ without writing eighty exceptions — but the isolation earns its keep even when
 nobody's asking for it.
 
 **2. Self-service, and delegated.**
-Standing up a zone is one click in the platform console and takes seconds, not
+Standing up a team is one click in the platform console and takes seconds, not
 a ticket — a scheduler places it on whichever host has room. And the team
-lead is their zone's admin: they add teammates and create repos themselves,
+lead is their team's admin: they add teammates and create repos themselves,
 through a scoped surface, without coming back to the platform team. The
 marginal cost of one more team is close to zero.
 
 **3. Real deployments, not screenshots.**
 Every app a team ships is live at `https://<app>.apps.<team>.<event-domain>/`.
-The team lead clicks **Release** in their zone console and it builds and deploys itself;
+The team lead clicks **Release** in their team console and it builds and deploys itself;
 every app is also wired to reload automatically when its image changes. One
 team can run several. Stakeholders engage with **working software** during
 judging. The best ideas leave the event as a running URL and a git repo —
@@ -106,23 +106,23 @@ A planned **services catalogue** extends this. A team's own infrastructure —
 its database, its cache — ships in its app. The catalogue covers the
 *org-standard* services teams would otherwise fake or wait on: a card-art
 lookup, a rewards engine, a payments sandbox, an internal data API. One click
-adds one to a zone, as a blessed mock or as a *keyed proxy* to the real
+adds one to a team, as a blessed mock or as a *keyed proxy* to the real
 service. The proxy holds an org-issued credential the platform meters and
-revokes per zone, so participants build against real systems without a real key
+revokes per team, so participants build against real systems without a real key
 ever landing on a laptop or in a repo.
 
 **4. Deterministic teardown.**
-Every resource is namespaced per zone; teardown is a single, complete
-operation, and an idle sweeper reclaims zones that go quiet. The event leaves
+Every resource is namespaced per team; teardown is a single, complete
+operation, and an idle sweeper reclaims teams that go quiet. The event leaves
 **no residue** — no leaked containers, no creeping spend, no "what is this
 from?" six months later.
 
 ## The operating posture
 
 - **A handful of hosts, one control plane.** Register each host as a *node*;
-  zones are scheduled across them by free capacity. No Kubernetes to stand up
+  teams are scheduled across them by free capacity. No Kubernetes to stand up
   and staff — one small Java service, compose templates, and a few hosts.
-- **Predictable footprint.** Per-zone CPU and memory quotas are set in one
+- **Predictable footprint.** Per-team CPU and memory quotas are set in one
   place; the console shows allocation vs. capacity per node. Adding a node is
   one form.
 - **No new vendor.** Forgejo (community-governed, FOSS), Docker, Traefik, and
@@ -138,7 +138,7 @@ isolated forge + CI + build sandbox + a routed live app per team, provisioned
 and reclaimed on demand.
 
 **It is not** a permanent internal developer platform, a replacement for
-production CI/CD, or a general-purpose orchestrator. It schedules zones across
+production CI/CD, or a general-purpose orchestrator. It schedules teams across
 a handful of nodes for the length of an event and no more. Ideas that graduate
 move onto the organisation's real platform — Ignition's job is to get them to
 the point of being worth graduating.

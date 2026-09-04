@@ -137,7 +137,7 @@ ignition.classesarecode.net.     A   <PUBLIC_IP>     # optional: the bare apex
 ```
 
 One record covers every depth (the bare apex itself, `git.<slug>.…`,
-`x.apps.<slug>.…`) — provisioning a zone adds no DNS. The certificate from
+`x.apps.<slug>.…`) — provisioning a team adds no DNS. The certificate from
 part 1 is unaffected (DNS-01 doesn't care where the `A` record points).
 
 ---
@@ -329,7 +329,7 @@ routes through nginx for real.
 
 ---
 
-## Step 7 — provision a zone and deploy an app
+## Step 7 — provision a team and deploy an app
 
 In the console (`https://ignition.classesarecode.net/`):
 
@@ -342,18 +342,18 @@ In the console (`https://ignition.classesarecode.net/`):
    hostname, it's the same one console) add them as a team admin. They sign in
    with email + password like everyone else; their role scopes what they see.
 
-Each zone auto-requests its own `*.quantum-badgers.ignition.classesarecode.net`
+Each team auto-requests its own `*.quantum-badgers.ignition.classesarecode.net`
 + `*.apps.quantum-badgers.ignition.classesarecode.net` cert (two labels below
 the apex).
 
-**Deploy an app** — in that zone's Forgejo
+**Deploy an app** — in that team's Forgejo
 (`https://git.quantum-badgers.ignition.classesarecode.net/`):
 
 1. A repo with a `Dockerfile` and `.forgejo/workflows/deploy.yml`
    (copy [`examples/deploy.yml`](examples/deploy.yml)).
 2. Repo vars / secrets: `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
    `DEPLOY_TOKEN`, optionally `FORGEJO_TOKEN`.
-3. **Zone console → Repositories → Release** — `ignition-control` reads the
+3. **Team console → Repositories → Release** — `ignition-control` reads the
    commits since the last tag, picks the semver bump (Conventional Commits;
    dropdown overrides), tags `vX.Y.Z` on `main`; the tag builds, pushes, deploys.
 4. Live at `https://<APP_NAME>.apps.quantum-badgers.ignition.classesarecode.net/`.
@@ -367,7 +367,7 @@ tag (~60s).
 ## Security notes
 
 - **No authentication anywhere but the consoles.** Every deployed app and every
-  zone's Forgejo web UI is open to anyone who resolves the domain.
+  team's Forgejo web UI is open to anyone who resolves the domain.
 - **`IGN_ADMIN_TOKEN` is total control** — the bearer / session cookie for the
   platform console. Rotate it after the demo.
 - **Client IPs:** `spitfire` sees every request from `10.44.0.1` (the tunnel).
@@ -375,7 +375,7 @@ tag (~60s).
   real sites' logs, add `proxy_protocol` to the nginx `proxy_pass` **and**
   `RemoteIPProxyProtocol On` (Apache ≥ 2.4.31) on the loopback listener.
 - **`traefik-public` is one flat network on `spitfire`** — a deployed app can
-  reach another zone's Forgejo by IP. Don't demo with untrusted app code.
+  reach another team's Forgejo by IP. Don't demo with untrusted app code.
 - **When done:** delete the `*.ignition.classesarecode.net` DNS record.
 
 ---
@@ -415,7 +415,7 @@ rm /etc/wireguard/wg0.conf
 | compose-template changes | none | task 4 |
 
 Moving to the target model later reuses everything here: same DNS record, same
-certificates, same zones.
+certificates, same teams.
 
 ---
 

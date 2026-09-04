@@ -27,7 +27,7 @@ One model. No per-topology choices, no hosted services.
   reaches them over a **WireGuard** link (`ignition-control` adds each node as a
   peer at registration). Everything behind the edge is **plain HTTP** — the
   private link is the confidentiality boundary.
-- Every zone's `traefik-public` / `zone-<slug>` / DinD network is Docker-local
+- Every team's `traefik-public` / `zone-<slug>` / DinD network is Docker-local
   on its node, with no route out.
 
 ## DNS — pre-registered, once
@@ -38,8 +38,8 @@ Set up **before** any event, never touched again:
   and let it run a tiny authoritative DNS (CoreDNS / Technitium). It answers a
   wildcard `*.<BASE_DOMAIN>  →  <controller-public-IP>` at any depth (RFC 4592),
   so `<BASE_DOMAIN>` itself, `git.qb.<BASE_DOMAIN>`, and
-  `x.apps.qb.<BASE_DOMAIN>` all resolve to the controller with **no per-zone
-  record**. Provisioning a zone adds zero DNS.
+  `x.apps.qb.<BASE_DOMAIN>` all resolve to the controller with **no per-team
+  record**. Provisioning a team adds zero DNS.
 - Or, if you'd rather not delegate: pre-register `*.<BASE_DOMAIN>  A  <controller>`
   in your existing DNS and hand the controller a DNS-provider API token so it
   can still do the ACME challenge.
@@ -55,7 +55,7 @@ The edge obtains certs from an ACME CA (Let's Encrypt, or your own `step-ca` via
 
 - one `*.<BASE_DOMAIN>` cert (covers `<BASE_DOMAIN>` and every single-label
   name), plus
-- per zone, `*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` (cert
+- per team, `*.<slug>.<BASE_DOMAIN>` + `*.apps.<slug>.<BASE_DOMAIN>` (cert
   wildcards are single-label, so these are two labels deep). `ignition-control`
   requests them as it provisions, alongside the router config.
 
@@ -71,7 +71,7 @@ session).
 
 ## SSO — one gateway, no software on the dev machine
 
-Every **browser** request — the platform console, the zone console, Forgejo's
+Every **browser** request — the platform console, the team console, Forgejo's
 web UI (PRs, CI logs, Actions), and the deployed apps — passes through one
 `forward-auth` gateway at the edge that redirects to your IdP. A developer
 needs only a browser and a corporate login; nothing is installed on their
@@ -92,7 +92,7 @@ HTTPS. Forgejo SSH stays disabled.
 
 ## Per-app visibility
 
-The deploy payload and the zone console carry a `visibility`:
+The deploy payload and the team console carry a `visibility`:
 
 | `visibility` | Behind the SSO gateway? | Reachable by |
 |---|---|---|

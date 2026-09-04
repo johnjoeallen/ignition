@@ -83,7 +83,7 @@ Watch the first cert attempt — if Joker's SVC endpoint won't create a *nested*
 is dedicated, so hand *just* its DNS to a provider with a proper free API and
 never touch Joker for the demo again:
 
-1. Create the zone `ignition.classesarecode.net` at **[deSEC.io](https://desec.io)**
+1. Create the team `ignition.classesarecode.net` at **[deSEC.io](https://desec.io)**
    (free, DNS-only, first-class Traefik support) or Cloudflare; get an API token.
 2. At Joker, add `NS` records delegating the subdomain:
    ```
@@ -120,15 +120,15 @@ On the **first** start it has no accounts, so it logs a one-time **setup code**
 email and a password, and that creates the **platform admin**. After that,
 `/setup` is gone and you sign in with email + password.
 
-`IGN_SECRET_KEY` (32 bytes, base64) encrypts the per-zone credentials in
+`IGN_SECRET_KEY` (32 bytes, base64) encrypts the per-team credentials in
 Postgres — keep it with your backups.
 
-### Nodes, zones, apps
+### Nodes, teams, apps
 
 - **node** — a machine that can run team stacks. Here there is exactly one:
   `spitfire` itself, registered with the endpoint `local` ("the Docker on this
   same box").
-- **zone** — one team's fully isolated stack: its own Forgejo (git + CI +
+- **team** — a fully isolated stack: its own Forgejo (git + CI +
   container registry), a private Docker-in-Docker build engine, a CI runner.
   Identified by a **slug** like `quantum-badgers`. *(Created in part 2.)*
 - **app** — a container a team deploys from its repo. *(Part 2.)*
@@ -270,7 +270,7 @@ Ignition runs on `spitfire` and the platform console works from your LAN with a
 real certificate. The stack configuration is final — **nothing here changes in
 part 2.**
 
-**Provisioning a zone is deliberately left for [part 2](demo-2-remote-access.md).**
+**Provisioning a team is deliberately left for [part 2](demo-2-remote-access.md).**
 It makes `ignition-control` talk to the team's Forgejo over its public name
 (`git.<slug>.ignition.classesarecode.net`), and CI pushes images to that same
 name — both need the public path that part 2 builds.
