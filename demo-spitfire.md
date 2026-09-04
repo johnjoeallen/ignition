@@ -5,9 +5,10 @@ door; `spitfire` on your LAN runs everything.
 
 - **`hetzner`** — public, an **access point** only: a WireGuard listener plus an
   `nft` rule that forwards the demo's `:80` / `:443` straight to `spitfire`. It
-  terminates nothing and holds no Ignition config. The box already runs **Apache
-  on its main IP** for other sites, so the demo is given its **own second IP**
-  and Apache is never touched.
+  terminates nothing and holds no Ignition config. The box already runs **web
+  (`:80`/`:443`), mail (`:143`, …) and SSH on its main IP**, so the demo is
+  given its **own second IP** and none of those are touched — see
+  [Step 2](#step-2--hetzner-root-server-demo-ip-and-firewall).
 - **`spitfire`** — one box on your LAN, behind NAT, **no inbound**. Runs the
   whole Ignition stack: the edge Traefik (TLS + ACME), `ignition-control`, and
   every zone and app.
@@ -159,69 +160,117 @@ ping -c3 10.44.0.1                  # from spitfire
 
 ---
 
-## Step 2 — hetzner: the demo IP and the firewalls
+## Step 2 — hetzner root server: demo IP and firewall
 
-### 1. Get the second IP
+The box already serves `:80`, `:443`, `:143` and SSH on `<PUBLIC_IP>`. Nothing
+below edits any existing service, IP binding, or firewall rule.
 
-Apache owns `<PUBLIC_IP>`; the demo gets its own address so Apache's config is
-never edited.
+### Why this is safe by construction
 
-- **Hetzner Cloud**: *Console → Floating IPs → Create* an IPv4, assign it to the
-  server (~€1/mo). (A Cloud server has exactly one *primary* IPv4 — a second
-  routable v4 is a **Floating IP**.)
-- **Hetzner dedicated / root server**: order an *additional IP* (single IP, not
-  a subnet) in Robot.
+- The demo lives on a **separate IP** (`<DEMO_IP>`). Every existing service
+  keeps listening on `<PUBLIC_IP>` exactly as now.
+- The forwarding rule is its **own nftables table** (`ignition_demo`). nft
+  tables are independent — loading or deleting one cannot alter or remove a
+  rule in another.
+- Its `prerouting` rule matches **only `ip daddr <DEMO_IP>` tcp dport 80/443**.
+  A packet to `<PUBLIC_IP>:80` / `:443` / `:143` / `:22` never matches it and is
+  handled exactly as today.
+
+The **one** unavoidable change is an inbound `udp/51820` accept for the
+WireGuard listener — and only if your host firewall has a default-drop input
+policy. Everything else is additive and isolated.
+
+### 1. Additional IP (Robot)
+
+Order a **single additional IPv4** for the server (Robot → *IPs* → *Order additional IP*).
+Hetzner routes it to your server's main IP — no separate MAC needed for host use.
+Note whether Robot shows it as *same subnet as the main IP* (usual — bind as
+`/32`) or *separate subnet* (it will also give a gateway; see Hetzner's "Additional
+IP addresses" doc for the `pointopoint` form).
 
 ### 2. Bind it on Debian
 
-Hetzner routes the address to your server but the OS won't add it by itself.
+Add the address alongside the existing one — don't replace anything.
 
 ```ini
-# /etc/systemd/network/10-demo-ip.network.d/override.conf   (systemd-networkd)
+# /etc/systemd/network/<existing-file>.network.d/demo-ip.conf   (systemd-networkd)
 [Network]
 Address=<DEMO_IP>/32
 ```
 ```sh
-systemctl restart systemd-networkd
+networkctl reload && networkctl reconfigure <iface>
 ```
 
-If the box uses `ifupdown` instead (`/etc/network/interfaces`):
+`ifupdown` box instead:
 
 ```
 # /etc/network/interfaces.d/60-demo-ip
-up   ip addr add <DEMO_IP>/32 dev eth0
-down ip addr del <DEMO_IP>/32 dev eth0
+up   ip addr add <DEMO_IP>/32 dev <iface>
+down ip addr del <DEMO_IP>/32 dev <iface>
+```
+```sh
+ip addr add <DEMO_IP>/32 dev <iface>      # apply now, no restart of the main iface
 ```
 
-Verify: `ip addr show eth0` lists **both** `<PUBLIC_IP>` and `<DEMO_IP>`. From
-another host: `ping <DEMO_IP>`.
+Verify from another host: `ping <DEMO_IP>`, and `curl -I http://<DEMO_IP>` still
+reaches **Apache** at this point (nothing forwards yet). Existing services
+unaffected — re-check `https://<your-site>` and IMAP.
 
-### 3. Hetzner Cloud Firewall (if one is attached)
+### 3. Hetzner Robot firewall (only if you use it)
 
-A Cloud Firewall is **default-deny inbound** — attaching one to a box that
-currently has none will cut off Apache and SSH. If the server already has one,
-**add** to it:
+Dedicated servers can have Hetzner's **stateless** hardware firewall (Robot →
+*Firewall*). If yours is **not** active, skip this — don't activate it now.
 
-| direction | port | source |
-|---|---|---|
-| in | `443/tcp`, `80/tcp` | `0.0.0.0/0`, `::/0` |
-| in | `51820/udp` | `0.0.0.0/0` (or just `spitfire`'s public IP if it's static) |
+If it **is** active, its template already lists your `:80` / `:443` / `:143` /
+SSH rules. **Add**, keeping all existing rows:
 
-Keep every rule the existing services and your SSH already rely on.
+| version | protocol | dst port | action |
+|---|---|---|---|
+| IPv4 | `udp` | `51820` | accept |
 
-If the server has **no** Cloud Firewall, leave it that way — don't add one just
-for this. The host nftables below is enough.
+(It filters all the server's IPs; the `:80`/`:443` rows you already have cover
+`<DEMO_IP>` too. Stateless → make sure your template has the usual
+`tcp flags` established/`ack` accept row it needs, which it will if SSH works today.)
 
 ### 4. Host nftables
 
-- The `ignition_demo` NAT table from Step 1 loads with `wg0` — nothing else to do
-  for the forwarding itself.
-- `51820/udp` inbound: only needed as an explicit rule if the host firewall has
-  an `input` `drop` policy. Then, in the existing filter table's input chain:
-  `udp dport 51820 accept`.
-- `forward` `drop` policy: add the two accepts shown in Step 1.
-- Persist whatever you add (`nft list ruleset > /etc/nftables.conf`, or a file
-  under `/etc/nftables.d/` if your `/etc/nftables.conf` includes that dir).
+First look at what's there:
+
+```sh
+nft list ruleset | less
+nft -a list ruleset | grep -E 'hook (input|forward)'      # note any 'policy drop'
+```
+
+**Open a second SSH session and leave it connected** before the next step, plus
+a dead-man's rollback:
+
+```sh
+# reboots in 10 min unless you cancel with `shutdown -c` after confirming access
+shutdown -r +10 "firewall change rollback"
+```
+
+- **`ignition_demo` table** (from Step 1) — loads with `wg0`. Isolated; nothing
+  to reconcile with existing tables.
+- **`ip_forward`** — `/etc/sysctl.d/99-ignition-demo.conf` (Step 1). Check it
+  doesn't fight an existing `net.ipv4.ip_forward=0` in another file; the highest
+  numbered file wins, `99-` is high.
+- **Input policy `drop`?** Add just the one rule to the existing table/chain
+  (append, don't rewrite the file):
+
+  ```sh
+  nft add rule inet <table> <input-chain> udp dport 51820 accept
+  ```
+- **Forward policy `drop`?** Add the demo flow to the existing forward chain:
+
+  ```sh
+  nft add rule inet <table> <forward-chain> ip daddr 10.44.0.11 tcp dport { 80, 443 } accept
+  nft add rule inet <table> <forward-chain> ip saddr 10.44.0.11 ct state established,related accept
+  ```
+
+Confirm SSH still works in a fresh connection, then `shutdown -c`. Persist:
+append the same lines to whatever file feeds `nft` at boot (often
+`/etc/nftables.conf` or a file in `/etc/nftables.d/`), or
+`nft list ruleset > /etc/nftables.conf` if that's how the box already does it.
 
 `spitfire` needs **no** inbound rules and **no** router port-forwarding — it
 dials out.
