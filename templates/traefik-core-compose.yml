@@ -83,16 +83,24 @@ services:
       - --certificatesresolvers.le.acme.storage=/acme/acme.json
       - --certificatesresolvers.le.acme.dnschallenge=true
       - --certificatesresolvers.le.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:?set ACME_DNS_PROVIDER}
-      # Lego (Traefik's ACME client) checks every authoritative nameserver
-      # itself before ever telling the CA to validate — belt-and-braces, but
-      # some providers (Joker, notably) are slow/flaky enough that this local
-      # check times out even with a generous *_PROPAGATION_TIMEOUT, despite
-      # the record being genuinely live and consistent on every nameserver by
-      # the time you check by hand. Setting ACME_DISABLE_PROPAGATION_CHECK=true
-      # skips Lego's own check and lets the CA's validation (independent,
-      # multi-vantage-point, its own retries) be the sole judge instead —
-      # default false, since it's a real safety check for providers that
-      # don't need this workaround.
+      # Lego (Traefik's ACME client) checks propagation itself before ever
+      # telling the CA to validate — belt-and-braces, but by default it does
+      # that check through *this container's own resolver* (Docker's embedded
+      # DNS at 127.0.0.11, per resolv.conf), not the domain's real
+      # authoritative nameservers. If that resolver is itself slow/flaky/
+      # negative-caching (seen live against Joker: every authoritative
+      # nameserver agrees on the TXT record when queried directly, but the
+      # container's own resolver never picks it up), the check spins for the
+      # full *_PROPAGATION_TIMEOUT no matter how correct the DNS actually is.
+      # Pointing it at real public resolvers instead fixes that at the root —
+      # prefer this over ACME_DISABLE_PROPAGATION_CHECK below, which throws
+      # the whole safety check away rather than fixing what it's checking.
+      - --certificatesresolvers.le.acme.dnschallenge.resolvers=${ACME_DNS_RESOLVERS:-1.1.1.1:53,8.8.8.8:53}
+      # Escape hatch: skips Lego's own check entirely and lets the CA's
+      # validation (independent, multi-vantage-point, its own retries) be the
+      # sole judge instead. Default false — try ACME_DNS_RESOLVERS above
+      # first; only reach for this if a provider's propagation is genuinely
+      # too slow for any resolver to observe in time.
       - --certificatesresolvers.le.acme.dnschallenge.disablepropagationcheck=${ACME_DISABLE_PROPAGATION_CHECK:-false}
       # ACME_CA_SERVER: leave unset for Let's Encrypt, or set to a self-hosted
       # step-ca directory URL for certs from your own CA.
