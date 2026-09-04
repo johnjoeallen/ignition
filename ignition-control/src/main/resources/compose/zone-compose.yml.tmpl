@@ -57,6 +57,7 @@ services:
       traefik.http.routers.zone-${ZONE_SLUG}-git.rule: Host(`git.${ZONE_SLUG}.${BASE_DOMAIN}`)
       traefik.http.routers.zone-${ZONE_SLUG}-git.entrypoints: websecure
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls: "true"
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.certresolver: le
       # git.<slug> is two labels deep — this zone gets its own *.<slug> cert.
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].main: ${ZONE_SLUG}.${BASE_DOMAIN}
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].sans: "*.${ZONE_SLUG}.${BASE_DOMAIN},*.apps.${ZONE_SLUG}.${BASE_DOMAIN}"
