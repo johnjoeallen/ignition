@@ -244,10 +244,13 @@ public class ZoneService {
                 ensureOrgMembership(slug, username);
                 zones.putSecret(slug, emailKey, username);
                 // The account predates us knowing its password (this ignition-control
-                // never set one it kept, or the row is stale) — Forgejo won't hand back
-                // an existing password either way, so the only way to have one on file
-                // to show is to set a fresh one now.
-                if (!zones.hasSecret(slug, "git_pw_" + username)) {
+                // never set one it kept, or the row is stale — including a row this
+                // user's key can no longer decrypt, e.g. written before per-user
+                // encryption existed) — Forgejo won't hand back an existing password
+                // either way, so the only way to have one on file to show is to set a
+                // fresh one now. userSecret(), not hasSecret(): a row can exist and
+                // still not be readable with this user's key.
+                if (zones.userSecret(slug, "git_pw_" + username, userId).isBlank()) {
                     resetGitPassword(slug, username, userId);
                 }
                 ensurePat(slug, username, userId);
@@ -271,10 +274,21 @@ public class ZoneService {
         return username;
     }
 
-    /** Mints a personal access token for a git login if one isn't already stored. Self-healing, like everything else here. */
+    /**
+     * Mints a personal access token for a git login if one isn't already
+     * stored and readable. Self-healing, like everything else here — checked
+     * by actually decrypting (userSecret), not just row-presence (hasSecret):
+     * a row can exist and still not be readable with this user's key, e.g. if
+     * it predates per-user encryption. In that case the old token still works
+     * fine for git (we just can't show it), so it's deleted and replaced
+     * rather than left as silent clutter alongside the new one.
+     */
     private void ensurePat(String slug, String username, java.util.UUID userId) {
-        if (zones.hasSecret(slug, "git_pat_" + username)) {
+        if (!zones.userSecret(slug, "git_pat_" + username, userId).isBlank()) {
             return;
+        }
+        if (zones.hasSecret(slug, "git_pat_" + username)) {
+            forgejo.delete(slug, "/users/" + username + "/tokens/ignition?sudo=" + username);
         }
         // sudo: the bot is a Forgejo site admin (see ProvisioningService), so this
         // executes as `username` rather than as the bot itself.

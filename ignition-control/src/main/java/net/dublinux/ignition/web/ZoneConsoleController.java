@@ -77,6 +77,18 @@ public class ZoneConsoleController {
                 .toList();
 
         List<ZoneAccessService.MemberView> members = access.membersOf(slug);
+
+        // Self-heal: a membership row doesn't always come through addMember()
+        // below (the zone creator's ZONE_ADMIN row, in particular, is written
+        // straight into zone_member by ProvisioningService) — so it's not
+        // guaranteed the viewer ever had git access provisioned. Idempotent,
+        // like everything else here; cheap enough to just always check on load.
+        currentUser.get().ifPresent(me -> {
+            if (members.stream().anyMatch(m -> m.userId().equals(me.id()))) {
+                zones.ensureGitAccess(slug, me.email(), me.id());
+            }
+        });
+
         Map<String, String> gitUsernames = members.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         ZoneAccessService.MemberView::email, m -> zones.gitUsername(slug, m.email())));

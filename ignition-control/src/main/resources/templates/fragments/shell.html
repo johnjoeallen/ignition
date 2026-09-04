@@ -5,15 +5,19 @@
     <div class="d-flex ign-shell">
 
       <div class="offcanvas-md offcanvas-start ign-sidebar" tabindex="-1" id="ignSidebar">
-        <div class="offcanvas-header ign-sidebar-brand">
-          <a class="brand" href="/">
-            <span class="ign-brand-mark"><img src="/img/mark.svg" alt="" width="26" height="26"></span>
-            <span>Ignition</span>
-          </a>
-          <button type="button" class="btn-close btn-close-white d-md-none"
+        <!-- Bootstrap hides .offcanvas-header at the md+ breakpoint (it's the
+             mobile slide-over's title bar) — the brand has to live in
+             .offcanvas-body to stay visible once this becomes a static
+             desktop sidebar. This close button only ever shows below md. -->
+        <div class="offcanvas-header d-md-none">
+          <button type="button" class="btn-close btn-close-white ms-auto"
                   data-bs-dismiss="offcanvas" data-bs-target="#ignSidebar" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body d-flex flex-column p-0">
+          <a class="brand ign-sidebar-brand" href="/">
+            <span class="ign-brand-mark"><img src="/img/mark.svg" alt="" width="26" height="26"></span>
+            <span>Ignition</span>
+          </a>
           <nav class="nav flex-column flex-grow-1 pt-2">
             <a th:if="${isPlatformAdmin}" class="nav-link" th:classappend="${active == 'teams'} ? ' active'" href="/">
               <i class="bi bi-people"></i> Teams</a>

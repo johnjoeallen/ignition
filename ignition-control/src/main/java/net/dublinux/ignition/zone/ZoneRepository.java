@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class ZoneRepository {
+
+    private static final Logger log = LoggerFactory.getLogger(ZoneRepository.class);
 
     private final ZoneEntityRepository zoneRepo;
     private final ZoneSecretRepository secretRepo;
@@ -82,10 +86,23 @@ public class ZoneRepository {
 
     // --- per-user secrets (git password / PAT) — see UserSecretCipher ---------
 
-    /** Decrypted with a key derived from {@code userId}, not the shared zone-secret key. */
+    /**
+     * Decrypted with a key derived from {@code userId}, not the shared
+     * zone-secret key. Returns {@code ""} rather than throwing if that fails
+     * (wrong/rotated id, or a row written before this per-user scheme
+     * existed) — a page rendering a whole member list shouldn't 500 because
+     * one row can't be read back; the caller just treats it as unset.
+     */
     public String userSecret(String slug, String name, UUID userId) {
         return secretRepo.findByZoneSlugAndName(slug, name)
-                .map(s -> userCipher.decrypt(s.value(), userId))
+                .map(s -> {
+                    try {
+                        return userCipher.decrypt(s.value(), userId);
+                    } catch (RuntimeException e) {
+                        log.warn("could not decrypt user secret {}/{} for {}: {}", slug, name, userId, e.getMessage());
+                        return "";
+                    }
+                })
                 .orElse("");
     }
 
