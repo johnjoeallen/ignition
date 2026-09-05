@@ -527,7 +527,8 @@ public class ZoneService {
 
     // --- Forgejo repos -----------------------------------------------------
 
-    public record RepoView(String owner, String name, String fullName, String htmlUrl, String cloneUrl, String version) {}
+    public record RepoView(String owner, String name, String fullName, String htmlUrl, String cloneUrl,
+                           String description, String version) {}
 
     /** Every repo in the zone's org — all repos are org-owned, so every zone user can see them. */
     public List<RepoView> repos(String slug) {
@@ -538,18 +539,34 @@ public class ZoneService {
         List<RepoView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode r : res.body()) {
-                String owner = slug;
                 String name = r.path("name").asText("");
-                int[] v = ReleaseService.latestSemver(
-                        forgejo.get(slug, "/repos/%s/%s/tags?limit=50".formatted(owner, name)).body());
-                String version = (v[0] == 0 && v[1] == 0 && v[2] == 0)
-                        ? "no releases yet" : "v%d.%d.%d".formatted(v[0], v[1], v[2]);
                 protectMainBranch(slug, name); // self-heal: catches a repo that predates this protection
-                out.add(new RepoView(owner, name, r.path("full_name").asText(""),
-                        r.path("html_url").asText(""), r.path("clone_url").asText(""), version));
+                out.add(toRepoView(slug, r));
             }
         }
         return out;
+    }
+
+    /** One repo's own info — for its management page, without fetching every repo in the org to get it. */
+    public RepoView repoInfo(String slug, String repo) {
+        var res = forgejo.get(slug, "/repos/%s/%s".formatted(slug, repo));
+        return toRepoView(slug, res.body());
+    }
+
+    private RepoView toRepoView(String slug, JsonNode r) {
+        String owner = slug;
+        String name = r.path("name").asText("");
+        int[] v = ReleaseService.latestSemver(
+                forgejo.get(slug, "/repos/%s/%s/tags?limit=50".formatted(owner, name)).body());
+        String version = (v[0] == 0 && v[1] == 0 && v[2] == 0)
+                ? "no releases yet" : "v%d.%d.%d".formatted(v[0], v[1], v[2]);
+        return new RepoView(owner, name, r.path("full_name").asText(""), r.path("html_url").asText(""),
+                r.path("clone_url").asText(""), r.path("description").asText(""), version);
+    }
+
+    /** Repo description is a plain Forgejo repo setting — the bot's own token is enough, no PAT needed. */
+    public ForgejoClient.Response updateRepoDescription(String slug, String repo, String description) {
+        return forgejo.patch(slug, "/repos/" + slug + "/" + repo, Map.of("description", description));
     }
 
     // --- issues / branches / pull requests, as the calling user's own PAT ---

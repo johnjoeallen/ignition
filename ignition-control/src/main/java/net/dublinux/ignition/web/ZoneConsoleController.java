@@ -50,7 +50,7 @@ public class ZoneConsoleController {
     }
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
-    public record AppRow(String name, String htmlUrl, String cloneUrl, String version, boolean deployed,
+    public record AppRow(String name, String description, String version, boolean deployed,
                          String image, String url, String deployId) {}
 
     @GetMapping("/teams/{slug}")
@@ -62,7 +62,7 @@ public class ZoneConsoleController {
         List<AppRow> rows = zones.repos(slug).stream()
                 .map(r -> {
                     DeployedApp d = deployed.get(r.name());
-                    return new AppRow(r.name(), r.htmlUrl(), r.cloneUrl(), r.version(), d != null,
+                    return new AppRow(r.name(), r.description(), r.version(), d != null,
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
                             d == null ? null : d.deployId());
@@ -234,10 +234,21 @@ public class ZoneConsoleController {
                 })
                 .toList();
 
+        ZoneService.RepoView info = zones.repoInfo(slug, repo);
+
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
+        model.addAttribute("repoInfo", info);
         model.addAttribute("issueRows", issueRows);
         return "repo";
+    }
+
+    @PostMapping("/teams/{slug}/repos/{repo}/description")
+    public String updateDescription(@PathVariable String slug, @PathVariable String repo,
+                                    @RequestParam(required = false, defaultValue = "") String description) {
+        var res = zones.updateRepoDescription(slug, repo, description);
+        return redirectRepo(slug, repo, res.ok() ? "description updated"
+                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
     }
 
     /** Opening an issue creates its branch too — see {@link net.dublinux.ignition.zone.ZoneService#createIssue}. */

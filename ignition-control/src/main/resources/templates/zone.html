@@ -47,43 +47,25 @@
       </form>
       <div class="table-card mb-4">
         <table class="table table-hover mb-0">
-          <thead><tr><th>app</th><th>repo</th><th>version</th><th>live</th><th></th></tr></thead>
+          <thead><tr><th>app</th><th>description</th><th>version</th><th></th></tr></thead>
           <tbody>
             <tr th:each="a : ${apps}">
               <td>
                 <a th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${a.name})}" th:text="${a.name}">flora</a>
               </td>
-              <td class="d-flex align-items-center gap-1">
-                <span th:text="${a.name}">flora</span>
-                <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
-                        th:attr="data-copy=${a.cloneUrl}" title="Copy clone URL">
-                  <i class="bi bi-clipboard"></i>
-                </button>
-                <a th:href="${a.htmlUrl}" class="btn btn-sm btn-link p-0" title="Open in Forgejo">
-                  <i class="bi bi-box-arrow-up-right"></i>
-                </a>
-              </td>
-              <td th:text="${a.version}">v1.2.3</td>
+              <td class="text-body-secondary" th:text="${#strings.isEmpty(a.description)} ? '—' : ${a.description}">a nice app</td>
               <td>
-                <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.image}">image</a>
-                <span th:unless="${a.deployed}" class="text-body-secondary">not deployed yet</span>
+                <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.version}">v1.2.3</a>
+                <span th:unless="${a.deployed}" th:text="${a.version}">no releases yet</span>
               </td>
               <td class="text-end text-nowrap">
-                <form method="post" th:action="@{/teams/{slug}/repos/release(slug=${zoneSlug})}" class="d-inline">
-                  <input type="hidden" name="repo" th:value="${a.name}">
-                  <select name="bump" class="form-select form-select-sm d-inline-block w-auto">
-                    <option value="auto">auto (from commits)</option>
-                    <option>patch</option><option>minor</option><option>major</option>
-                  </select>
-                  <button class="btn btn-sm btn-outline-secondary">Release</button>
-                </form>
                 <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-danger">stop</button>
                 </form>
               </td>
             </tr>
-            <tr th:if="${apps.isEmpty()}"><td colspan="5" class="text-body-secondary text-center py-4">no apps yet — create one above</td></tr>
+            <tr th:if="${apps.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">no apps yet — create one above</td></tr>
           </tbody>
         </table>
       </div>
