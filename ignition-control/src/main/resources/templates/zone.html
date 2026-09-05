@@ -9,52 +9,48 @@
       <div class="alert alert-success" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
 
       <div class="card mb-4">
-        <div class="card-body d-flex flex-column gap-2">
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="text-body-secondary small">Forgejo</span>
-            <a th:href="${zone.forgejoUrl + zoneSlug}" th:text="${zone.forgejoUrl + zoneSlug}">git…</a>
-          </div>
-          <div th:if="${myGitPassword != null}" class="d-flex justify-content-between align-items-center">
-            <span class="text-body-secondary small">Your password</span>
-            <span class="d-inline-flex align-items-center gap-1">
-              <code th:text="${myGitPassword}">••••••••</code>
-              <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
-                      th:attr="data-copy=${myGitPassword}" title="Copy password">
-                <i class="bi bi-clipboard"></i>
-              </button>
-              <form method="post" th:action="@{/teams/{slug}/members/reset-git-password(slug=${zoneSlug})}"
-                    class="d-inline"
-                    onsubmit="return confirm('Regenerate your git password? The old one stops working immediately.')">
-                <input type="hidden" name="userId" th:value="${currentUserId}">
-                <button class="btn btn-sm btn-link p-0" title="Regenerate password"><i class="bi bi-arrow-clockwise"></i></button>
-              </form>
-            </span>
-          </div>
-          <div th:if="${myGitPat != null}" class="d-flex justify-content-between align-items-center">
-            <span class="text-body-secondary small">Your PAT</span>
-            <span class="d-inline-flex align-items-center gap-1">
-              <code th:text="${myGitPat}" style="word-break:break-all">••••••••</code>
-              <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
-                      th:attr="data-copy=${myGitPat}" title="Copy PAT">
-                <i class="bi bi-clipboard"></i>
-              </button>
-              <form method="post" th:action="@{/teams/{slug}/members/reset-pat(slug=${zoneSlug})}"
-                    class="d-inline"
-                    onsubmit="return confirm('Regenerate your PAT? The old one stops working immediately.')">
-                <input type="hidden" name="userId" th:value="${currentUserId}">
-                <button class="btn btn-sm btn-link p-0" title="Regenerate PAT"><i class="bi bi-arrow-clockwise"></i></button>
-              </form>
-            </span>
-          </div>
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="text-body-secondary small">Node</span>
-            <span th:text="${zone.node} ?: '?'">node-1</span>
-          </div>
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="text-body-secondary small">Stack</span>
-            <code th:text="${stack}">—</code>
-          </div>
-          <form method="post" th:action="@{/teams/{slug}/runner/restart(slug=${zoneSlug})}" class="text-end">
+        <div class="card-body" style="display:grid;grid-template-columns:auto 1fr;column-gap:1.5rem;row-gap:.5rem;align-items:center;">
+          <span class="text-body-secondary small">Forgejo</span>
+          <a th:href="${zone.forgejoUrl + zoneSlug}" th:text="${zone.forgejoUrl + zoneSlug}">git…</a>
+
+          <span th:if="${myGitPassword != null}" class="text-body-secondary small">Your password</span>
+          <span th:if="${myGitPassword != null}" class="d-inline-flex align-items-center gap-1">
+            <code th:text="${myGitPassword}">••••••••</code>
+            <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
+                    th:attr="data-copy=${myGitPassword}" title="Copy password">
+              <i class="bi bi-clipboard"></i>
+            </button>
+            <form method="post" th:action="@{/teams/{slug}/members/reset-git-password(slug=${zoneSlug})}"
+                  class="d-inline"
+                  onsubmit="return confirm('Regenerate your git password? The old one stops working immediately.')">
+              <input type="hidden" name="userId" th:value="${currentUserId}">
+              <button class="btn btn-sm btn-link p-0" title="Regenerate password"><i class="bi bi-arrow-clockwise"></i></button>
+            </form>
+          </span>
+
+          <span th:if="${myGitPat != null}" class="text-body-secondary small">Your PAT</span>
+          <span th:if="${myGitPat != null}" class="d-inline-flex align-items-center gap-1">
+            <code th:text="${myGitPat}" style="word-break:break-all">••••••••</code>
+            <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
+                    th:attr="data-copy=${myGitPat}" title="Copy PAT">
+              <i class="bi bi-clipboard"></i>
+            </button>
+            <form method="post" th:action="@{/teams/{slug}/members/reset-pat(slug=${zoneSlug})}"
+                  class="d-inline"
+                  onsubmit="return confirm('Regenerate your PAT? The old one stops working immediately.')">
+              <input type="hidden" name="userId" th:value="${currentUserId}">
+              <button class="btn btn-sm btn-link p-0" title="Regenerate PAT"><i class="bi bi-arrow-clockwise"></i></button>
+            </form>
+          </span>
+
+          <span class="text-body-secondary small">Node</span>
+          <span th:text="${zone.node} ?: '?'">node-1</span>
+
+          <span class="text-body-secondary small">Stack</span>
+          <code th:text="${stack}">—</code>
+
+          <span></span>
+          <form method="post" th:action="@{/teams/{slug}/runner/restart(slug=${zoneSlug})}">
             <button class="btn btn-sm btn-outline-secondary">Restart runner</button>
           </form>
         </div>
