@@ -270,12 +270,18 @@ public class ZoneConsoleController {
             if (res.ok()) {
                 msg = "issue #" + number + "'s PR merged";
             } else if (res.status() == 405) {
-                // Forgejo computes mergeability asynchronously right after a PR
-                // opens (or certain pushes) — a merge attempt before that check
-                // finishes gets exactly this response. Transient, not a real
-                // failure; the fix is just "try again in a few seconds", not
-                // anything we can act on server-side.
-                msg = "Forgejo is still checking whether this PR can be merged — wait a few seconds and try again";
+                // Forgejo's merge endpoint returns this exact 405 for more than
+                // one underlying state, and doesn't distinguish them in the
+                // response: still computing mergeability right after the PR
+                // opened (transient — waiting resolves it), or a branch with no
+                // actual diff from main (permanent — Forgejo's own UI shows only
+                // "Close" for this one, never "Merge"; no amount of waiting
+                // fixes it). We can't tell which one this is from here, so
+                // don't promise it'll resolve on its own — point at the PR
+                // itself instead, where Forgejo's own UI does show which case it is.
+                msg = "Forgejo won't merge this yet (405) — open the PR itself to see why: "
+                        + "either it's still computing mergeability (wait and retry), or the branch "
+                        + "has no commits beyond main yet (push some, or just close it)";
             } else {
                 msg = "Forgejo said (%d): %s".formatted(res.status(), res.message());
             }
