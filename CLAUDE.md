@@ -243,6 +243,14 @@ command's stdout.
    Compose project `svc-<slug>-<name>`, torn down with the zone. Catalogue
    entries: compose template + a manifest (ports, env, secrets it needs, mock
    vs proxy).
+
+   **Controller-hosted variant.** A stateless catalogue entry (a sandbox API
+   proxy, a standing mock) doesn't need a per-zone instance — run it **once on
+   the controller** and expose it to every zone's apps (by name, reachable over
+   the same WireGuard path as the edge, no Traefik router). One org-held key,
+   one process, metered per zone at the proxy. Per-zone rendering stays for
+   entries that hold state or must be isolated. The manifest flag is
+   `scope: shared | per-zone`.
 4. **Wire up the single front door** (the architecture — `docs/exposure.md` and
    the Ingress section above; this task is the implementation). **The controller
    is the only public machine and the only place TLS terminates.** It runs the

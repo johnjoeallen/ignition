@@ -126,14 +126,24 @@ per-app approval. The best ideas leave the event as a running URL and a git
 repo — already deployed, already shareable — instead of a deck that needs a
 project to become real.
 
-A planned **services catalogue** extends this. A team's own infrastructure —
-its database, its cache — ships in its app. The catalogue covers the
-*org-standard* services teams would otherwise fake or wait on: a card-art
-lookup, a rewards engine, a payments sandbox, an internal data API. One click
-adds one to a team, as a blessed mock or as a *keyed proxy* to the real
-service. The proxy holds an org-issued credential the platform meters and
-revokes per team, so participants build against real systems without a real key
-ever landing on a laptop or in a repo.
+A planned **shared-services layer** has the controller host the services every
+team needs and no team should have to build. A team's *own* infrastructure —
+its database, its cache — ships in its app; the shared pieces are provided
+once, centrally, and reachable from any team's app by name:
+
+- **Sandbox API proxies.** The controller holds the org's test/sandbox API keys
+  and fronts each upstream service with a small proxy. An app calls the proxy by
+  name — the real key never enters a repo or a laptop — and the platform meters
+  and revokes it per team. Every team builds against real payment, mapping or
+  data sandboxes with nothing to hand out.
+- **Standing mock services.** Always-on, org-blessed fakes of what teams would
+  otherwise stub badly: a payments sandbox, a rewards engine, an internal data
+  API, a cryptographic signing service, an LLM gateway. One is there for every
+  team from the first minute; nobody re-implements it.
+
+Where a service has to hold per-team state, one click gives that team its own
+instance instead — but everything stateless is shared and costs nothing per
+team.
 
 **4. Deterministic teardown.**
 Every resource is namespaced per team; teardown is a single, complete

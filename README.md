@@ -166,7 +166,8 @@ The compose templates the service renders (`zone-compose.yml.tmpl`,
 - **No repo seeding** — the starter repo + repo vars/secrets are still set by
   hand per team.
 - **No services catalogue yet** — an app's own infra (Postgres, Redis) belongs
-  in its Dockerfile, but org-standard shared services (a card-art lookup, a
-  rewards engine, a payments sandbox) should be one click to add to a team,
-  either as a blessed mock or a keyed proxy to the real thing (`CLAUDE.md`,
-  task 5).
+  in its Dockerfile, but the shared services every team needs — standing mocks
+  (a payments sandbox, a rewards engine, a signing service, an LLM gateway) and
+  sandbox API proxies that hold the org's test keys so no app ever sees one —
+  should run once on the controller and be offered to every team (`CLAUDE.md`,
+  task 3).
