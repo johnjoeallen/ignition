@@ -291,17 +291,17 @@ sequenceDiagram
     participant FJ as zone Forgejo
     participant Edge as edge Traefik
 
-    Admin->>Ctl: POST /teams  { slug }
+    Admin->>Ctl: POST /teams { slug }
     Ctl->>Ctl: scheduler picks the node with most free CPU that fits
-    Ctl->>Edge: write the team's Traefik router snippet<br/>(cert SANs *.&lt;slug&gt; + *.apps.&lt;slug&gt;)
-    Edge-->>Edge: ACME DNS-01 → obtains the per-team cert
-    Ctl->>Node: docker compose -p zone-&lt;slug&gt; up -d forgejo dind
+    Ctl->>Edge: write the team's Traefik router snippet (cert SANs *.slug + *.apps.slug)
+    Edge-->>Edge: ACME DNS-01 obtains the per-team cert
+    Ctl->>Node: docker compose -p zone-slug up -d forgejo dind
     Ctl->>FJ: await /api/healthz healthy
     Ctl->>FJ: forgejo-cli actions register --secret (20-byte hex)
-    Ctl->>Node: compose up -d (runner) ; compose cp runner-config.yml ; restart runner
-    Ctl->>FJ: create ignition-bot admin ; mint all-scopes token
-    Ctl->>Ctl: encrypt & store zone secrets:<br/>runner-secret, forgejo_token, zone-token, deploy-token
-    Ctl-->>Admin: team ready (~1–2 min) — you are its admin
+    Ctl->>Node: compose up -d runner, compose cp runner-config.yml, restart runner
+    Ctl->>FJ: create ignition-bot admin, mint all-scopes token
+    Ctl->>Ctl: encrypt and store zone secrets (runner-secret, forgejo_token, zone-token, deploy-token)
+    Ctl-->>Admin: team ready in ~1-2 min, you are its admin
 ```
 
 State written (all in Postgres, secrets encrypted with `IGN_SECRET_KEY`):
@@ -321,13 +321,13 @@ sequenceDiagram
     participant Ctl as ignition-control
     participant FJ as zone Forgejo
 
-    Dev->>Ctl: POST /teams/&lt;slug&gt;/apps  { name, description }
-    Ctl->>FJ: POST /orgs/&lt;slug&gt;/repos  (private, auto_init)
-    Ctl->>FJ: seed .forgejo/workflows/deploy.yml, Dockerfile, nginx.conf, index.html
-    Ctl->>FJ: POST actions/variables  REGISTRY, CONTROL_URL, APP_NAME, APP_PORT, REGISTRY_USER
-    Ctl->>FJ: PUT  actions/secrets  DEPLOY_TOKEN, FORGEJO_TOKEN
-    Ctl->>FJ: enable branch protection on main (no direct push — PRs only)
-    Ctl-->>Dev: "clone it, push, then Release"
+    Dev->>Ctl: POST /teams/slug/apps { name, description }
+    Ctl->>FJ: POST /orgs/slug/repos (private, auto_init)
+    Ctl->>FJ: seed deploy.yml, Dockerfile, nginx.conf, index.html
+    Ctl->>FJ: POST actions/variables (REGISTRY, CONTROL_URL, APP_NAME, APP_PORT, REGISTRY_USER)
+    Ctl->>FJ: PUT actions/secrets (DEPLOY_TOKEN, FORGEJO_TOKEN)
+    Ctl->>FJ: enable branch protection on main (no direct push, PRs only)
+    Ctl-->>Dev: clone it, push, then Release
 ```
 
 Seeded into the repo:
@@ -376,25 +376,25 @@ sequenceDiagram
     autonumber
     participant Run as runner (job in DinD, network=host)
     participant DinD as zone DinD engine
-    participant Reg as zone Forgejo registry<br/>git.&lt;slug&gt;.&lt;domain&gt;
+    participant Reg as zone Forgejo registry (git.slug.domain)
     participant Ctl as ignition-control
     participant Node as spitfire Docker
     participant Edge as edge Traefik
 
     Note over Run: job image = code.forgejo.org/oci/docker:cli (bare Alpine + docker CLI)
     Run->>Run: apk add --no-cache nodejs curl
-    Run->>Reg: actions/checkout@v4  (needs node)
-    Run->>Reg: docker login -u ignition-bot  (FORGEJO_TOKEN, write:package)
-    Run->>DinD: docker build -t $REPO:$SHA -t $REPO:$TAG .
-    Run->>Reg: docker push $REPO:$SHA  then  docker push $REPO:$TAG
-    Run->>Ctl: POST $CONTROL_URL/deploy  { app, image: $REPO:$TAG, port }<br/>Authorization: Bearer $DEPLOY_TOKEN
-    Ctl->>Ctl: DeployTokenFilter: bearer → slug (constant-time match)
-    Ctl->>Ctl: reject unless image starts with git.&lt;slug&gt;.&lt;domain&gt;/
-    Ctl->>Node: docker login git.&lt;slug&gt;.&lt;domain&gt; -u ignition-bot (zone forgejo_token)
-    Ctl->>Node: docker compose -p app-&lt;slug&gt;-&lt;name&gt; up -d --pull always --remove-orphans
-    Node->>Reg: pull $REPO:$TAG   (now authenticated)
-    Node-->>Ctl: container up, labelled traefik.* + watchtower.enable=true
-    Ctl-->>Run: 200 { ok, url: https://&lt;name&gt;.apps.&lt;slug&gt;.&lt;domain&gt;/ }
+    Run->>Reg: actions/checkout@v4 (needs node)
+    Run->>Reg: docker login -u ignition-bot (FORGEJO_TOKEN, write:package)
+    Run->>DinD: docker build -t REPO:SHA -t REPO:TAG .
+    Run->>Reg: docker push REPO:SHA then docker push REPO:TAG
+    Run->>Ctl: POST CONTROL_URL/deploy { app, image REPO:TAG, port } + Bearer DEPLOY_TOKEN
+    Ctl->>Ctl: DeployTokenFilter maps bearer to slug (constant-time match)
+    Ctl->>Ctl: reject unless image starts with git.slug.domain/
+    Ctl->>Node: docker login git.slug.domain -u ignition-bot (zone forgejo_token)
+    Ctl->>Node: docker compose -p app-slug-name up -d --pull always --remove-orphans
+    Node->>Reg: pull REPO:TAG (now authenticated)
+    Node-->>Ctl: container up, labelled traefik.* and watchtower.enable=true
+    Ctl-->>Run: 200 { ok, url https://name.apps.slug.domain/ }
     Edge-->>Edge: sees the new container on traefik-public, routes it by Host
 ```
 
