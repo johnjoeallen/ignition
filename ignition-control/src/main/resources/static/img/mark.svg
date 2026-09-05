@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="16" fill="#0a7d6b"/>
-  <path d="M33 6c3 10-9 12-9 22 0 8 6 14 14 14s14-7 14-15c0-6-3-10-6-13
-           1 5-2 8-5 8-3 0-5-2-5-5 0-4 3-6 3-11-2 1-4 3-6 0z"
-        fill="#fff" opacity=".95"/>
-  <circle cx="38" cy="34" r="4.2" fill="#0a7d6b"/>
+  <!-- stubby rocket body -->
+  <path d="M32 9c7.5 0 12 8 12 17 0 6.5-1.8 11-3.6 14H23.6c-1.8-3-3.6-7.5-3.6-14 0-9 4.5-17 12-17z" fill="#fff"/>
+  <!-- fins -->
+  <path d="M23.6 30.5l-7.6 10h7.6z" fill="#fff"/>
+  <path d="M40.4 30.5l7.6 10h-7.6z" fill="#fff"/>
+  <!-- base cap -->
+  <rect x="24" y="39.5" width="16" height="4.5" rx="1.8" fill="#fff"/>
+  <!-- window -->
+  <circle cx="32" cy="23" r="4.8" fill="#0a7d6b"/>
+  <!-- flame -->
+  <path d="M32 44.5c-3.2 4-4.4 8.2-1.2 12.5 0.8-2.8 1.8-4 0.9-6.2 2.2 1.8 3 4 1.8 6.8 3.4-3.2 3.6-9.3-1.5-13.1z" fill="#ffb84d"/>
 </svg>
