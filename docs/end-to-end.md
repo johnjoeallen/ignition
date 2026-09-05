@@ -499,9 +499,13 @@ unauthorized: incorrect username or password
 Confusing, because the workflow never mentions Docker Hub.
 
 **Diagnosis.** `docker login "${{ vars.REGISTRY }}" …` with `vars.REGISTRY`
-**empty** — Docker treats an empty registry argument as Docker Hub. Checking the
-repo: `GET /repos/<slug>/<app>/actions/variables` returned `[]`. The
-`ignition-control` log showed why:
+**empty** — Docker treats an empty registry argument as its built-in default,
+Docker Hub (`registry-1.docker.io`), and tried to authenticate there with the
+Forgejo token. Ignition never pushes to Docker Hub — every build goes to the
+team's own Forgejo registry `git.<slug>.<domain>` — so this error only appears
+when `REGISTRY` is missing. Checking the repo: `GET
+/repos/<slug>/<app>/actions/variables` returned `[]`. The `ignition-control` log
+showed why:
 
 ```
 PUT /repos/<slug>/<app>/actions/variables/REGISTRY  ->  404 "variable not found"
