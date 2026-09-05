@@ -1,6 +1,13 @@
 # Exposure & access
 
-One model. No per-topology choices, no hosted services.
+!!! note "Status — one proposed model, draft"
+    This is **one** exposure/access design among several the project is weighing,
+    written up in full because it's the current front-runner — not a locked
+    decision. It is **not** how the prototype runs today; for that see
+    [End to End](end-to-end.md), which uses a simpler two-machine demo topology.
+    Treat this page as a proposal.
+
+A single model, deliberately: no per-topology choices, no hosted services.
 
 ```
                  internet

@@ -14,6 +14,16 @@ and the concrete request path.
 The apex used throughout is `ignition.classesarecode.net`. Substitute your own
 `BASE_DOMAIN`.
 
+!!! warning "Status — draft, describes the prototype"
+    This page is a **working draft**. It documents how the **initial prototype**
+    is deployed right now — a two-machine demo (`spitfire` + `hetzner`), not a
+    production reference. The topology here (TLS on the LAN box, a public box
+    doing only SNI passthrough, one node, no SSO) is a **pragmatic starting
+    point**, not the intended end state. The target model in
+    [Exposure & access](exposure.md) is itself **one of several possible
+    approaches** under consideration, not a settled decision. Expect the
+    specifics — versions, file paths, the exact deploy flow — to keep moving.
+
 ---
 
 ## 1. The journey

@@ -241,6 +241,11 @@ Real chicken-and-egg, not accidental complexity.
 
 ## Ingress — one front door
 
+!!! note
+    The ingress design below is a **proposal** — see
+    [Exposure & access](exposure.md) for its status and alternatives. The
+    prototype currently runs a simpler topology ([End to End](end-to-end.md)).
+
 There is **one front door**: the controller is the only public machine and the
 only place TLS terminates. Its edge Traefik owns `:443` (and `:80` for the ACME
 challenge and the HTTPS redirect), runs the **SSO gateway** for browser
