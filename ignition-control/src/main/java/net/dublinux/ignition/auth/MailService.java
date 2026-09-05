@@ -13,8 +13,8 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 
 /**
- * Sends the two transactional mails (activation link, password reset). The
- * {@link JavaMailSender} is built
+ * Sends every transactional mail (activation link, password reset, team
+ * add/remove). The {@link JavaMailSender} is built
  * straight from {@link SmtpProperties} so the one config surface is the
  * {@code ignition.smtp.*} block.
  */
@@ -43,6 +43,29 @@ public class MailService {
 
                 The link is valid for 24 hours. If this wasn't you, ignore this mail.
                 """.formatted(link));
+    }
+
+    public void sendAddedToTeam(String email, String slug, String role) {
+        String link = props.getPublicUrl().replaceAll("/+$", "") + "/teams/" + slug;
+        send(email, "You've been added to " + slug, """
+                You've been added to the "%s" team on Ignition, as %s.
+
+                Open the team's console:
+                %s
+
+                Your own git password and personal access token are shown there,
+                on your own row — nobody else's, including other admins, are shown.
+                """.formatted(slug, role, link));
+    }
+
+    public void sendRemovedFromTeam(String email, String slug) {
+        send(email, "You've been removed from " + slug, """
+                You've been removed from the "%s" team on Ignition. Your git access
+                to that team (login, password, personal access token) was removed
+                along with it.
+
+                If this wasn't expected, ask a "%s" team admin, or a platform admin.
+                """.formatted(slug, slug));
     }
 
     public void sendReset(String email, String rawToken) {

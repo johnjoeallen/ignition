@@ -8,6 +8,7 @@ import java.util.Map;
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.app.DeployedApp;
 import net.dublinux.ignition.auth.CurrentUser;
+import net.dublinux.ignition.auth.MailService;
 import net.dublinux.ignition.auth.ZoneAccessService;
 import net.dublinux.ignition.auth.ZoneMember;
 import net.dublinux.ignition.forgejo.ForgejoClient;
@@ -40,13 +41,15 @@ public class ZoneConsoleController {
     private final AppService apps;
     private final ZoneAccessService access;
     private final CurrentUser currentUser;
+    private final MailService mail;
 
     public ZoneConsoleController(ZoneService zones, AppService apps, ZoneAccessService access,
-                                 CurrentUser currentUser) {
+                                 CurrentUser currentUser, MailService mail) {
         this.zones = zones;
         this.apps = apps;
         this.access = access;
         this.currentUser = currentUser;
+        this.mail = mail;
     }
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
@@ -117,6 +120,7 @@ public class ZoneConsoleController {
         try {
             java.util.UUID memberId = access.addMember(slug, email, role);
             String username = zones.ensureGitAccess(slug, email, memberId);
+            mail.sendAddedToTeam(email, slug, role.name().toLowerCase());
             return redirect(slug, email + " added as " + role.name().toLowerCase()
                     + " — git access as " + username + " (they can see their own password/PAT on this page)");
         } catch (IllegalArgumentException e) {
@@ -146,6 +150,7 @@ public class ZoneConsoleController {
             access.removeMember(slug, userId);
             if (email != null) {
                 zones.removeGitAccess(slug, zones.gitUsername(slug, email));
+                mail.sendRemovedFromTeam(email, slug);
             }
             return redirect(slug, "member and their git access removed");
         } catch (IllegalArgumentException | IllegalStateException e) {
