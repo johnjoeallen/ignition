@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/head :: head(|Ignition · ${repoName}|)}"></head>
+<body>
+  <div th:replace="~{fragments/shell :: shell('teams', ~{::main})}">
+    <main>
+      <p class="mb-3">
+        <a th:href="@{/teams/{slug}(slug=${zoneSlug})}"><i class="bi bi-arrow-left"></i> <span th:text="${zoneSlug}">team</span></a>
+      </p>
+      <h1 class="h4 page-title"><i class="bi bi-git"></i> <span th:text="${repoName}">repo</span></h1>
+      <div class="alert alert-success" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
+      <p class="text-body-secondary small">Every action below is done as <b>you</b> — your own git login, not the
+        team's shared bot — using the personal access token shown on the team console.</p>
+
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Pull requests</h2>
+      <div class="table-card mb-3">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>#</th><th>title</th><th>branch</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="p : ${pulls}">
+              <td th:text="${p.number}">1</td>
+              <td><a th:href="${p.htmlUrl}" th:text="${p.title}">a change</a></td>
+              <td><code th:text="|${p.head} &rarr; ${p.base}|">head → base</code></td>
+              <td class="text-end">
+                <form method="post"
+                      th:action="@{/teams/{slug}/repos/{repo}/pulls/{n}/merge(slug=${zoneSlug},repo=${repoName},n=${p.number})}"
+                      class="d-inline"
+                      onsubmit="return confirm('Merge PR #' + this.action.split('/pulls/')[1].split('/')[0] + '?')">
+                  <button class="btn btn-sm btn-outline-secondary" th:disabled="${!p.mergeable}">merge</button>
+                </form>
+              </td>
+            </tr>
+            <tr th:if="${pulls.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-3">no open pull requests</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <form method="post" th:action="@{/teams/{slug}/repos/{repo}/pulls(slug=${zoneSlug},repo=${repoName})}"
+            class="row g-2 align-items-end mb-4">
+        <div class="col-auto">
+          <label class="form-label small mb-1">title</label>
+          <input class="form-control form-control-sm" name="title" required style="min-width:16rem">
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">head (from)</label>
+          <select class="form-select form-select-sm" name="head" required>
+            <option th:each="b : ${branches}" th:value="${b}" th:text="${b}">branch</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">base (into)</label>
+          <select class="form-select form-select-sm" name="base">
+            <option th:each="b : ${branches}" th:value="${b}" th:text="${b}" th:selected="${b == 'main'}">branch</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open PR</button>
+        </div>
+      </form>
+
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Issues</h2>
+      <div class="table-card mb-3">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>#</th><th>title</th></tr></thead>
+          <tbody>
+            <tr th:each="i : ${issues}">
+              <td th:text="${i.number}">1</td>
+              <td><a th:href="${i.htmlUrl}" th:text="${i.title}">a bug</a></td>
+            </tr>
+            <tr th:if="${issues.isEmpty()}"><td colspan="2" class="text-body-secondary text-center py-3">no open issues</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <form method="post" th:action="@{/teams/{slug}/repos/{repo}/issues(slug=${zoneSlug},repo=${repoName})}"
+            class="row g-2 align-items-end mb-4">
+        <div class="col-auto">
+          <label class="form-label small mb-1">title</label>
+          <input class="form-control form-control-sm" name="title" required style="min-width:16rem">
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">description</label>
+          <input class="form-control form-control-sm" name="body" style="min-width:20rem">
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open issue</button>
+        </div>
+      </form>
+
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Branches</h2>
+      <p class="text-body-secondary small" th:text="${#strings.listJoin(branches, ', ')}">main, feature-x</p>
+      <form method="post" th:action="@{/teams/{slug}/repos/{repo}/branches(slug=${zoneSlug},repo=${repoName})}"
+            class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label small mb-1">new branch</label>
+          <input class="form-control form-control-sm" name="newBranch" required>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">from</label>
+          <select class="form-select form-select-sm" name="fromBranch">
+            <option th:each="b : ${branches}" th:value="${b}" th:text="${b}" th:selected="${b == 'main'}">branch</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Create branch</button>
+        </div>
+      </form>
+    </main>
+  </div>
+</body>
+</html>

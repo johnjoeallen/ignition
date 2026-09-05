@@ -540,6 +540,95 @@ public class ZoneService {
         return out;
     }
 
+    // --- issues / branches / pull requests, as the calling user's own PAT ---
+    //
+    // Every action here is attributed to the real person, not ignition-bot —
+    // it authenticates with the caller's own personal access token (minted
+    // in ensureGitAccess, decrypted with a key derived from their own
+    // userId). null/blank if they have no PAT on file yet (shouldn't happen
+    // for an existing member — the team console page self-heals this on
+    // every load — but a stale/undecryptable row is treated as absent, same
+    // as everywhere else this cipher is used).
+
+    /** The calling user's own PAT for this team, or {@code null} if they have none yet. */
+    public String myPat(String slug, String email, java.util.UUID userId) {
+        String username = gitUsername(slug, email);
+        String pat = zones.userSecret(slug, "git_pat_" + username, userId);
+        return pat.isBlank() ? null : pat;
+    }
+
+    public record IssueView(int number, String title, String htmlUrl) {}
+
+    /** Open issues on a repo (not pull requests — Forgejo shares the tracker, {@code type=issue} excludes PRs). */
+    public List<IssueView> issues(String slug, String repo) {
+        var res = forgejo.get(slug, "/repos/%s/%s/issues?type=issue&state=open&limit=50".formatted(slug, repo));
+        List<IssueView> out = new ArrayList<>();
+        if (res.ok() && res.body() != null && res.body().isArray()) {
+            for (JsonNode i : res.body()) {
+                out.add(new IssueView(i.path("number").asInt(), i.path("title").asText(""),
+                        i.path("html_url").asText("")));
+            }
+        }
+        return out;
+    }
+
+    public ForgejoClient.Response createIssue(String slug, String repo, String email, java.util.UUID userId,
+                                              String title, String body) {
+        return forgejo.postAsUser(slug, "/repos/%s/%s/issues".formatted(slug, repo),
+                Map.of("title", title, "body", body == null ? "" : body), myPat(slug, email, userId));
+    }
+
+    /** Branch names on a repo — plain strings, good enough for a "create from" dropdown. */
+    public List<String> branches(String slug, String repo) {
+        var res = forgejo.get(slug, "/repos/%s/%s/branches?limit=50".formatted(slug, repo));
+        List<String> out = new ArrayList<>();
+        if (res.ok() && res.body() != null && res.body().isArray()) {
+            for (JsonNode b : res.body()) {
+                out.add(b.path("name").asText(""));
+            }
+        }
+        return out;
+    }
+
+    public ForgejoClient.Response createBranch(String slug, String repo, String email, java.util.UUID userId,
+                                               String newBranchName, String fromBranch) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("new_branch_name", newBranchName);
+        if (fromBranch != null && !fromBranch.isBlank()) {
+            body.put("old_branch_name", fromBranch);
+        }
+        return forgejo.postAsUser(slug, "/repos/%s/%s/branches".formatted(slug, repo), body, myPat(slug, email, userId));
+    }
+
+    public record PullView(int number, String title, String head, String base, boolean mergeable, String htmlUrl) {}
+
+    public List<PullView> pulls(String slug, String repo) {
+        var res = forgejo.get(slug, "/repos/%s/%s/pulls?state=open&limit=50".formatted(slug, repo));
+        List<PullView> out = new ArrayList<>();
+        if (res.ok() && res.body() != null && res.body().isArray()) {
+            for (JsonNode p : res.body()) {
+                out.add(new PullView(p.path("number").asInt(), p.path("title").asText(""),
+                        p.path("head").path("ref").asText(""), p.path("base").path("ref").asText(""),
+                        p.path("mergeable").asBoolean(false), p.path("html_url").asText("")));
+            }
+        }
+        return out;
+    }
+
+    public ForgejoClient.Response createPullRequest(String slug, String repo, String email, java.util.UUID userId,
+                                                     String title, String head, String base, String body) {
+        return forgejo.postAsUser(slug, "/repos/%s/%s/pulls".formatted(slug, repo),
+                Map.of("title", title, "head", head, "base", base == null || base.isBlank() ? "main" : base,
+                        "body", body == null ? "" : body),
+                myPat(slug, email, userId));
+    }
+
+    public ForgejoClient.Response mergePullRequest(String slug, String repo, String email, java.util.UUID userId,
+                                                    int index) {
+        return forgejo.postAsUser(slug, "/repos/%s/%s/pulls/%d/merge".formatted(slug, repo, index),
+                Map.of("Do", "merge"), myPat(slug, email, userId));
+    }
+
     /**
      * New repos always belong to the zone's org, not the bot user, and
      * are always public — this demo has no SSO, and a private repo/org just

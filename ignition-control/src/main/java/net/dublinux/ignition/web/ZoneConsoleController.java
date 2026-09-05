@@ -192,6 +192,63 @@ public class ZoneConsoleController {
         }
     }
 
+    /** A repo's own page — issues, branches, open PRs, and forms to open each — all as the caller's own PAT. */
+    @GetMapping("/teams/{slug}/repos/{repo}")
+    public String repo(@PathVariable String slug, @PathVariable String repo, Model model) {
+        model.addAttribute("zoneSlug", slug);
+        model.addAttribute("repoName", repo);
+        model.addAttribute("issues", zones.issues(slug, repo));
+        model.addAttribute("pulls", zones.pulls(slug, repo));
+        model.addAttribute("branches", zones.branches(slug, repo));
+        return "repo";
+    }
+
+    @PostMapping("/teams/{slug}/repos/{repo}/issues")
+    public String createIssue(@PathVariable String slug, @PathVariable String repo,
+                              @RequestParam String title, @RequestParam(required = false) String body) {
+        var res = zones.createIssue(slug, repo, callerEmail(), callerId(), title, body);
+        return redirectRepo(slug, repo, res.ok() ? "issue opened"
+                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+    }
+
+    @PostMapping("/teams/{slug}/repos/{repo}/branches")
+    public String createBranch(@PathVariable String slug, @PathVariable String repo,
+                               @RequestParam(name = "newBranch") String newBranch,
+                               @RequestParam(name = "fromBranch", required = false) String fromBranch) {
+        var res = zones.createBranch(slug, repo, callerEmail(), callerId(), newBranch, fromBranch);
+        return redirectRepo(slug, repo, res.ok() ? "branch " + newBranch + " created"
+                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+    }
+
+    @PostMapping("/teams/{slug}/repos/{repo}/pulls")
+    public String createPullRequest(@PathVariable String slug, @PathVariable String repo,
+                                    @RequestParam String title, @RequestParam String head,
+                                    @RequestParam(defaultValue = "main") String base,
+                                    @RequestParam(required = false) String body) {
+        var res = zones.createPullRequest(slug, repo, callerEmail(), callerId(), title, head, base, body);
+        return redirectRepo(slug, repo, res.ok() ? "PR opened"
+                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+    }
+
+    @PostMapping("/teams/{slug}/repos/{repo}/pulls/{number}/merge")
+    public String mergePullRequest(@PathVariable String slug, @PathVariable String repo, @PathVariable int number) {
+        var res = zones.mergePullRequest(slug, repo, callerEmail(), callerId(), number);
+        return redirectRepo(slug, repo, res.ok() ? "PR #" + number + " merged"
+                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+    }
+
+    private String callerEmail() {
+        return currentUser.get().map(u -> u.email()).orElse("");
+    }
+
+    private java.util.UUID callerId() {
+        return currentUser.get().map(u -> u.id()).orElse(null);
+    }
+
+    private static String redirectRepo(String slug, String repo, String msg) {
+        return "redirect:/teams/" + enc(slug) + "/repos/" + enc(repo) + "?m=" + enc(msg);
+    }
+
     @PostMapping("/teams/{slug}/runner/restart")
     public String restartRunner(@PathVariable String slug) {
         boolean ok = zones.restartRunner(slug);

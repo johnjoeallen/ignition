@@ -97,6 +97,29 @@ public class ForgejoClient {
         return sendBasicAuth(slug, "DELETE", path, null);
     }
 
+    /**
+     * Same as {@link #get}/{@link #post}, but authenticated as the calling
+     * Ignition user's own personal access token (see {@code UserSecretCipher},
+     * {@code ZoneService.GitCreds}) instead of the bot's — so an issue,
+     * branch, PR or merge is attributed to the actual person, not
+     * {@code ignition-bot}. {@code userToken} is a plain value the caller
+     * already decrypted; never logged.
+     */
+    public Response getAsUser(String slug, String path, String userToken) {
+        return sendAsUser(slug, "GET", path, null, userToken);
+    }
+
+    public Response postAsUser(String slug, String path, Map<String, ?> body, String userToken) {
+        return sendAsUser(slug, "POST", path, body, userToken);
+    }
+
+    private Response sendAsUser(String slug, String method, String path, Map<String, ?> body, String userToken) {
+        if (userToken == null || userToken.isBlank()) {
+            return new Response(401, error("you have no personal access token on file for this team yet"));
+        }
+        return send(slug, method, path, body, "token " + userToken, "token …" + tail(userToken));
+    }
+
     private Response send(String slug, String method, String path, Map<String, ?> body) {
         String token = zones.secret(slug, "forgejo_token");
         if (token.isBlank()) {
