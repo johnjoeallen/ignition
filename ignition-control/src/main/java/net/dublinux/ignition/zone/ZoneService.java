@@ -631,18 +631,6 @@ public class ZoneService {
         return forgejo.postAsUser(slug, "/repos/%s/%s/branches".formatted(slug, repo), body, myPat(slug, email, userId));
     }
 
-    /** Every branch on a repo, by name — informational only now; not used to drive any form. */
-    public List<String> branches(String slug, String repo) {
-        var res = forgejo.get(slug, "/repos/%s/%s/branches?limit=50".formatted(slug, repo));
-        List<String> out = new ArrayList<>();
-        if (res.ok() && res.body() != null && res.body().isArray()) {
-            for (JsonNode b : res.body()) {
-                out.add(b.path("name").asText(""));
-            }
-        }
-        return out;
-    }
-
     public record PullView(int number, String title, String head, String base, boolean mergeable, String htmlUrl) {}
 
     public List<PullView> pulls(String slug, String repo) {

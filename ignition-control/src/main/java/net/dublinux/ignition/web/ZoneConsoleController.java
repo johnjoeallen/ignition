@@ -237,7 +237,6 @@ public class ZoneConsoleController {
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("issueRows", issueRows);
-        model.addAttribute("branches", zones.branches(slug, repo));
         return "repo";
     }
 

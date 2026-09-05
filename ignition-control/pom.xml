@@ -13,7 +13,7 @@
 
   <groupId>net.dublinux.ignition</groupId>
   <artifactId>ignition-control</artifactId>
-  <version>0.105.0</version>
+  <version>0.105.1</version>
   <name>ignition-control</name>
   <description>Ignition control plane: platform + zone consoles, provisioning, the CI deploy bridge</description>
 
