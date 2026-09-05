@@ -192,8 +192,9 @@ public class ZoneConsoleController {
     }
 
     @PostMapping("/teams/{slug}/apps")
-    public String createApp(@PathVariable String slug, @RequestParam String name) {
-        return back(slug, zones.createApp(slug, name),
+    public String createApp(@PathVariable String slug, @RequestParam String name,
+                            @RequestParam(required = false) String description) {
+        return back(slug, zones.createApp(slug, name, description),
                 "app " + name + " created — clone it, push, then Release");
     }
 

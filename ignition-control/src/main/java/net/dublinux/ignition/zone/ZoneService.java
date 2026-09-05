@@ -812,10 +812,11 @@ public class ZoneService {
      * workflow needs — so the team can clone, push, and hit Release with
      * nothing to configure by hand.
      */
-    public ForgejoClient.Response createApp(String slug, String name) {
+    public ForgejoClient.Response createApp(String slug, String name, String description) {
         ensureOrg(slug);
         ForgejoClient.Response repo = forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
-                "name", name, "private", false, "auto_init", true));
+                "name", name, "description", description == null ? "" : description,
+                "private", false, "auto_init", true));
         if (!repo.ok()) {
             return repo;
         }
