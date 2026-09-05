@@ -107,14 +107,19 @@ every app the team deployed**.
 ## The control plane
 
 `ignition-control` is one container on the controller. It authenticates every
-caller — a session login for a human, a bearer token for CI — and acts only
+caller — a signed-in identity for a human, a bearer token for CI — and acts only
 within that scope:
 
 | Credential | Role | Can do |
 |---|---|---|
-| email + password login, `PLATFORM_ADMIN` role | platform admin | every node, team, and app (platform view) |
-| `state/zones/<slug>/zone-token` | team admin | that team only: Forgejo users, repos, cut releases, the team's apps, restart the runner, read status |
+| a signed-in identity with the `PLATFORM_ADMIN` role | platform admin | every node, team, and app (platform view) |
+| a signed-in identity with a `ZONE_ADMIN:<slug>` role (or `state/zones/<slug>/zone-token` for proxied calls) | team admin | that team only: members, repos, cut releases, the team's apps, restart the runner, read status |
 | `state/zones/<slug>/deploy-token` | CI | `POST /deploy` and `POST /undeploy` for that team's apps |
+
+The human sign-in is email + password on the console in the prototype, and the
+organisation's own identity provider at the edge in the intended model
+([Exposure & access](exposure.md)) — one corporate identity, no per-team
+account. The role split is the same either way.
 
 Team-admin actions are either a **proxied call to that team's Forgejo admin
 API** (over the public `git.<slug>.<domain>`, using the token minted at

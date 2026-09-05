@@ -1,8 +1,16 @@
 # Roles
 
-Ignition has three roles, one console (`https://<event-domain>/`, email +
-password login for everyone — no separate hostname, no token), and a clean
-line between what each role can do there.
+Ignition has three roles, one console (`https://<event-domain>/` — no separate
+hostname, no token per role), and a clean line between what each role can do
+there.
+
+!!! note "Login"
+    The **prototype** signs everyone in with email + password on the console
+    itself. The **intended model** is the organisation's own identity provider
+    at the edge — one corporate identity, no Ignition password, no per-team
+    account to manage; `git push` / `docker push` use a personal access token
+    minted after that first sign-in. See [Exposure & access](exposure.md). The
+    role split below is the same either way.
 
 ```mermaid
 flowchart TB
@@ -59,10 +67,9 @@ role on that team, not a separate login or hostname. Their console is
 | Task | In the console |
 |---|---|
 | Add / remove team members | **Members** — creates their Forgejo account too, from their email |
-| Reset your own git password / PAT | The regenerate icon beside them, on the team console's top card (next to the Forgejo link) — always self-service |
-| Reset another member's git password | **Members** — the "reset git password" action (admin only) |
-| Create an app (a repo) | **Apps → Create app** — name + description, seeded with a starter Dockerfile + deploy workflow |
-| Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop, delete |
+| Reset your own git password / PAT | The regenerate icon beside them, on the team console's top card (next to the Forgejo link) — always self-service, every member can do it |
+| Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, the deploy workflow, and every variable/secret it needs. Re-running it on an existing app re-applies that config |
+| Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop (undeploy, keep the repo), delete (undeploy and remove the repo) |
 | Restart a stuck Actions runner | **Restart runner** button |
 
 They never touch a Forgejo admin screen; the `ignition-bot` service account
@@ -151,6 +158,7 @@ rolls the app forward on its own within ~60s.
   the app's management page, never a Forgejo admin screen.
 
 The control plane (`ignition-control`) is the single process that holds every
-credential (platform, per-team service accounts, per-member git logins) and
-enforces the split: it authenticates the signed-in session, decides what
-role(s) it holds, and only ever acts within that scope.
+credential (platform, per-team service accounts, per-member git logins, the
+org keys behind the shared-service proxies) and enforces the split: it
+authenticates the caller, decides what role(s) it holds, and only ever acts
+within that scope.

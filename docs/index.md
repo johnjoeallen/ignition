@@ -1,17 +1,22 @@
 # Ignition
 
-**Per-team infrastructure for hackathons and innovation sprints.** Many teams
-(target ~80) across a small pool of hosts. Each team gets a fully isolated
-stack: its own git host, CI, container registry, private build engine, and a
-routed HTTPS origin for whatever it deploys. It stands up in seconds from one
-click in the console and tears down in one more, leaving nothing behind.
+**Per-team infrastructure for hackathons, innovation sprints, or a standing
+innovation platform.** Many teams (target ~80) across a small pool of hosts.
+Each team gets a fully isolated stack: its own git host, CI, container registry,
+private build engine, and a routed HTTPS origin for each app it deploys — a team
+can run several. It stands up in seconds from one click in the console and tears
+down in one more, leaving nothing behind. Run it for one event, or leave it
+running for continuous innovation work.
 
-The point isn't just to satisfy a security review (though it does that too — see
-[Why an isolated stack per team](#why-an-isolated-stack-per-team)). Even on infrastructure with no
-restrictions at all, giving each team its own disposable stack is simply the
-model that produces the most working software per event: it removes the
-coordination tax of shared environments, contains the failures that hackathon
-code inevitably causes, and makes every team's output a real running URL instead
+Whatever teams are normally handed — a locked-down network, or a cloud sandbox
+that returns a container rather than an environment — the ceiling is the same,
+and what reaches the demo is a laptop and a slide deck. Ignition gives each team
+a controlled environment that is entirely its own, with near-total freedom to
+build inside it. That's the arrangement that produces the most working software
+per event, whether or not any policy requires it (see
+[Why an isolated stack per team](#why-an-isolated-stack-per-team)): it contains
+the failures hackathon code inevitably causes, removes the coordination tax of
+shared infrastructure, and makes every team's output a real running URL instead
 of a laptop demo.
 
 <div class="ign-actions">
@@ -53,6 +58,15 @@ subdomain:
   — nothing to configure in the repo.
 - **A team admin** — the team lead adds members, creates repos, ships releases,
   manages the team's apps, and restarts the runner, without a platform ticket.
+
+**Nobody logs into a host, a git account, or an app.** A person's ordinary
+corporate identity is the only credential, checked once at the edge. Every
+team's running app is reachable from the corporate network by default —
+colleagues and judges just open the URL; making one reachable from the public
+internet is a separate, per-app approval. The controller also hosts the shared
+services teams shouldn't have to build — standing mocks, and sandbox proxies
+that hold the org's test API keys so no app ever sees one (planned; see
+[Executive Overview](executive-overview.md)).
 
 ```mermaid
 flowchart TB
@@ -111,8 +125,8 @@ flowchart TB
 
 ## Why an isolated stack per team
 
-Assume the friendliest possible environment: root on every box, no security
-team to convince, unlimited budget. An isolated stack per team is *still* the right call.
+Even with no policy to satisfy and budget to spare, an isolated stack per team
+is *still* the right call.
 
 - **Failure isolation.** Hackathon code is code no one has run before —
   half-written migrations, an accidental fork bomb in a Dockerfile, a process
@@ -145,9 +159,9 @@ team to convince, unlimited budget. An isolated stack per team is *still* the ri
   box accumulates every problem above. Spin up Monday, gone Friday. Keep the
   templates.
 
-And where the environment *does* impose limits — no root Docker on shared hosts
-for unvetted participants, audit or network-policy requirements — the same
-design is what makes a "yes" possible at all. That's a bonus, not the reason.
+And where the environment *does* impose limits — unvetted participants, audit or
+network-policy requirements — the same design is what makes a "yes" possible at
+all. That's a bonus, not the reason.
 
 ## How it's built
 
@@ -168,6 +182,9 @@ registration, team provisioning (the two-phase Forgejo + DinD + runner apply) /
 move / destroy, the scheduler, the roster, the idle sweep, and the CI `/deploy`
 bridge are all in place. There is no CLI — every operation is in the web UI.
 
-Rough edges — finishing the edge / SSO / WireGuard wiring in the compose
-templates, repo seeding, a services catalogue — are tracked in `README` and
-`CLAUDE.md`. The design and the port history are in `DESIGN.md`.
+The exposure model — a controller-only front door with an SSO edge — is a
+**proposal** ([Exposure & access](exposure.md)); the prototype currently runs a
+simpler topology ([End to End](end-to-end.md)). Rough edges — finishing that
+edge / SSO / WireGuard wiring, the controller-hosted shared-services layer — are
+tracked in `README` and `CLAUDE.md`. The design and the port history are in
+`DESIGN.md`.

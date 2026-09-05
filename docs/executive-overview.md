@@ -162,20 +162,28 @@ from?" six months later.
 - **No new vendor.** Forgejo (community-governed, FOSS), Docker, Traefik, and
   WireGuard — all things a platform team can already reason about and audit. No
   hosted tunnel or edge service: the controller is the only public machine.
-- **Reversible.** Nothing here is a long-lived commitment. Run an event, tear it
-  down, keep the templates.
+- **Reversible.** Nothing here is a long-lived commitment. Run it for one event
+  and tear it down, or leave it standing for continuous innovation work — either
+  way it's a few hosts and the templates, not a platform migration.
 
 ## What it is, and what it is not
 
 **It is** the environment layer for running many small teams in parallel:
-isolated forge + CI + build sandbox + a routed live app per team, provisioned
-and reclaimed on demand.
+isolated forge + CI + build sandbox + one or more routed live apps per team,
+provisioned and reclaimed on demand.
 
-**It is not** a permanent internal developer platform, a replacement for
-production CI/CD, or a general-purpose orchestrator. It schedules teams across
-a handful of nodes for the length of an event and no more. Ideas that graduate
-move onto the organisation's real platform — Ignition's job is to get them to
-the point of being worth graduating.
+**It is not** an internal developer platform, a replacement for production
+CI/CD, or a general-purpose orchestrator. It gives a team a disposable stack to
+prove an idea in; ideas that graduate move onto the organisation's real
+platform, and Ignition's job is to get them to the point of being worth
+graduating.
+
+**It can, though, run continuously** — not just for a scheduled event. Left
+standing, it's an always-available innovation platform: any approved
+innovation project spins up its own isolated stack the same way, works in it
+for as long as it's live, and hands it back when the project ends or goes
+quiet (the idle sweeper reclaims what nobody is using). Same model, no fixed
+calendar.
 
 ## The bottom line
 

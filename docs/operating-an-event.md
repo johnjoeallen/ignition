@@ -4,6 +4,12 @@ Everything is in the **one console**, at `https://<BASE_DOMAIN>/` — every
 role (platform admin, team admin, team member) signs in there; what you see
 and can do is by role, not by which URL you hit. There is no CLI.
 
+!!! note
+    This page describes the proposed operating model — a controller-only front
+    door with an SSO edge. That edge is still being wired up
+    ([Exposure & access](exposure.md) is one design among several); for how the
+    prototype is deployed today see [End to End](end-to-end.md).
+
 ## Prerequisites
 
 - The **controller** — the one public machine — with Docker + Compose v2. It
@@ -118,17 +124,18 @@ capacity per node.
 ## Rough edges
 
 - **The edge / SSO / WireGuard wiring in the compose templates is still being
-  finished** — the architecture is the controller-only front door
-  ([Exposure & access](exposure.md)); `traefik-core-compose.yml` and
-  `ignition-control-compose.yml` are catching up to it.
+  finished** — the *proposed* architecture is a controller-only front door with
+  an SSO edge ([Exposure & access](exposure.md), one design among several);
+  `traefik-core-compose.yml` and `ignition-control-compose.yml` are catching up
+  to it. The current prototype runs a simpler topology
+  ([End to End](end-to-end.md)).
 - **`traefik-public` is one flat network** — app containers and Forgejo
   instances on a node can reach each other by IP.
 - **`ignition-control` holds every token**, is the single public front door,
   and drives every node's Docker daemon — the controller is a
   concentrated blast radius and needs a locked-down deployment.
-- **No repo seeding** — the starter repo + repo vars/secrets are still set by
-  hand per team.
-- **No services catalogue** — org-standard shared services (a card-art lookup,
-  a rewards engine, a payments sandbox), as a blessed mock or a keyed proxy to
-  the real thing, are a planned one-click add-on for a team (`CLAUDE.md`,
+- **No shared-services layer yet** — the controller should host the services
+  every team needs and no team should hold keys for: standing mocks (a payments
+  sandbox, a rewards engine, a signing service, an LLM gateway) and sandbox API
+  proxies that carry the org's test keys so no app ever sees one (`CLAUDE.md`,
   task 3). An app's own infra (Postgres, Redis) stays in its Dockerfile.

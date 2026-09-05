@@ -4,11 +4,18 @@ Per-team hackathon infrastructure. Many teams (target ~80), a pool of hosts
 ("nodes"). Each team gets a fully isolated stack that stands up in seconds and
 tears down without residue.
 
-An isolated stack per team isn't just a security measure. Even with root everywhere and no
-restrictions, isolated disposable stacks are the model that ships the most
-working software per event — failure containment, zero coordination tax, an
-identical clean start, a real deploy surface, and teardown that's actually
-finished. See [Why an isolated stack per team](https://johnjoeallen.github.io/ignition/#why-an-isolated-stack-per-team).
+Whatever teams are normally handed — a locked-down network, or a cloud sandbox
+that returns a container, not an environment — the ceiling is the same, and what
+reaches the demo is a laptop and a slide deck. Ignition gives each team a
+controlled environment that is entirely its own, with near-total freedom inside
+it. Even with no policy to satisfy, that's the model that ships the most working
+software per event — failure containment, zero coordination tax, an identical
+clean start, a real deploy surface, and teardown that's actually finished. See
+[Why an isolated stack per team](https://johnjoeallen.github.io/ignition/#why-an-isolated-stack-per-team).
+
+Nobody logs into a host, a git account, or an app: one corporate identity,
+checked at the edge. Apps are reachable from the corporate network by default;
+internet exposure is a per-app approval.
 
 Ignition is **one Java service, `ignition-control`, deployed as a container**.
 Every platform-admin and team-admin operation is in its web UI — there is no
@@ -28,10 +35,12 @@ role (platform admin, team admin, team member), not by hostname:
 `ignition.example` is a placeholder — set `BASE_DOMAIN` to any apex your
 organisation controls. DNS is one pre-registered wildcard `*.<apex>` → the
 **controller**, which matches at any depth (RFC 4592), so provisioning a team
-adds no records. The controller is the only public machine and the only place
-TLS terminates: it owns `:443`, runs the SSO gateway, and reverse-proxies by
-`Host` over WireGuard to nodes on a private network with no inbound. Behind the
-edge everything is plain HTTP. See
+adds no records. In the proposed model the controller is the only public
+machine and the only place TLS terminates: it owns `:443`, runs an SSO edge
+against the org's identity provider, and reverse-proxies by `Host` over
+WireGuard to nodes on a private network with no inbound; behind the edge
+everything is plain HTTP. That edge is one design among several and still being
+wired up — see
 [Exposure & access](https://johnjoeallen.github.io/ignition/exposure/).
 
 Per team: one Forgejo, a private Docker-in-Docker build engine so one team's CI
@@ -155,16 +164,16 @@ The compose templates the service renders (`zone-compose.yml.tmpl`,
 ## Rough edges
 
 - **The edge / SSO / WireGuard wiring in the compose templates is still being
-  finished** — the architecture is the controller-only front door
-  ([`docs/exposure.md`](docs/exposure.md)); `traefik-core-compose.yml` and
-  `ignition-control-compose.yml` are catching up to it.
+  finished** — the *proposed* architecture is a controller-only front door with
+  an SSO edge ([`docs/exposure.md`](docs/exposure.md), one design among
+  several); `traefik-core-compose.yml` and `ignition-control-compose.yml` are
+  catching up. The prototype runs a simpler topology
+  ([`docs/end-to-end.md`](docs/end-to-end.md)).
 - **`traefik-public` is one flat network** on a node — app and Forgejo
   containers can reach each other by IP.
 - **`ignition-control` holds every token**, is the single public front door,
   and drives every node's Docker daemon — a concentrated blast radius that
   needs a locked-down deployment.
-- **No repo seeding** — the starter repo + repo vars/secrets are still set by
-  hand per team.
 - **No services catalogue yet** — an app's own infra (Postgres, Redis) belongs
   in its Dockerfile, but the shared services every team needs — standing mocks
   (a payments sandbox, a rewards engine, a signing service, an LLM gateway) and
