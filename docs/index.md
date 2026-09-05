@@ -96,7 +96,7 @@ flowchart TB
    (Conventional Commits; override available) and tags the next `vX.Y.Z` on
    `main`. That release tag is the only thing that deploys — a plain push to
    `main` does not. See
-   [Roles → Shipping a release](roles.md#shipping-a-release).
+   [Roles → Operating model](roles.md#operating-model-how-a-team-actually-works-day-to-day).
 2. A **Forgejo Actions** job builds a container image inside the team's
    **private DinD engine** — isolated from every other team.
 3. It pushes the image to the team's own registry (`git.<slug>.ignition.example/…`),

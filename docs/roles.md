@@ -1,27 +1,29 @@
 # Roles
 
-Ignition has two admin roles and a clean line between them.
+Ignition has three roles, one console (`https://<event-domain>/`, email +
+password login for everyone — no separate hostname, no token), and a clean
+line between what each role can do there.
 
 ```mermaid
 flowchart TB
     pa["Platform admin"]
-    za["Zone admin<br/>(one per zone / team lead)"]
-    dev["Team developers"]
+    za["Team admin<br/>(one or more per team)"]
+    dev["Team member / developer"]
 
-    subgraph cp["ignition-control (one service, two consoles)"]
-        nodes["Platform console → Nodes<br/>register · drain · capacity"]
-        zones["Platform console → Zones<br/>provision · place · move · destroy · roster"]
-        zoneconsole["Zone console<br/>users · repos · releases · apps · runner · status"]
+    subgraph cp["ignition-control — one console, by role"]
+        nodes["Nodes<br/>register · drain · capacity"]
+        teams["Teams<br/>provision · place · move · destroy · roster"]
+        teamconsole["Team console<br/>members · apps · issues/PRs/releases · runner · status"]
     end
 
     pa --> nodes
-    pa --> zones
-    za -->|"the only surface a zone admin sees"| zoneconsole
-    zoneconsole -->|"proxied API (service token)"| forgejo["the zone's Forgejo"]
-    dev -->|"git push / PRs / CI logs"| forgejo
+    pa --> teams
+    za -->|"the only surface a team admin sees"| teamconsole
+    dev -->|"same console, no member management"| teamconsole
+    teamconsole -->|"proxied API (service token), or the member's own PAT"| forgejo["the team's Forgejo"]
 
     pa -. "never touches" .-> forgejo
-    za -. "no node, Docker or Forgejo-admin access" .-> nodes
+    za -. "no node or Docker access" .-> nodes
 ```
 
 ## Platform admin
@@ -49,65 +51,84 @@ nodes and teams.
 
 ## Team admin
 
-One per team — the team lead. At provisioning time they get **one** credential:
-a **team token** (`state/zones/<slug>/zone-token`) which signs them in at
-`https://admin.<slug>.<event-domain>/` — the **team console**.
-
-That console is their whole surface. They never touch a Forgejo admin screen;
-the `ignition-bot` Forgejo account exists only as ignition-control's service credential
-and stays on the controller. Everything below is a console action:
+One or more per team. Signs into the same one console, same email + password
+as everyone else — what makes them a team admin is the `ZONE_ADMIN:<slug>`
+role on that team, not a separate login or hostname. Their console is
+`/teams/<slug>` — everything below is a console action there:
 
 | Task | In the console |
 |---|---|
-| Add / remove team members | **Users** — creates the Forgejo account for them |
-| Create repositories | **Repositories → Create repo** |
-| Ship a build | **Repositories → Release** — version is picked from commits since the last release (override available); see below |
-| Manage the team's apps | **Apps** — list, live status, remove. Deploys come from CI; every app is wired with a Watchtower agent automatically, so a re-pushed image redeploys on its own (~60s). |
+| Add / remove team members | **Members** — creates their Forgejo account too, from their email |
+| Reset a member's git password, or your own | **Members** — the regenerate icon next to the password/PAT (yours is always self-service; another member's needs admin) |
+| Create an app (a repo) | **Apps → Create app** — name + description, seeded with a starter Dockerfile + deploy workflow |
+| Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop |
 | Restart a stuck Actions runner | **Restart runner** button |
-| See build / deploy status, the live-app URL | status card |
 
-Every console action is either a **proxied call to that team's Forgejo admin
-API** (with the service token, never exposed) or a `docker compose` command
-**scoped to a `zone-<slug>` or `app-<slug>-<name>` project the team owns**. A
-team admin has no node access, no Docker access, no Forgejo admin access, and
-no visibility into any other team.
+They never touch a Forgejo admin screen; the `ignition-bot` service account
+exists only as `ignition-control`'s own credential and never leaves the
+controller. A team admin has no node access, no Docker access, no Forgejo
+admin access, and no visibility into any other team.
 
-Developers on the team use the git remote for code, pull requests and CI logs
-like any forge — that's the *developer* surface, separate from this one.
+## Team member / developer
 
-### Shipping a release
+Everyone else on the team — same console, same `/teams/<slug>`, minus member
+management. This is the day-to-day surface for actually shipping code; see
+**Operating model**, below.
 
-Release versioning is automated — **no one bumps the version**. In the console
-under **Repositories**, each repo shows its current version (e.g. `· v1.2.3`).
-Click **Release** and ignition-control:
+## Operating model — how a team actually works day to day
 
-1. reads the commit messages **since the last release** (it compares the last
-   tag to `main`),
-2. picks the bump from them by [Conventional Commits](https://www.conventionalcommits.org/):
-   a `fix:` → **patch**, a `feat:` → **minor**, a `feat!:` or `BREAKING CHANGE:`
-   → **major** (nothing conventional → patch),
-3. tags the next `vX.Y.Z` on `main` (first release `v0.1.0`, or `v1.0.0` for a
-   major).
+**Generally, leave Forgejo's own web UI alone.** It's there, and nothing
+stops you opening it directly, but day-to-day work — issues, branches, pull
+requests, merging, releases — all happens from an app's **management page**
+in the console (click the app's name from the team console's Apps table),
+not by clicking around in Forgejo. The one thing you still do with a normal
+git client is `clone`/`push` — that part is unchanged; it's the
+issue/PR/release *lifecycle* that has one intended path.
 
-The dropdown next to **Release** defaults to *auto (from commits)*; switch it to
-`patch` / `minor` / `major` to override for that one release.
+1. **Open an issue** for the work, on the app's management page. This
+   automatically creates its branch too — `<issue-number>-<title, slugified>`
+   off `main` — so there's no separate "create a branch" step, and every
+   branch traces back to the issue that justified it.
+2. **Clone the repo** (the clone URL and a copy button are right there on the
+   management page) and push your commits to that issue's branch, same as any
+   git workflow.
+3. **Open a PR** — a button on the issue's own row once it has commits to
+   merge. It always targets `main` (the only target this project uses); no
+   need to pick a base branch.
+4. **Merge or close** — once Forgejo reports the PR mergeable, **merge**
+   closes the issue and deletes the branch automatically. If it turns out
+   there's nothing to merge after all, **close** does the same cleanup
+   without merging — either way, an issue's branch never outlives the issue,
+   and there's no way to reopen a PR for a closed issue (open a new issue
+   instead).
+5. **Ship a build — a release, from the same management page.** Version
+   bumps are automatic, not something anyone picks by hand: click **Release**
+   and `ignition-control` reads the commits since the last release, picks the
+   bump by [Conventional Commits](https://www.conventionalcommits.org/) (a
+   `fix:` → **patch**, a `feat:` → **minor**, a `feat!:`/`BREAKING CHANGE:` →
+   **major**; nothing conventional → patch), and tags the next `vX.Y.Z` on
+   `main`. The dropdown next to **Release** defaults to *auto (from
+   commits)*; override it for that one release if needed.
 
 The new tag fires the `build and deploy` workflow; on success the app is live
 at `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
-**Only a release deploys** — a plain push to `main` does not — so every running
-image carries a version you can redeploy or roll back to.
+**Only a release deploys** — a plain push to `main` does not (and `main` is
+protected against direct pushes anyway — every change goes through a PR) —
+so every running image carries a version you can redeploy or roll back to.
+Re-pushing an image to the **same** tag later (a base-image rebuild, say)
+needs no new release: the per-node Watchtower notices the new digest and
+rolls the app forward on its own within ~60s.
 
-Re-pushing an image to the **same** tag later (a base-image rebuild, say) needs
-no new release: the per-node Watchtower notices the new digest and rolls the
-app forward on its own within ~60s.
-
-## The line between them
+## The line between the roles
 
 - Platform admin: *which* hosts exist, *where* teams run, *whether* a team
   exists at all.
-- Team admin: *what happens inside* one team — people, repos, the runner, and
-  shipping releases — all from the team console, never a Forgejo admin screen.
+- Team admin: *who's on* one team and at what role — everything else is the
+  same surface every member gets.
+- Team member: the operating model above — issues, PRs, releases, all from
+  the app's management page, never a Forgejo admin screen.
 
-The control plane (`ignition-control`) is the single process that holds both sets of
-credentials and enforces the split: it authenticates the caller's token,
-decides platform-vs-team, and only ever acts within that scope.
+The control plane (`ignition-control`) is the single process that holds every
+credential (platform, per-team service accounts, per-member git logins) and
+enforces the split: it authenticates the signed-in session, decides what
+role(s) it holds, and only ever acts within that scope.

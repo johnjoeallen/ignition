@@ -94,7 +94,7 @@ deploy — is older than `ignition.sweep.ttl` (default 24 h). Set
 
 Teams deploy themselves — the team lead hits **Release** in the team console.
 You don't run deploys for them. See
-[Roles → Shipping a release](roles.md#shipping-a-release).
+[Roles → Operating model](roles.md#operating-model-how-a-team-actually-works-day-to-day).
 
 ## Capacity
 
