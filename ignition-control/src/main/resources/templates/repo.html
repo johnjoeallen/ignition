@@ -15,6 +15,20 @@
         done as <b>you</b> — your own git login, not the team's shared bot.</p>
 
       <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Issues</h2>
+      <form method="post" th:action="@{/teams/{slug}/repos/{repo}/issues(slug=${zoneSlug},repo=${repoName})}"
+            class="row g-2 align-items-end mb-3">
+        <div class="col-auto">
+          <label class="form-label small mb-1">title</label>
+          <input class="form-control form-control-sm" name="title" required style="min-width:16rem">
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-1">description</label>
+          <input class="form-control form-control-sm" name="body" style="min-width:20rem">
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open issue</button>
+        </div>
+      </form>
       <div class="table-card mb-3">
         <table class="table table-hover mb-0">
           <thead><tr><th>#</th><th>title</th><th>branch</th><th></th></tr></thead>
@@ -45,20 +59,6 @@
           </tbody>
         </table>
       </div>
-      <form method="post" th:action="@{/teams/{slug}/repos/{repo}/issues(slug=${zoneSlug},repo=${repoName})}"
-            class="row g-2 align-items-end mb-4">
-        <div class="col-auto">
-          <label class="form-label small mb-1">title</label>
-          <input class="form-control form-control-sm" name="title" required style="min-width:16rem">
-        </div>
-        <div class="col-auto">
-          <label class="form-label small mb-1">description</label>
-          <input class="form-control form-control-sm" name="body" style="min-width:20rem">
-        </div>
-        <div class="col-auto">
-          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open issue</button>
-        </div>
-      </form>
     </main>
   </div>
 </body>

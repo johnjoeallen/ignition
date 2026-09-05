@@ -54,11 +54,14 @@
                 <a th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${a.name})}" th:text="${a.name}">flora</a>
               </td>
               <td class="d-flex align-items-center gap-1">
-                <code th:text="${a.cloneUrl}" style="word-break:break-all">https://git…</code>
+                <span th:text="${a.name}">flora</span>
                 <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
                         th:attr="data-copy=${a.cloneUrl}" title="Copy clone URL">
                   <i class="bi bi-clipboard"></i>
                 </button>
+                <a th:href="${a.htmlUrl}" class="btn btn-sm btn-link p-0" title="Open in Forgejo">
+                  <i class="bi bi-box-arrow-up-right"></i>
+                </a>
               </td>
               <td th:text="${a.version}">v1.2.3</td>
               <td>
