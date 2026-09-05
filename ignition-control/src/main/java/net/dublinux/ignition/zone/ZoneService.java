@@ -568,7 +568,17 @@ public class ZoneService {
         return pat.isBlank() ? null : pat;
     }
 
-    public record IssueView(int number, String title, String htmlUrl) {}
+    /**
+     * Every branch here traces back to an issue — its name is always derived
+     * the same deterministic way, so nothing about the branch/PR/merge chain
+     * for an issue ever needs to be stored; it's re-derived from the issue
+     * number and title every time.
+     */
+    private static String issueBranch(int number, String title) {
+        return number + "-" + TeamNameSuggester.slugify(title);
+    }
+
+    public record IssueView(int number, String title, String htmlUrl, String branchName) {}
 
     /** Open issues on a repo (not pull requests — Forgejo shares the tracker, {@code type=issue} excludes PRs). */
     public List<IssueView> issues(String slug, String repo) {
@@ -576,8 +586,9 @@ public class ZoneService {
         List<IssueView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode i : res.body()) {
-                out.add(new IssueView(i.path("number").asInt(), i.path("title").asText(""),
-                        i.path("html_url").asText("")));
+                int number = i.path("number").asInt();
+                String title = i.path("title").asText("");
+                out.add(new IssueView(number, title, i.path("html_url").asText(""), issueBranch(number, title)));
             }
         }
         return out;
@@ -598,7 +609,7 @@ public class ZoneService {
             return new IssueOpenResult(false, 0, null, res.message());
         }
         int number = res.body().path("number").asInt();
-        String branchName = number + "-" + TeamNameSuggester.slugify(title);
+        String branchName = issueBranch(number, title);
         var branchRes = createBranch(slug, repo, email, userId, branchName, "main");
         if (!branchRes.ok()) {
             log.warn("zone {}: issue #{} opened on {}/{} but branch {} failed: {}",
@@ -607,18 +618,6 @@ public class ZoneService {
                     "issue opened, but branch creation failed: " + branchRes.message());
         }
         return new IssueOpenResult(true, number, branchName, "");
-    }
-
-    /** Branch names on a repo — plain strings, good enough for a PR head/base dropdown. */
-    public List<String> branches(String slug, String repo) {
-        var res = forgejo.get(slug, "/repos/%s/%s/branches?limit=50".formatted(slug, repo));
-        List<String> out = new ArrayList<>();
-        if (res.ok() && res.body() != null && res.body().isArray()) {
-            for (JsonNode b : res.body()) {
-                out.add(b.path("name").asText(""));
-            }
-        }
-        return out;
     }
 
     /** Not exposed on its own — only {@link #createIssue} calls this, so every branch traces back to an issue. */
@@ -630,6 +629,18 @@ public class ZoneService {
             body.put("old_branch_name", fromBranch);
         }
         return forgejo.postAsUser(slug, "/repos/%s/%s/branches".formatted(slug, repo), body, myPat(slug, email, userId));
+    }
+
+    /** Every branch on a repo, by name — informational only now; not used to drive any form. */
+    public List<String> branches(String slug, String repo) {
+        var res = forgejo.get(slug, "/repos/%s/%s/branches?limit=50".formatted(slug, repo));
+        List<String> out = new ArrayList<>();
+        if (res.ok() && res.body() != null && res.body().isArray()) {
+            for (JsonNode b : res.body()) {
+                out.add(b.path("name").asText(""));
+            }
+        }
+        return out;
     }
 
     public record PullView(int number, String title, String head, String base, boolean mergeable, String htmlUrl) {}
@@ -647,15 +658,40 @@ public class ZoneService {
         return out;
     }
 
-    public ForgejoClient.Response createPullRequest(String slug, String repo, String email, java.util.UUID userId,
-                                                     String title, String head, String base, String body) {
+    /**
+     * Opens a PR for an issue's branch into {@code main} — the only target,
+     * always. {@code Closes #<n>} in the body is Forgejo/Gitea's own
+     * close-on-merge keyword, so merging the PR closes the issue too, with
+     * no separate step.
+     */
+    public ForgejoClient.Response openPrForIssue(String slug, String repo, String email, java.util.UUID userId,
+                                                 int issueNumber, String issueTitle) {
+        return createPullRequest(slug, repo, email, userId, issueTitle,
+                issueBranch(issueNumber, issueTitle), "main", "Closes #" + issueNumber);
+    }
+
+    /** Not exposed on its own — only {@link #openPrForIssue} calls this. */
+    private ForgejoClient.Response createPullRequest(String slug, String repo, String email, java.util.UUID userId,
+                                                      String title, String head, String base, String body) {
         return forgejo.postAsUser(slug, "/repos/%s/%s/pulls".formatted(slug, repo),
                 Map.of("title", title, "head", head, "base", base == null || base.isBlank() ? "main" : base,
                         "body", body == null ? "" : body),
                 myPat(slug, email, userId));
     }
 
-    public ForgejoClient.Response mergePullRequest(String slug, String repo, String email, java.util.UUID userId,
+    /** Merges the open PR for an issue's branch — found by matching {@code pulls()} on the derived branch name. */
+    public ForgejoClient.Response mergePrForIssue(String slug, String repo, String email, java.util.UUID userId,
+                                                  int issueNumber, String issueTitle) {
+        String branch = issueBranch(issueNumber, issueTitle);
+        return pulls(slug, repo).stream()
+                .filter(p -> p.head().equals(branch))
+                .findFirst()
+                .map(p -> mergePullRequest(slug, repo, email, userId, p.number()))
+                .orElseThrow(() -> new IllegalArgumentException("no open PR for issue #" + issueNumber + " yet"));
+    }
+
+    /** Not exposed on its own — only {@link #mergePrForIssue} calls this. */
+    private ForgejoClient.Response mergePullRequest(String slug, String repo, String email, java.util.UUID userId,
                                                     int index) {
         return forgejo.postAsUser(slug, "/repos/%s/%s/pulls/%d/merge".formatted(slug, repo, index),
                 Map.of("Do", "merge"), myPat(slug, email, userId));

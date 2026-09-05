@@ -129,7 +129,7 @@
                         class="d-inline"
                         onsubmit="return confirm('Regenerate your git password? The old one stops working immediately.')">
                     <input type="hidden" name="userId" th:value="${m.userId}">
-                    <button class="btn btn-sm btn-link p-0" title="Regenerate password">regenerate</button>
+                    <button class="btn btn-sm btn-link p-0" title="Regenerate password"><i class="bi bi-arrow-clockwise"></i></button>
                   </form>
                 </span>
                 <span th:unless="${m.userId == currentUserId and myGitPassword != null}"
@@ -147,7 +147,7 @@
                         class="d-inline"
                         onsubmit="return confirm('Regenerate your PAT? The old one stops working immediately.')">
                     <input type="hidden" name="userId" th:value="${m.userId}">
-                    <button class="btn btn-sm btn-link p-0" title="Regenerate PAT">regenerate</button>
+                    <button class="btn btn-sm btn-link p-0" title="Regenerate PAT"><i class="bi bi-arrow-clockwise"></i></button>
                   </form>
                 </span>
                 <span th:unless="${m.userId == currentUserId and myGitPat != null}"

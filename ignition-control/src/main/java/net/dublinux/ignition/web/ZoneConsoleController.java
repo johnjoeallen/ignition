@@ -212,13 +212,31 @@ public class ZoneConsoleController {
         }
     }
 
-    /** A repo's own page — issues, branches, open PRs, and forms to open each — all as the caller's own PAT. */
+    /**
+     * One row per issue — its branch (always derivable, never stored), and
+     * whichever open PR has that branch as its head, if one's been opened yet.
+     */
+    public record IssueRow(int number, String title, String htmlUrl, String branchName,
+                           Integer prNumber, String prHtmlUrl, boolean prMergeable) {}
+
+    /** A repo's own page, managed entirely through its issues — see {@link net.dublinux.ignition.zone.ZoneService#createIssue}. */
     @GetMapping("/teams/{slug}/repos/{repo}")
     public String repo(@PathVariable String slug, @PathVariable String repo, Model model) {
+        List<ZoneService.PullView> pulls = zones.pulls(slug, repo);
+        Map<String, ZoneService.PullView> pullByBranch = pulls.stream()
+                .collect(java.util.stream.Collectors.toMap(ZoneService.PullView::head, p -> p, (a, b) -> a));
+        List<IssueRow> issueRows = zones.issues(slug, repo).stream()
+                .map(i -> {
+                    var pr = pullByBranch.get(i.branchName());
+                    return new IssueRow(i.number(), i.title(), i.htmlUrl(), i.branchName(),
+                            pr == null ? null : pr.number(), pr == null ? null : pr.htmlUrl(),
+                            pr != null && pr.mergeable());
+                })
+                .toList();
+
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
-        model.addAttribute("issues", zones.issues(slug, repo));
-        model.addAttribute("pulls", zones.pulls(slug, repo));
+        model.addAttribute("issueRows", issueRows);
         model.addAttribute("branches", zones.branches(slug, repo));
         return "repo";
     }
@@ -234,21 +252,26 @@ public class ZoneConsoleController {
         return redirectRepo(slug, repo, msg);
     }
 
-    @PostMapping("/teams/{slug}/repos/{repo}/pulls")
-    public String createPullRequest(@PathVariable String slug, @PathVariable String repo,
-                                    @RequestParam String title, @RequestParam String head,
-                                    @RequestParam(defaultValue = "main") String base,
-                                    @RequestParam(required = false) String body) {
-        var res = zones.createPullRequest(slug, repo, callerEmail(), callerId(), title, head, base, body);
-        return redirectRepo(slug, repo, res.ok() ? "PR opened"
+    /** Opens a PR for this issue's branch into main — Closes #n in the body closes the issue on merge. */
+    @PostMapping("/teams/{slug}/repos/{repo}/issues/{number}/pr")
+    public String openPrForIssue(@PathVariable String slug, @PathVariable String repo,
+                                 @PathVariable int number, @RequestParam String title) {
+        var res = zones.openPrForIssue(slug, repo, callerEmail(), callerId(), number, title);
+        return redirectRepo(slug, repo, res.ok() ? "PR opened for issue #" + number
                 : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
     }
 
-    @PostMapping("/teams/{slug}/repos/{repo}/pulls/{number}/merge")
-    public String mergePullRequest(@PathVariable String slug, @PathVariable String repo, @PathVariable int number) {
-        var res = zones.mergePullRequest(slug, repo, callerEmail(), callerId(), number);
-        return redirectRepo(slug, repo, res.ok() ? "PR #" + number + " merged"
-                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+    /** Merges the open PR for this issue's branch — found by the branch, not a stored PR number. */
+    @PostMapping("/teams/{slug}/repos/{repo}/issues/{number}/merge")
+    public String mergePrForIssue(@PathVariable String slug, @PathVariable String repo,
+                                  @PathVariable int number, @RequestParam String title) {
+        try {
+            var res = zones.mergePrForIssue(slug, repo, callerEmail(), callerId(), number, title);
+            return redirectRepo(slug, repo, res.ok() ? "issue #" + number + "'s PR merged"
+                    : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, repo, e.getMessage());
+        }
     }
 
     private String callerEmail() {
