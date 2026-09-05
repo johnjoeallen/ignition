@@ -31,10 +31,17 @@ body { background: var(--ign-bg); }
 
 .ign-sidebar {
   width: 240px;
+  min-height: 100vh;
   background: linear-gradient(180deg, var(--ign-sidebar-bg), var(--ign-sidebar-bg-2));
   color: #fff;
   border: none;
 }
+/* Without an explicit height here, .offcanvas-body's flex column only
+   stretches to fit its own content (the nav links), not the sidebar's full
+   height — so the version footer just sat right under the last link instead
+   of at the bottom of the screen. Pins it there regardless of how few nav
+   items there are or how tall the page content is. */
+.ign-sidebar .offcanvas-body { height: 100%; }
 .ign-sidebar-brand { border-bottom: 1px solid rgba(255,255,255,.08); padding: 1.1rem 1rem; }
 .ign-sidebar .brand {
   display: flex; align-items: center; gap: .7rem;
