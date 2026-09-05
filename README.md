@@ -121,10 +121,11 @@ to create the platform admin. Then from the console:
 - **Roster** — paste a slug list to bulk-provision or bulk-destroy an event.
 - Per team: **move**, **destroy**; per app: **stop**; **sweep idle teams now**.
 
-A team lead then adds `.forgejo/workflows/deploy.yml`
-([`examples/deploy.yml`](examples/deploy.yml)) to a repo with its vars/secrets
-(`REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, and an
-optional `FORGEJO_TOKEN`).
+**Create app** in the team console seeds the repo with a starter `Dockerfile`
+and `.forgejo/workflows/deploy.yml` ([`examples/deploy.yml`](examples/deploy.yml))
+plus every var/secret that workflow needs — `REGISTRY`, `REGISTRY_USER`,
+`CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, `FORGEJO_TOKEN` — so
+there's nothing to wire up by hand.
 
 Builds **start from a release** — in the team console under Repositories the
 team admin clicks **Release**; `ignition-control` reads the commits since the

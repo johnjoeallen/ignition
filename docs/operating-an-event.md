@@ -69,9 +69,10 @@ They take it from there — same console, scoped to their team by role, not by
 a token. (`zone-admin.txt` is `ignition-control`'s own Forgejo service
 credential; it never leaves the controller, and nobody signs in as it.)
 
-In each repo they want deployed they add `.forgejo/workflows/deploy.yml` (from
-`examples/deploy.yml`) with its variables/secrets — `REGISTRY`, `CONTROL_URL`,
-`APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN` (and an optional `FORGEJO_TOKEN`). The
+**Create app** in the team console makes the repo and seeds it with a starter
+`Dockerfile`, `.forgejo/workflows/deploy.yml` (see `examples/deploy.yml`), and
+every variable/secret that workflow needs — `REGISTRY`, `REGISTRY_USER`,
+`CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, `FORGEJO_TOKEN`. The
 team admin hits **Release** in the console — which reads the commits since the
 last release, picks the bump, and tags the next `vX.Y.Z` on `main` — and that
 tag builds, pushes, and deploys `APP_NAME.apps.<slug>.ignition.example`.

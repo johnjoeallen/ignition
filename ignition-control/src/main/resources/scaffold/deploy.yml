@@ -22,15 +22,17 @@
 # Repo variables (Settings -> Actions -> Variables):
 #   REGISTRY     git.<slug>.<BASE_DOMAIN>            e.g. git.quantum-badgers.ignition.example
 #                (must match the zone's registry exactly — ignition-control checks it)
-#   CONTROL_URL  the ignition-control public URL           its /deploy endpoint
-#   APP_NAME     my-app                              -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
-#   APP_PORT     8080                                fixed by ignition (Create app) — listen on $PORT/8080
+#   CONTROL_URL   the ignition-control public URL          its /deploy endpoint
+#   APP_NAME      my-app                             -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
+#   APP_PORT      8080                               fixed by ignition (Create app) — listen on $PORT/8080
+#   REGISTRY_USER the Forgejo user to `docker login` as  (the zone bot; set by Create app)
 # Repo secrets (Settings -> Actions -> Secrets):
 #   DEPLOY_TOKEN   the zone's CI token (state/zones/<slug>/deploy-token)
-#   FORGEJO_TOKEN  optional — a token with package:write for the registry. If
-#                  unset, the automatic per-run Actions token is used (its user
-#                  always matches github.actor, and `permissions:` below grants
-#                  it package writes).
+#   FORGEJO_TOKEN  a real user token with write:package — set by Create app to
+#                  the zone bot's PAT. Required: the automatic per-run Actions
+#                  token (github.token) CANNOT push to Forgejo's container
+#                  registry (it gets `unauthorized: reqPackageAccess` however
+#                  `permissions:` is set), so a package push needs this.
 
 name: build and deploy
 
@@ -68,7 +70,7 @@ jobs:
           # job image is Alpine, no bash)
           TAG=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
           echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
-            | docker login "${{ vars.REGISTRY }}" -u "${{ github.actor }}" --password-stdin
+            | docker login "${{ vars.REGISTRY }}" -u "${{ vars.REGISTRY_USER || github.actor }}" --password-stdin
           docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$TAG" .
           docker push "$REPO:${{ github.sha }}"
           docker push "$REPO:$TAG"

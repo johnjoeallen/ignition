@@ -436,8 +436,8 @@ the apex).
 
 1. A repo with a `Dockerfile` and `.forgejo/workflows/deploy.yml`
    (copy [`examples/deploy.yml`](examples/deploy.yml)).
-2. Repo vars / secrets: `REGISTRY`, `CONTROL_URL`, `APP_NAME`, `APP_PORT`,
-   `DEPLOY_TOKEN`, optionally `FORGEJO_TOKEN`.
+2. Repo vars / secrets: `REGISTRY`, `REGISTRY_USER`, `CONTROL_URL`, `APP_NAME`,
+   `APP_PORT`, `DEPLOY_TOKEN`, `FORGEJO_TOKEN` — all seeded by **Create app**.
 3. **Team console → Repositories → Release** — `ignition-control` reads the
    commits since the last tag, picks the semver bump (Conventional Commits;
    dropdown overrides), tags `vX.Y.Z` on `main`; the tag builds, pushes, deploys.

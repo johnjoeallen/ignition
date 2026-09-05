@@ -21,6 +21,7 @@ import net.dublinux.ignition.config.IgnitionProperties;
 import net.dublinux.ignition.docker.DockerCli;
 import net.dublinux.ignition.forgejo.ForgejoClient;
 import net.dublinux.ignition.node.NodeRepository;
+import net.dublinux.ignition.provisioning.ProvisioningService;
 import net.dublinux.ignition.provisioning.ProvisioningStatusRepository;
 import net.dublinux.ignition.release.ReleaseService;
 import net.dublinux.ignition.templates.RenderService;
@@ -196,11 +197,10 @@ public class ZoneService {
      * anything a normal user can do through the API, the same as they can
      * through the web UI with their password. In particular {@code
      * write:package}: the container registry (git.<slug>...) authenticates
-     * with a token exactly like this one, so this is what lets a member's
-     * own PAT stand in for the manually-created {@code FORGEJO_TOKEN} repo
-     * secret the seeded deploy.yml already accepts (optional there — it
-     * falls back to the per-run Actions token — but a member using their own
-     * PAT there, or from their own machine, needs the scope to push).
+     * with a token exactly like this one. {@link #createApp} seeds the zone
+     * bot's token as the repo's {@code FORGEJO_TOKEN} secret so CI can push;
+     * this scope is what lets a member's own PAT do the same from their
+     * machine, or stand in for that secret in a hand-run of the workflow.
      * {@code write:X} implies read:X too. Deliberately excludes the one
      * admin-only scope (site-wide admin) — this is a normal user's token.
      */
@@ -837,14 +837,23 @@ public class ZoneService {
      * page and the deploy workflow, and sets the repo variables/secrets that
      * workflow needs — so the team can clone, push, and hit Release with
      * nothing to configure by hand.
+     *
+     * <p>Idempotent: run against a name that already exists it re-applies the
+     * variables/secrets (and any starter file still missing), so "Create app"
+     * doubles as "repair this app's deploy config" — the way a fix to what we
+     * seed (e.g. a new {@code FORGEJO_TOKEN}) reaches apps made before it.
      */
     public ForgejoClient.Response createApp(String slug, String name, String description) {
         ensureOrg(slug);
         ForgejoClient.Response repo = forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
                 "name", name, "description", description == null ? "" : description,
                 "private", props.isPrivateRepos(), "auto_init", true));
-        if (!repo.ok()) {
+        boolean existed = repo.status() == 409;
+        if (!repo.ok() && !existed) {
             return repo;
+        }
+        if (existed) {
+            log.info("zone {}: app {} already exists — re-applying deploy config", slug, name);
         }
         Zone zone = zones.find(slug).orElseThrow(() -> new IllegalStateException("no such zone: " + slug));
 
@@ -860,11 +869,27 @@ public class ZoneService {
         setVar(slug, name, "APP_PORT", Integer.toString(APP_PORT));
         setSecret(slug, name, "DEPLOY_TOKEN", zones.secret(slug, "deploy-token"));
 
+        // Registry auth for `docker push` in the deploy workflow. The per-run
+        // Actions token (github.token) can't write to Forgejo's container
+        // registry — a package push is rejected with `unauthorized:
+        // reqPackageAccess` regardless of the job's `permissions:` block. So we
+        // seed a real user token: the zone bot's PAT (site admin, all scopes,
+        // so it can always write the org's packages), plus the matching
+        // username to `docker login` with. github.actor on a console release is
+        // this same bot (it POSTs the tag), but pinning REGISTRY_USER keeps the
+        // login working no matter who triggers the run.
+        setVar(slug, name, "REGISTRY_USER", ProvisioningService.BOT_USER);
+        setSecret(slug, name, "FORGEJO_TOKEN", zones.secret(slug, "forgejo_token"));
+
         // After seeding, not before — the scaffold commits above go straight
         // to main themselves, so protecting it first would just block them.
         protectMainBranch(slug, name);
 
-        return repo;
+        // A 409 from the create is expected on a repair run — the config above
+        // still applied, so report success to the console.
+        return existed
+                ? forgejo.get(slug, "/repos/" + slug + "/" + name)
+                : repo;
     }
 
     /**
