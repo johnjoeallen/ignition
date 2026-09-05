@@ -161,7 +161,8 @@ from?" six months later.
   one form.
 - **No new vendor.** Forgejo (community-governed, FOSS), Docker, Traefik, and
   WireGuard — all things a platform team can already reason about and audit. No
-  hosted tunnel or edge service: the controller is the only public machine.
+  hosted tunnel or edge service: the controller is the sole front door,
+  reachable from the internet, the corporate network, or both as you choose.
 - **Reversible.** Nothing here is a long-lived commitment. Run it for one event
   and tear it down, or leave it standing for continuous innovation work — either
   way it's a few hosts and the templates, not a platform migration.

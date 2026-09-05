@@ -2,7 +2,7 @@
 
 Ignition is **one Java (Spring Boot) service, `ignition-control`**, plus two
 compose templates. It runs as a container on the **controller** — the only
-machine with a public address and the only place TLS terminates — serves both
+machine that accepts inbound traffic and the only place TLS terminates — serves both
 admin consoles, is the single front door for all traffic, and drives every
 node's Docker daemon over the `docker` CLI. Nodes sit on a private network with
 no inbound; the controller reaches them over WireGuard. State is a directory per
@@ -251,8 +251,10 @@ Real chicken-and-egg, not accidental complexity.
     [Exposure & access](exposure.md) for its status and alternatives. The
     prototype currently runs a simpler topology ([End to End](end-to-end.md)).
 
-There is **one front door**: the controller is the only public machine and the
-only place TLS terminates. Its edge Traefik owns `:443` (and `:80` for the ACME
+There is **one front door**: the controller is the only machine that accepts
+inbound traffic and the only place TLS terminates. Whether it's reachable from
+the public internet, only from the corporate network, or both is a deployment
+choice — the design assumes only that clients and nodes can reach it. Its edge Traefik owns `:443` (and `:80` for the ACME
 challenge and the HTTPS redirect), runs the **SSO gateway** for browser
 traffic, and reverse-proxies by `Host` over **WireGuard** to whichever node
 runs the team. Nodes have **no inbound at all**; behind the edge everything is

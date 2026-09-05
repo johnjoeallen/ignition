@@ -74,7 +74,7 @@ flowchart TB
     dev["Team developer"] -->|"git push (PAT) · https"| cp
     visitor["Judge / stakeholder"] -->|https| cp
     za["Zone admin (quantum-badgers)"] -->|"users · repos · apps · runner"| cp
-    cp["Controller<br/>edge :443 · SSO · ignition-control<br/>the only public machine"]
+    cp["Controller<br/>edge :443 · SSO · ignition-control<br/>the only inbound entry point"]
 
     subgraph node1["node-1  (private, no inbound)"]
         traefik1["Traefik (internal :80)"]
@@ -176,8 +176,8 @@ each, **[Roles](roles.md)** for the platform-admin / team-admin split, and
 ## Status
 
 Ignition is **one Java (Spring Boot) service, `ignition-control`, deployed as a
-container** on the controller — the only public machine and the only place TLS
-terminates, reaching the private nodes over WireGuard. Both consoles, node
+container** on the controller — the only machine that accepts inbound traffic
+and the only place TLS terminates, reaching the private nodes over WireGuard. Both consoles, node
 registration, team provisioning (the two-phase Forgejo + DinD + runner apply) /
 move / destroy, the scheduler, the roster, the idle sweep, and the CI `/deploy`
 bridge are all in place. There is no CLI — every operation is in the web UI.
