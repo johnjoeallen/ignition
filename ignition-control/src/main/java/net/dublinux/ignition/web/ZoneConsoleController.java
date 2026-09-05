@@ -155,7 +155,7 @@ public class ZoneConsoleController {
 
     @PostMapping("/teams/{slug}/members/reset-git-password")
     public String resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId) {
-        requireZoneAdmin(slug);
+        requireSelfOrZoneAdmin(slug, userId);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
@@ -164,10 +164,30 @@ public class ZoneConsoleController {
                 + " — copy it now, it won't be shown again");
     }
 
+    /** Anyone can regenerate their own PAT; a team admin can also regenerate someone else's. */
+    @PostMapping("/teams/{slug}/members/reset-pat")
+    public String resetPat(@PathVariable String slug, @RequestParam java.util.UUID userId) {
+        requireSelfOrZoneAdmin(slug, userId);
+        String email = access.emailOf(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
+        String username = zones.gitUsername(slug, email);
+        String newPat = zones.resetPat(slug, username, userId);
+        return redirect(slug, "personal access token for " + username + " regenerated: " + newPat
+                + " — copy it now, it won't be shown again");
+    }
+
     /** Member-management actions need team-admin rights, not just team access. */
     private void requireZoneAdmin(String slug) {
         if (!currentUser.isZoneAdmin(slug)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can manage members");
+        }
+    }
+
+    /** Resetting your own credentials never needs admin rights; resetting someone else's does. */
+    private void requireSelfOrZoneAdmin(String slug, java.util.UUID targetUserId) {
+        boolean isSelf = currentUser.get().map(u -> u.id().equals(targetUserId)).orElse(false);
+        if (!isSelf) {
+            requireZoneAdmin(slug);
         }
     }
 

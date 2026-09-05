@@ -353,6 +353,11 @@ public class ZoneService {
         if (!zones.userSecret(slug, "git_pat_" + username, userId).isBlank()) {
             return;
         }
+        mintPat(slug, username, userId);
+    }
+
+    /** Mints a fresh PAT unconditionally, replacing whatever's on file — see {@link #ensurePat} for the gated version. */
+    private void mintPat(String slug, String username, java.util.UUID userId) {
         forgejo.deleteBasicAuth(slug, "/users/" + username + "/tokens/ignition?sudo=" + username);
         // sudo: the bot is a Forgejo site admin (see ProvisioningService), so this
         // executes as `username` rather than as the bot itself. Basic auth, not the
@@ -377,6 +382,12 @@ public class ZoneService {
         }
         zones.putUserSecret(slug, "git_pat_" + username, token, userId);
         log.info("zone {}: PAT minted for {}: {}", slug, username, token);
+    }
+
+    /** Regenerates a member's PAT on demand — the old one stops working immediately (Forgejo deletes it first). */
+    public String resetPat(String slug, String username, java.util.UUID userId) {
+        mintPat(slug, username, userId);
+        return zones.userSecret(slug, "git_pat_" + username, userId);
     }
 
     private void ensureOrgMembership(String slug, String username) {

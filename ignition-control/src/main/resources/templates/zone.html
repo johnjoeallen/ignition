@@ -125,6 +125,12 @@
                           th:attr="data-copy=${myGitPassword}" title="Copy password">
                     <i class="bi bi-clipboard"></i>
                   </button>
+                  <form method="post" th:action="@{/teams/{slug}/members/reset-git-password(slug=${zoneSlug})}"
+                        class="d-inline"
+                        onsubmit="return confirm('Regenerate your git password? The old one stops working immediately.')">
+                    <input type="hidden" name="userId" th:value="${m.userId}">
+                    <button class="btn btn-sm btn-link p-0" title="Regenerate password">regenerate</button>
+                  </form>
                 </span>
                 <span th:unless="${m.userId == currentUserId and myGitPassword != null}"
                       class="text-body-secondary">—</span>
@@ -137,6 +143,12 @@
                           th:attr="data-copy=${myGitPat}" title="Copy PAT">
                     <i class="bi bi-clipboard"></i>
                   </button>
+                  <form method="post" th:action="@{/teams/{slug}/members/reset-pat(slug=${zoneSlug})}"
+                        class="d-inline"
+                        onsubmit="return confirm('Regenerate your PAT? The old one stops working immediately.')">
+                    <input type="hidden" name="userId" th:value="${m.userId}">
+                    <button class="btn btn-sm btn-link p-0" title="Regenerate PAT">regenerate</button>
+                  </form>
                 </span>
                 <span th:unless="${m.userId == currentUserId and myGitPat != null}"
                       class="text-body-secondary">—</span>
