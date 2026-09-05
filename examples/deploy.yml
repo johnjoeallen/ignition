@@ -51,12 +51,13 @@ jobs:
   deploy:
     runs-on: docker-cli
     steps:
-      # The job image (code.forgejo.org/oci/docker:cli) is Alpine with the
-      # Docker CLI but no Node.js; actions/checkout is a JavaScript action and
-      # needs a `node` on PATH. Alpine's nodejs package is current (Node 22),
-      # which satisfies checkout@v4. This runs in `sh`, before any JS action.
-      - name: Provide Node.js for JavaScript actions
-        run: apk add --no-cache nodejs
+      # The job image (code.forgejo.org/oci/docker:cli) is a bare Alpine +
+      # Docker CLI: no Node.js (actions/checkout is a JavaScript action and
+      # needs `node` on PATH — Alpine's nodejs is Node 24, well past
+      # checkout@v4's floor) and no curl (the Deploy step below). Add both
+      # up front, in `sh`, before any JS action runs.
+      - name: Prepare job tools (node for checkout, curl for deploy)
+        run: apk add --no-cache nodejs curl
 
       - uses: actions/checkout@v4
 
