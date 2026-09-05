@@ -15,23 +15,33 @@ demo is a laptop and a slide deck.
 Ignition is the layer that's missing between "here is a network" and "here is a
 running product." At the push of a button, every team gets a genuinely
 controlled environment that is entirely its own — its git, CI, build engine,
-image registry, and a real internet-reachable address — sealed off from every
-other team by construction, with near-total freedom to do whatever it likes
-inside those walls. When the event ends the whole thing is reclaimed cleanly,
-leaving nothing behind.
+image registry, and routed HTTPS addresses for whatever it deploys — sealed off
+from every other team by construction, with near-total freedom to build
+whatever it wants inside those walls. Nobody logs into a host, manages a
+separate git account, or puts a password on their app: a person's ordinary
+corporate identity is the only credential, checked once at the edge. When the
+event ends the whole environment is reclaimed cleanly, leaving nothing behind.
+
+Access to what teams build is deliberate, not incidental. Every team's running
+app is reachable from the corporate network — colleagues, judges, and product
+owners just open the URL, no account, no VPN dance. Reaching an app from the
+public internet is a separate, per-app decision: off by default, turned on one
+app at a time and only with approval. The environment is controlled at every
+edge; the freedom is on the inside.
 
 The difference this makes is the difference between *innovation theatre* — a day
 of slideware and localhost demos that are gone by Monday — and an *innovation
 pipeline*, where every promising idea already exists as a running artifact a
 product team can pick up.
 
-And this holds even where none of those restrictions apply. Give every team root
-on its own host, skip the security review, spend freely — an isolated,
-disposable stack per team is *still* the arrangement that produces the most
-working software per event, for reasons of failure containment, coordination
-cost, fidelity, and hygiene that have nothing to do with policy. A constrained
-environment doesn't create the need for this design; it just removes the option
-of ignoring it.
+That control is the point, not a constraint to be worked around. Even where
+there is no policy to satisfy, an isolated disposable stack per team — with
+exposure governed centrally — is still the arrangement that produces the most
+working software per event: it keeps one team's mistake from becoming
+everyone's outage, gives every team an identical clean start, and makes each
+team's output a real running URL rather than a laptop demo. A restrictive
+corporate environment doesn't create the need for this design; it just removes
+the option of ignoring it.
 
 ## Why a shared environment is the wrong default
 
@@ -109,10 +119,12 @@ marginal cost of one more team is close to zero.
 Every app a team ships is live at `https://<app>.apps.<team>.<event-domain>/`.
 The team lead clicks **Release** in their team console and it builds and deploys itself;
 every app is also wired to reload automatically when its image changes. One
-team can run several. Stakeholders engage with **working software** during
-judging. The best ideas leave the event as a running URL and a git repo —
-already deployed, already shareable — instead of a deck that needs a project to
-become real.
+team can run several. From the corporate network the URL just works — no
+account, no per-app login — so stakeholders engage with **working software**
+during judging; making an app reachable from the public internet is a separate,
+per-app approval. The best ideas leave the event as a running URL and a git
+repo — already deployed, already shareable — instead of a deck that needs a
+project to become real.
 
 A planned **services catalogue** extends this. A team's own infrastructure —
 its database, its cache — ships in its app. The catalogue covers the
