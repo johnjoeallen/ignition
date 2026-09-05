@@ -51,14 +51,9 @@
           <tbody>
             <tr th:each="a : ${apps}">
               <td>
-                <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.name}">flora</a>
-                <span th:unless="${a.deployed}" th:text="${a.name}">flora</span>
-              </td>
-              <td>
                 <a th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${a.name})}" th:text="${a.name}">flora</a>
-                <a th:href="${a.htmlUrl}" class="text-body-secondary ms-1" title="open in Forgejo">
-                  <i class="bi bi-box-arrow-up-right"></i></a>
               </td>
+              <td><a th:href="${a.htmlUrl}" th:text="${a.name}">flora</a></td>
               <td th:text="${a.version}">v1.2.3</td>
               <td>
                 <a th:if="${a.deployed}" th:href="${a.url}" th:text="${a.image}">image</a>
