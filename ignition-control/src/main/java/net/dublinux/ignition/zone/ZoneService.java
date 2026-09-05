@@ -544,6 +544,7 @@ public class ZoneService {
                         forgejo.get(slug, "/repos/%s/%s/tags?limit=50".formatted(owner, name)).body());
                 String version = (v[0] == 0 && v[1] == 0 && v[2] == 0)
                         ? "no releases yet" : "v%d.%d.%d".formatted(v[0], v[1], v[2]);
+                protectMainBranch(slug, name); // self-heal: catches a repo that predates this protection
                 out.add(new RepoView(owner, name, r.path("full_name").asText(""),
                         r.path("html_url").asText(""), r.path("clone_url").asText(""), version));
             }
@@ -729,7 +730,39 @@ public class ZoneService {
         setVar(slug, name, "APP_PORT", Integer.toString(APP_PORT));
         setSecret(slug, name, "DEPLOY_TOKEN", zones.secret(slug, "deploy-token"));
 
+        // After seeding, not before — the scaffold commits above go straight
+        // to main themselves, so protecting it first would just block them.
+        protectMainBranch(slug, name);
+
         return repo;
+    }
+
+    /**
+     * Direct pushes to {@code main} are blocked from here on — matches the
+     * issue→branch→PR→merge flow the team console drives everything through
+     * ({@link #createIssue}, {@link #openPrForIssue}, {@link #mergePrForIssue}).
+     * A PR's merge still lands on {@code main} normally; only a raw
+     * {@code git push} to it is refused.
+     *
+     * <p>{@code branch_name} is Forgejo/Gitea's older, more broadly-compatible
+     * field name for this endpoint — some versions have since moved to a
+     * pattern-based {@code rule_name} instead. Written from memory of the
+     * API shape, not verified against a live instance; if this 422s, that
+     * field name is the first thing to check.
+     */
+    private void protectMainBranch(String slug, String repo) {
+        if (forgejo.get(slug, "/repos/" + slug + "/" + repo + "/branch_protections/main").ok()) {
+            return; // already protected — cheap to check, idempotent either way
+        }
+        var res = forgejo.post(slug, "/repos/" + slug + "/" + repo + "/branch_protections", Map.of(
+                "branch_name", "main",
+                "enable_push", false,
+                "enable_merge_whitelist", false));
+        if (res.ok()) {
+            log.info("zone {}: main protected on {} (no direct push — PRs only)", slug, repo);
+        } else {
+            log.warn("zone {}: protecting main on {} failed ({}): {}", slug, repo, res.status(), res.message());
+        }
     }
 
     private void putFile(String slug, String repo, String path, String content, String message) {
