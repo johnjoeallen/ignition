@@ -93,9 +93,9 @@ public class ZoneConsoleController {
         // Credentials are only ever computed for the viewer's own row — never
         // fetched (let alone decrypted) for anyone else's, so there's nothing
         // to accidentally leak even if the template gating had a bug.
-        ZoneService.GitCreds myCreds = members.stream()
-                .filter(m -> m.userId().equals(currentUserId))
-                .findFirst()
+        var me = members.stream().filter(m -> m.userId().equals(currentUserId)).findFirst();
+        String myGitUsername = me.map(m -> gitUsernames.get(m.email())).orElse(null);
+        ZoneService.GitCreds myCreds = me
                 .map(m -> zones.gitCredentials(slug, gitUsernames.get(m.email()), m.userId()))
                 .orElse(null);
 
@@ -105,6 +105,7 @@ public class ZoneConsoleController {
         model.addAttribute("apps", rows);
         model.addAttribute("members", members);
         model.addAttribute("gitUsernames", gitUsernames);
+        model.addAttribute("myGitUsername", myGitUsername);
         model.addAttribute("myGitPassword", myCreds == null ? null : myCreds.password());
         model.addAttribute("myGitPat", myCreds == null ? null : myCreds.pat());
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));

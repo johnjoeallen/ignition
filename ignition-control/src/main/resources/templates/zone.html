@@ -13,6 +13,15 @@
           <span class="text-body-secondary small">Forgejo</span>
           <a th:href="${zone.forgejoUrl + zoneSlug}" th:text="${zone.forgejoUrl + zoneSlug}">git…</a>
 
+          <span th:if="${myGitUsername != null}" class="text-body-secondary small">Your username</span>
+          <span th:if="${myGitUsername != null}" class="d-inline-flex align-items-center gap-1">
+            <code th:text="${myGitUsername}">alice</code>
+            <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
+                    th:attr="data-copy=${myGitUsername}" title="Copy username">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </span>
+
           <span th:if="${myGitPassword != null}" class="text-body-secondary small">Your password</span>
           <span th:if="${myGitPassword != null}" class="d-inline-flex align-items-center gap-1">
             <code th:text="${myGitPassword}">••••••••</code>
