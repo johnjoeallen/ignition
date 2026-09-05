@@ -69,6 +69,12 @@ exists only as `ignition-control`'s own credential and never leaves the
 controller. A team admin has no node access, no Docker access, no Forgejo
 admin access, and no visibility into any other team.
 
+![Team console — apps and members](img/team-console.png)
+
+*The team console: apps (name, description, version) and members. Your own
+git password and PAT show only on your own row, each with a copy icon and a
+regenerate icon — nobody else's, including other admins, are ever shown here.*
+
 ## Team member / developer
 
 Everyone else on the team — same console, same `/teams/<slug>`, minus member
@@ -85,16 +91,28 @@ not by clicking around in Forgejo. The one thing you still do with a normal
 git client is `clone`/`push` — that part is unchanged; it's the
 issue/PR/release *lifecycle* that has one intended path.
 
+![An app's management page](img/app-management.png)
+
+*An app's management page — the clone URL, the current version, Release, an
+editable description, and the issue list. This is where day-to-day work
+happens, not in Forgejo's own UI.*
+
 1. **Open an issue** for the work, on the app's management page. This
    automatically creates its branch too — `<issue-number>-<title, slugified>`
    off `main` — so there's no separate "create a branch" step, and every
    branch traces back to the issue that justified it.
+
+   ![An issue, with its branch already created](img/issue-opened.png)
+
 2. **Clone the repo** (the clone URL and a copy button are right there on the
    management page) and push your commits to that issue's branch, same as any
    git workflow.
 3. **Open a PR** — a button on the issue's own row once it has commits to
    merge. It always targets `main` (the only target this project uses); no
    need to pick a base branch.
+
+   ![A PR opened for the issue, with merge and close available](img/pr-opened.png)
+
 4. **Merge or close** — once Forgejo reports the PR mergeable, **merge**
    closes the issue and deletes the branch automatically. If it turns out
    there's nothing to merge after all, **close** does the same cleanup
@@ -109,6 +127,8 @@ issue/PR/release *lifecycle* that has one intended path.
    **major**; nothing conventional → patch), and tags the next `vX.Y.Z` on
    `main`. The dropdown next to **Release** defaults to *auto (from
    commits)*; override it for that one release if needed.
+
+   ![After merging and releasing — v0.1.0, no open issues](img/released.png)
 
 The new tag fires the `build and deploy` workflow; on success the app is live
 at `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
