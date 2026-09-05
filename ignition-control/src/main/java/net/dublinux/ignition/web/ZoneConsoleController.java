@@ -266,8 +266,20 @@ public class ZoneConsoleController {
                                   @PathVariable int number, @RequestParam String title) {
         try {
             var res = zones.mergePrForIssue(slug, repo, callerEmail(), callerId(), number, title);
-            return redirectRepo(slug, repo, res.ok() ? "issue #" + number + "'s PR merged"
-                    : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+            String msg;
+            if (res.ok()) {
+                msg = "issue #" + number + "'s PR merged";
+            } else if (res.status() == 405) {
+                // Forgejo computes mergeability asynchronously right after a PR
+                // opens (or certain pushes) — a merge attempt before that check
+                // finishes gets exactly this response. Transient, not a real
+                // failure; the fix is just "try again in a few seconds", not
+                // anything we can act on server-side.
+                msg = "Forgejo is still checking whether this PR can be merged — wait a few seconds and try again";
+            } else {
+                msg = "Forgejo said (%d): %s".formatted(res.status(), res.message());
+            }
+            return redirectRepo(slug, repo, msg);
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());
         }
