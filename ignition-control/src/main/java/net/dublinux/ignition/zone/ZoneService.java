@@ -735,18 +735,37 @@ public class ZoneService {
     public ForgejoClient.Response mergePrForIssue(String slug, String repo, String email, java.util.UUID userId,
                                                   int issueNumber, String issueTitle) {
         String branch = issueBranch(issueNumber, issueTitle);
-        return pulls(slug, repo).stream()
+        String pat = myPat(slug, email, userId);
+        var pr = pulls(slug, repo).stream()
                 .filter(p -> p.head().equals(branch))
                 .findFirst()
-                .map(p -> mergePullRequest(slug, repo, email, userId, p.number()))
                 .orElseThrow(() -> new IllegalArgumentException("no open PR for issue #" + issueNumber + " yet"));
+        var mergeRes = mergePullRequest(slug, repo, email, userId, pr.number());
+        if (mergeRes.ok()) {
+            // Belt-and-braces: delete_branch_after_merge above is a real
+            // Gitea/Forgejo API option, but this session has had more than
+            // one field on this API not behave as documented — a harmless
+            // no-op (404) if Forgejo already deleted it, actual cleanup if not.
+            var branchRes = forgejo.deleteAsUser(slug, "/repos/%s/%s/branches/%s".formatted(slug, repo, branch), pat);
+            if (!branchRes.ok() && branchRes.status() != 404) {
+                log.warn("zone {}: PR merged for issue #{} but deleting branch {} failed ({}): {}",
+                        slug, issueNumber, branch, branchRes.status(), branchRes.message());
+            }
+        }
+        return mergeRes;
     }
 
-    /** Not exposed on its own — only {@link #mergePrForIssue} calls this. */
+    /**
+     * Not exposed on its own — only {@link #mergePrForIssue} calls this.
+     * {@code delete_branch_after_merge} does what its name says on the
+     * successful-merge path — same cleanup {@link #closePrForIssue} does
+     * explicitly for the never-merged path, so either way an issue's branch
+     * doesn't outlive the issue.
+     */
     private ForgejoClient.Response mergePullRequest(String slug, String repo, String email, java.util.UUID userId,
                                                     int index) {
         return forgejo.postAsUser(slug, "/repos/%s/%s/pulls/%d/merge".formatted(slug, repo, index),
-                Map.of("Do", "merge"), myPat(slug, email, userId));
+                Map.of("Do", "merge", "delete_branch_after_merge", true), myPat(slug, email, userId));
     }
 
     /**
