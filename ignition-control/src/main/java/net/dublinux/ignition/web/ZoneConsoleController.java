@@ -297,7 +297,8 @@ public class ZoneConsoleController {
                                   @PathVariable int number, @RequestParam String title) {
         try {
             var res = zones.closePrForIssue(slug, repo, callerEmail(), callerId(), number, title);
-            return redirectRepo(slug, repo, res.ok() ? "issue #" + number + "'s PR closed"
+            return redirectRepo(slug, repo, res.ok()
+                    ? "issue #" + number + " closed — PR closed, branch deleted"
                     : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());

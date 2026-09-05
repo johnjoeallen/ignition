@@ -117,6 +117,10 @@ public class ForgejoClient {
         return sendAsUser(slug, "PATCH", path, body, userToken);
     }
 
+    public Response deleteAsUser(String slug, String path, String userToken) {
+        return sendAsUser(slug, "DELETE", path, null, userToken);
+    }
+
     private Response sendAsUser(String slug, String method, String path, Map<String, ?> body, String userToken) {
         if (userToken == null || userToken.isBlank()) {
             return new Response(401, error("you have no personal access token on file for this team yet"));

@@ -655,9 +655,17 @@ public class ZoneService {
         List<PullView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode p : res.body()) {
-                out.add(new PullView(p.path("number").asInt(), p.path("title").asText(""),
+                int number = p.path("number").asInt();
+                // The list endpoint's own `mergeable` field isn't live —
+                // reported enabled for a PR that Forgejo's own UI shows only
+                // "Close" for (nothing to merge), confirmed live. Only the
+                // single-PR endpoint actually computes it fresh, so fetch that
+                // per PR instead of trusting the list.
+                boolean mergeable = forgejo.get(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, number))
+                        .body().path("mergeable").asBoolean(false);
+                out.add(new PullView(number, p.path("title").asText(""),
                         p.path("head").path("ref").asText(""), p.path("base").path("ref").asText(""),
-                        p.path("mergeable").asBoolean(false), p.path("html_url").asText("")));
+                        mergeable, p.path("html_url").asText("")));
             }
         }
         return out;
@@ -708,16 +716,38 @@ public class ZoneService {
      * for (a branch with nothing to merge): rather than a merge attempt that
      * can only ever 405, just close it. Found the same way merging finds it —
      * by matching the derived branch name, not a stored PR number.
+     *
+     * <p>Deliberately terminal, not a way to retry: also closes the issue
+     * itself and deletes the branch, so this issue drops out of the open
+     * list and there's nothing left to ever open another PR against — no
+     * half-abandoned branch sitting around, no way back into a PR that only
+     * ever 405'd. If the work still needs doing, that's a new issue.
      */
     public ForgejoClient.Response closePrForIssue(String slug, String repo, String email, java.util.UUID userId,
                                                   int issueNumber, String issueTitle) {
         String branch = issueBranch(issueNumber, issueTitle);
-        return pulls(slug, repo).stream()
+        String pat = myPat(slug, email, userId);
+        var pr = pulls(slug, repo).stream()
                 .filter(p -> p.head().equals(branch))
                 .findFirst()
-                .map(p -> forgejo.patchAsUser(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, p.number()),
-                        Map.of("state", "closed"), myPat(slug, email, userId)))
                 .orElseThrow(() -> new IllegalArgumentException("no open PR for issue #" + issueNumber + " yet"));
+        var closeRes = forgejo.patchAsUser(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, pr.number()),
+                Map.of("state", "closed"), pat);
+        if (!closeRes.ok()) {
+            return closeRes;
+        }
+        var branchRes = forgejo.deleteAsUser(slug, "/repos/%s/%s/branches/%s".formatted(slug, repo, branch), pat);
+        if (!branchRes.ok()) {
+            log.warn("zone {}: PR closed for issue #{} but deleting branch {} failed ({}): {}",
+                    slug, issueNumber, branch, branchRes.status(), branchRes.message());
+        }
+        var issueRes = forgejo.patchAsUser(slug, "/repos/%s/%s/issues/%d".formatted(slug, repo, issueNumber),
+                Map.of("state", "closed"), pat);
+        if (!issueRes.ok()) {
+            log.warn("zone {}: PR closed for issue #{} but closing the issue itself failed ({}): {}",
+                    slug, issueNumber, issueRes.status(), issueRes.message());
+        }
+        return closeRes;
     }
 
     /**

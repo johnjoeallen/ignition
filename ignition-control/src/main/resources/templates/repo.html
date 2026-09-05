@@ -56,7 +56,7 @@
                 <form th:if="${i.prNumber != null}" method="post"
                       th:action="@{/teams/{slug}/repos/{repo}/issues/{n}/close(slug=${zoneSlug},repo=${repoName},n=${i.number})}"
                       class="d-inline"
-                      onsubmit="return confirm('Close the PR for issue #' + this.action.split('/issues/')[1].split('/')[0] + ' without merging?')">
+                      onsubmit="return confirm('Close issue #' + this.action.split('/issues/')[1].split('/')[0] + ' without merging? This closes the issue too and deletes its branch — there is no way back in for this issue.')">
                   <input type="hidden" name="title" th:value="${i.title}">
                   <button class="btn btn-sm btn-outline-danger">close</button>
                 </form>
