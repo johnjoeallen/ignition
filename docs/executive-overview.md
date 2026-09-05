@@ -3,23 +3,35 @@
 ## The claim
 
 Large organisations run hackathons, innovation days, and internal build sprints
-to surface new ideas. Most of that investment leaks away — not because the ideas
-are bad, but because the **infrastructure to try them doesn't scale to the
-number of teams**. Ignition is the missing layer: it gives every team, at the
-push of a button, a real, isolated, internet-reachable environment, and reclaims
-it cleanly when the event ends.
+to surface new ideas. Most of that investment evaporates — not because the ideas
+are weak, but because of what teams are handed to build on. A locked-down
+corporate network won't let them install, expose, or route anything real. A
+hosted cloud sandbox — even a polished one — gives back a container, not an
+environment: no address of their own, no isolation to rely on, no clean way to
+stand up the three or four moving parts a genuine prototype needs. Either way
+the ceiling is the same, and teams hit it in the first hour. What reaches the
+demo is a laptop and a slide deck.
+
+Ignition is the layer that's missing between "here is a network" and "here is a
+running product." At the push of a button, every team gets a genuinely
+controlled environment that is entirely its own — its git, CI, build engine,
+image registry, and a real internet-reachable address — sealed off from every
+other team by construction, with near-total freedom to do whatever it likes
+inside those walls. When the event ends the whole thing is reclaimed cleanly,
+leaving nothing behind.
 
 The difference this makes is the difference between *innovation theatre* — a day
 of slideware and localhost demos that are gone by Monday — and an *innovation
-pipeline*, where every promising idea already has a running artifact that can be
-handed to a product team.
+pipeline*, where every promising idea already exists as a running artifact a
+product team can pick up.
 
-This is not primarily a story about corporate restrictions. Even with root on
-every host, no security review, and budget to spare, an isolated disposable
-stack per team is still the model that produces the most working software per
-event — for reasons of failure containment, coordination cost, fidelity, and
-hygiene that have nothing to do with policy. Restrictive environments simply
-make the same design non-optional.
+And this holds even where none of those restrictions apply. Give every team root
+on its own host, skip the security review, spend freely — an isolated,
+disposable stack per team is *still* the arrangement that produces the most
+working software per event, for reasons of failure containment, coordination
+cost, fidelity, and hygiene that have nothing to do with policy. A constrained
+environment doesn't create the need for this design; it just removes the option
+of ignoring it.
 
 ## Why a shared environment is the wrong default
 
