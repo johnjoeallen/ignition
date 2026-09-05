@@ -122,40 +122,34 @@ service`. Apache's sites are untouched.
     — WireGuard configs, the nginx stream block, the Apache change, firewall,
     PROXY-protocol for real client IPs, and an alternative using a second IP.
 
-### Stage 3 — the first real deployment (and the bugs in the path)
+### Stage 3 — the first real deployment
 
-Provisioning a team and creating an app worked immediately. Getting a **release
-to actually build, push and deploy** surfaced five separate defects — every one
-of them on the path between "click Release" and "app is live". They are fixed as
-of **v0.112.2**; existing app repos need their workflow file refreshed (see
-[below](#repairing-an-app-made-before-v01122)).
+Provisioning a team and creating an app worked first time. Getting a **release
+to actually build, push and deploy** surfaced a chain of defects, every one on
+the path between "click Release" and "app is live":
 
-| # | Symptom in the Actions run | Cause | Fix | Version |
-|---|---|---|---|---|
-| 1 | `exec: "node": executable file not found` (exit 126), job dies before step 1 | `runs-on: docker-cli` → `code.forgejo.org/oci/docker:cli`, a bare Alpine + Docker CLI with **no Node.js**; `actions/checkout@v4` is a JavaScript action | first step `apk add --no-cache nodejs` (Alpine ships Node 24, past checkout's floor) | v0.111.4 |
-| 2 | `docker login` → `registry-1.docker.io … unauthorized` (wrong registry entirely) | `ZoneService.setVar` used **`PUT`** on the Forgejo variables API — which only *updates*; a `PUT` to a missing name 404s. So `REGISTRY`/`CONTROL_URL`/`APP_NAME`/`APP_PORT` were **never set**, and `docker login ""` fell through to Docker Hub | `POST` to create, `PUT` on 409 | v0.111.4 |
-| 3 | `curl: not found` in the Deploy step, after a clean build | the job image has no `curl` either (it has `wget`) | fold `curl` into the same first `apk add` | v0.111.5 |
-| 4 | `unauthorized: reqPackageAccess` on `docker push` to the zone registry | Forgejo's container registry **rejects the per-run Actions token** (`github.token`) for package writes, regardless of the job's `permissions:` block — it needs a real user token with `write:package` | **Create app** now also seeds `FORGEJO_TOKEN` (the zone bot's PAT) + `REGISTRY_USER` (the bot username); the workflow does `docker login -u ${{ vars.REGISTRY_USER }}` | v0.112.1 |
-| 5 | Deploy step: `curl … /deploy` → **502** ×4, exit 22 | `POST /deploy` reached `ignition-control`, which ran `docker compose up --pull always` on the node — but the app image is a **private** package and **the node had no registry credentials** (a documented-but-manual `docker login` on the node) | `AppService.deploy` now runs `docker login git.<slug>.<domain>` (zone bot token) on the node before the compose up; Watchtower reads the same `~/.docker/config.json` | v0.112.2 |
+| # | Where it failed | One-line cause | Fixed in |
+|---|---|---|---|
+| 1 | job start | job image has no Node.js; `actions/checkout` is a JS action | v0.111.4 |
+| 2 | `docker login` (hit Docker Hub) | repo Actions variables were never created (`PUT` vs `POST`) | v0.111.4 |
+| 3 | Deploy step | job image has no `curl` | v0.111.5 |
+| 4 | `docker push` to the zone registry | `reqPackageAccess` — the per-run token can't write packages | v0.112.1 |
+| 5 | Deploy step → **502** | the node had no credentials to pull the private image | v0.112.2 |
 
-Two supporting changes came out of the same work:
+Each is written up in full — symptom, how it was diagnosed, root cause, and the
+fix — in **[§4 Issues encountered](#4-issues-encountered-and-how-each-was-resolved)**.
+Two capability gaps closed alongside them: **Create app** became idempotent
+(re-run it to repair an existing app's config, v0.112.1), and the team console
+got a **delete app** button (v0.112.0).
 
-- **`createApp` is idempotent** (v0.112.1): running "Create app" against a name
-  that already exists re-applies every variable, secret and starter file
-  instead of failing on the 409. So a fix to what's seeded reaches old apps —
-  "Create app" doubles as "repair this app's deploy config".
-- **The `/deploy` path now logs** (v0.112.2): request, success, and the compose
-  `stderr` on failure. It had *no* logging before, which is why bug 5's 502 was
-  invisible in `docker logs ignition-control`.
-- **Delete an app** (v0.112.0): the team console could only *stop* a running
-  app, never remove its repo. There's now a **delete** button (stops the
-  deployment, then deletes the Forgejo repo) so a broken app can be recreated
-  under the same name.
+After v0.112.2 the pipeline runs clean:
 
-After v0.112.2 the pipeline runs clean: `apk add nodejs curl` → `checkout` →
-`docker login` (bot PAT) → `docker build` → `docker push` (both tags) →
-`POST /deploy` → `ignition-control` logs the node into the registry →
-`compose up --pull` → Traefik serves the new image.
+```
+apk add nodejs curl → checkout → docker login (bot PAT) → docker build
+  → docker push :sha and :tag → POST /deploy
+  → ignition-control logs the node into the registry → compose up --pull
+  → Traefik serves the new image
+```
 
 ---
 
@@ -444,7 +438,275 @@ is the confidentiality boundary. `spitfire` sees every request from
 
 ---
 
-## 4. Repairing an app made before v0.112.2
+## 4. Issues encountered and how each was resolved
+
+Every problem below was on the release-to-live path and is fixed in the version
+noted. They are grouped: the **CI pipeline** issues (the Actions job) first, then
+the **control-plane / node** issues, then the **edge / TLS** issues from stages
+1–2 that are easy to mistake for a deploy failure.
+
+### 4.1 The job container has no Node.js
+
+**Symptom.** The Actions run dies in ~8 s, before the first visible step:
+
+```
+OCI runtime exec failed: exec failed: unable to start container process:
+exec: "node": executable file not found in $PATH: unknown
+⚙️ [runner]: exitcode '126': failure
+```
+
+**Diagnosis.** `runs-on: docker-cli` maps (in the runner config that
+`ignition-control` renders, `RenderService.runnerConfig`) to
+`code.forgejo.org/oci/docker:cli` — a bare Alpine image with the Docker CLI and
+nothing else. `actions/checkout@v4` is a **JavaScript action**: the runner
+executes it as `node .../index.js` inside the job container. No `node` → exit
+126.
+
+**Resolution (v0.111.4).** A first step, in `sh`, before any JS action runs:
+
+```yaml
+- name: Prepare job tools (node for checkout, curl for deploy)
+  run: apk add --no-cache nodejs curl
+```
+
+Alpine's `nodejs` is Node 24 — comfortably past `checkout@v4`'s Node-20 floor.
+Verified against the real image: `apk add` pulls ~90 MB and takes ~1 s per run;
+acceptable for an ephemeral job. (The alternative — a job image that bundles
+node *and* the Docker CLI — means maintaining or trusting a third-party "act"
+image; a two-package `apk add` on the official minimal image is the smaller
+surface.)
+
+### 4.2 The repo's Actions variables were never created
+
+**Symptom.** `docker login` in the build step fails against **Docker Hub**, not
+the zone registry:
+
+```
+Error response from daemon: Get "https://registry-1.docker.io/v2/":
+unauthorized: incorrect username or password
+```
+
+Confusing, because the workflow never mentions Docker Hub.
+
+**Diagnosis.** `docker login "${{ vars.REGISTRY }}" …` with `vars.REGISTRY`
+**empty** — Docker treats an empty registry argument as Docker Hub. Checking the
+repo: `GET /repos/<slug>/<app>/actions/variables` returned `[]`. The
+`ignition-control` log showed why:
+
+```
+PUT /repos/<slug>/<app>/actions/variables/REGISTRY  ->  404 "variable not found"
+```
+
+Forgejo (and Gitea) split the Actions-variable API: **`POST …/variables/<name>`
+creates**, **`PUT …/variables/<name>` only updates** — a `PUT` to a name that
+doesn't exist yet 404s. `ZoneService.setVar` used `PUT` for everything, so
+`REGISTRY`, `CONTROL_URL`, `APP_NAME` and `APP_PORT` were **silently never
+set** (the 404 was logged as a warning and swallowed).
+
+**Resolution (v0.111.4).** `setVar` now `POST`s to create and falls back to
+`PUT` on a `409` (so re-seeding an existing app still works):
+
+```java
+var res = forgejo.post(slug, path, Map.of("value", value));
+if (res.status() == 409) {              // already exists — update it
+    res = forgejo.put(slug, path, Map.of("value", value));
+}
+```
+
+### 4.3 The job container has no `curl`
+
+**Symptom.** After a clean build and push, the **Deploy** step:
+
+```
+/bin/sh: curl: not found
+```
+
+**Diagnosis.** Same bare Alpine image. It ships BusyBox `wget` but not `curl`,
+and the Deploy step is `curl -fsS --retry 3 -X POST …`.
+
+**Resolution (v0.111.5).** `curl` was folded into the same first `apk add`
+(§4.1). Keeping the familiar `curl` invocation (with `-f`, `--retry`) was worth
+one extra package over rewriting the step around BusyBox `wget`'s different flags
+and error semantics.
+
+### 4.4 The container registry rejects the per-run token — `reqPackageAccess`
+
+This is the "**`docker login` to enable container push**" issue.
+
+**Symptom.** Build succeeds; `docker push` to the zone registry fails:
+
+```
+unauthorized: reqPackageAccess
+```
+
+**Diagnosis.** The workflow originally logged in with `github.token` — the
+automatic per-run Actions token — and set `permissions: packages: write` in the
+job, which is the GitHub-Actions way to grant a push. **Forgejo's container
+registry does not honour that.** Its package endpoints authenticate a token the
+same way the web UI authenticates a session, and the ephemeral Actions token is
+not a real user token — it carries no `write:package` scope and the `permissions:`
+block has no effect on it. Every `docker push` to `git.<slug>.<domain>/…` with
+it returns `reqPackageAccess`.
+
+**Resolution (v0.112.1).** Push as a **real user** — the zone's `ignition-bot`
+account, whose all-scopes token (`write:package` included) is already minted at
+provisioning and stored as the zone secret `forgejo_token`. **Create app** now
+seeds two more repo settings:
+
+| Seeded | Value | Why |
+|---|---|---|
+| secret `FORGEJO_TOKEN` | the zone bot's PAT | the password for `docker login` / `docker push` |
+| var `REGISTRY_USER` | `ignition-bot` | the **login user must match the token's owner** — a token authenticates as its user, and `docker login -u <someone-else>` with it is rejected |
+
+and the workflow pins the login user:
+
+```yaml
+echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
+  | docker login "${{ vars.REGISTRY }}" \
+      -u "${{ vars.REGISTRY_USER || github.actor }}" --password-stdin
+```
+
+`github.actor` on a console-triggered release *is* `ignition-bot` (it POSTs the
+tag), so `REGISTRY_USER` is belt-and-braces — but it keeps the login correct if
+a run is ever triggered by a human tag or re-run.
+
+!!! note "Why not make the packages public instead?"
+    Package visibility in Forgejo 11 follows the owning org, and the org is
+    private by design (`IGN_PRIVATE_REPOS`). Seeding a scoped token is the
+    change that doesn't also expose every team's source.
+
+### 4.5 The node can't pull the private image — `/deploy` returns 502
+
+**Symptom.** Build and push succeed. The Deploy step's `curl … /deploy` returns
+**502** four times (once + `--retry 3`) and exits 22:
+
+```
+curl: (22) The requested URL returned error: 502
+⚙️ [runner]: exitcode '22': failure
+```
+
+**Diagnosis.** Two possibilities: the gateway (nginx SNI / Traefik) can't reach
+`ignition-control`, or `ignition-control` itself returned 502. `docker logs
+ignition-control` showed **nothing** for the request — but the `/deploy` path
+had *no logging at all*, so that was not conclusive. Reading the code:
+`DeployController` catches `AppService.DeployException` and maps it to
+`HTTP 502 BAD_GATEWAY`; `AppService.deploy` throws that when `docker compose up
+-d --pull always` on the node fails. The app image is a **private** package;
+`docker compose --pull` on the node runs as whatever user `ignition-control`
+drives Docker as, and **nothing had ever run `docker login` for the zone
+registry on the node**. This was a documented manual step
+(`README`, `operating-an-event.md`) — never automated.
+
+**Resolution (v0.112.2).**
+
+1. `AppService.deploy` runs `docker login git.<slug>.<domain>` on the node —
+   before the `compose up` — as `ignition-bot`, password from the zone's
+   `forgejo_token` secret, piped via `--password-stdin` (a new
+   `DockerCli.docker(host, args, stdin)` overload keeps the token off the
+   process's argv and out of any command log). Best-effort: a warning, not a
+   hard failure, so a public package or an already-logged-in node still deploys.
+2. That `docker login` writes `/root/.docker/config.json` on the node — which is
+   exactly the file the per-node **Watchtower** mounts (`DOCKER_CONFIG`), so the
+   digest-watch roll-forward is credentialed by the same act.
+3. The whole `/deploy` path now logs: the request, success with the deploy id,
+   and the compose `stderr` on failure — so a future failure here says *which*
+   part broke instead of a blank 502.
+
+**Manual unblock** (for a node already running, before the upgrade):
+
+```bash
+TOK=$(docker exec -u git zone-<slug>-forgejo forgejo admin user \
+        generate-access-token --username ignition-bot \
+        --scopes read:package --raw --token-name nodepull)
+echo "$TOK" | docker login git.<slug>.<BASE_DOMAIN> \
+        -u ignition-bot --password-stdin
+```
+
+### 4.6 The `/deploy` path was unobservable
+
+Not a bug on its own, but it turned §4.5 into guesswork. `DeployController` /
+`AppService.deploy` logged nothing — not the incoming request, not the
+`DeployException`. Fixed in v0.112.2 (§4.5). Lesson applied elsewhere:
+the CI-facing endpoints now log enough to tell an infrastructure failure (never
+arrived) from an application failure (arrived, compose failed).
+
+### 4.7 ACME DNS-01 kept timing out on the propagation check
+
+**Symptom (stage 1).** Traefik requests the certificate, creates the
+`_acme-challenge` `TXT` record, then loops on:
+
+```
+[INFO] [ignition.classesarecode.net] acme: Waiting for DNS record propagation
+...
+error: propagation: time limit exceeded
+```
+
+even though the record *was* live (checked with `dig @1.1.1.1`).
+
+**Diagnosis.** Lego (Traefik's ACME client) does a **local** propagation check
+before telling the CA to validate — and in a container it resolves through
+Docker's embedded DNS at `127.0.0.11`, which does not see external `TXT`
+records reliably. The record was fine; the pre-check was asking the wrong
+resolver.
+
+**Resolution.** Point the pre-check at real resolvers, in
+`traefik-core-compose.yml`:
+
+```yaml
+- --certificatesresolvers.le.acme.dnschallenge.resolvers=${ACME_DNS_RESOLVERS:-1.1.1.1:53,8.8.8.8:53}
+```
+
+(`--…dnschallenge.disablepropagationcheck=true` also works but throws away a
+useful safety check; pointing it at 1.1.1.1/8.8.8.8 keeps it.)
+
+### 4.8 The per-team certificates were never requested
+
+**Symptom (stage 2).** The apex `ignition.classesarecode.net` served a valid
+cert, but `git.<slug>.ignition.classesarecode.net` gave a browser TLS warning —
+Traefik was serving its self-signed default.
+
+**Diagnosis.** Two compounding causes:
+
+1. **Wildcard depth.** A TLS wildcard is single-label: `*.ignition.classesarecode.net`
+   matches `git` but **not** `git.temporal-dragons` (two labels deep). Each team
+   needs its own cert with SANs `*.<slug>.…` and `*.apps.<slug>.…`.
+2. **Missing resolver on the router.** The zone compose template set
+   `traefik.http.routers.…-git.tls: "true"` but no
+   `…tls.certresolver: le`, so Traefik enabled TLS for the router with **no
+   instruction to obtain a cert** — it fell back to the default cert.
+
+**Resolution.** The zone compose template
+(`compose/zone-compose.yml.tmpl`) now carries both the resolver and the explicit
+SAN list:
+
+```yaml
+traefik.http.routers.zone-${ZONE_SLUG}-git.tls.certresolver: le
+traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].main: ${ZONE_SLUG}.${BASE_DOMAIN}
+traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].sans: "*.${ZONE_SLUG}.${BASE_DOMAIN},*.apps.${ZONE_SLUG}.${BASE_DOMAIN}"
+```
+
+`ignition-control` also writes the matching cert request into its own Traefik
+dynamic-config file as it provisions the team.
+
+### 4.9 A "503" that was a stale `/etc/hosts` entry
+
+**Symptom (stage 2).** Right after provisioning `temporal-dragons`,
+`https://git.temporal-dragons.ignition.classesarecode.net/` returned 503 — but
+Traefik's logs showed the router registered and the cert obtained.
+
+**Diagnosis.** The test laptop still had a **stage-1** `/etc/hosts` line
+pointing `*.ignition.classesarecode.net` names at `spitfire`'s LAN IP from
+before the public path existed — actually a broader override that shadowed the
+new team's public name and sent it somewhere with no matching route.
+
+**Resolution.** Remove the stage-1 `/etc/hosts` overrides once stage 2's DNS is
+live; each provisioned team resolves through the one public wildcard with no
+per-team entry. Recorded as a standing check: **a fresh-team 503 is a hosts-file
+/ DNS problem until proven otherwise**, not a provisioning bug.
+
+---
+
+## 5. Repairing an app made before v0.112.2
 
 Existing app repos still carry the old workflow file and are missing the newer
 repo settings. Two options:
@@ -471,7 +733,7 @@ would point back at the edge / SNI path).
 
 ---
 
-## 5. How the demo differs from the target model
+## 6. How the demo differs from the target model
 
 | | this demo | [target model](exposure.md) |
 |---|---|---|
