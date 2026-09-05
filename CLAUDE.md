@@ -12,8 +12,9 @@ Many teams (target ~80), a small pool of hosts ("nodes"). Each team gets a
 fully isolated stack (a "zone").
 
 The whole thing is **one Java (Spring Boot 4) service, `ignition-control`,
-deployed as a container** on the **controller** — the only public machine and
-the only place TLS terminates; nodes sit on a private network with no inbound,
+deployed as a container** on the **controller** — the only machine that accepts
+inbound traffic and the only place TLS terminates (it can sit on the public
+internet, a corp-routable private subnet, or both); nodes sit on a private network with no inbound,
 reached over WireGuard. Every platform-admin and zone-admin operation is in its
 web UI — there is no CLI. Design and the
 port history are in **[DESIGN.md](DESIGN.md)**; the module is
@@ -253,7 +254,8 @@ command's stdout.
    `scope: shared | per-zone`.
 4. **Wire up the single front door** (the architecture — `docs/exposure.md` and
    the Ingress section above; this task is the implementation). **The controller
-   is the only public machine and the only place TLS terminates.** It runs the
+   is the only machine that accepts inbound traffic and the only place TLS
+   terminates (public-facing, corp-network-only, or both).** It runs the
    Traefik **edge**, an **SSO gateway**, and
    `ignition-control`; it owns `:443` and reverse-proxies by `Host` over
    **WireGuard** to nodes on a private network with **no inbound**

@@ -35,8 +35,9 @@ role (platform admin, team admin, team member), not by hostname:
 `ignition.example` is a placeholder — set `BASE_DOMAIN` to any apex your
 organisation controls. DNS is one pre-registered wildcard `*.<apex>` → the
 **controller**, which matches at any depth (RFC 4592), so provisioning a team
-adds no records. In the proposed model the controller is the only public
-machine and the only place TLS terminates: it owns `:443`, runs an SSO edge
+adds no records. In the proposed model the controller is the only machine that
+accepts inbound traffic and the only place TLS terminates — public-facing,
+corp-network-only, or both, as the deploying org chooses: it owns `:443`, runs an SSO edge
 against the org's identity provider, and reverse-proxies by `Host` over
 WireGuard to nodes on a private network with no inbound; behind the edge
 everything is plain HTTP. That edge is one design among several and still being
@@ -77,7 +78,7 @@ open-core drift. Server `codeberg.org/forgejo/forgejo:11` (LTS), runner
 
 ## Prerequisites
 
-- The **controller** — the one public machine — with Docker + Compose v2. It
+- The **controller** — the one machine that accepts inbound traffic — with Docker + Compose v2. It
   owns `:443`, terminates all TLS, runs the SSO gateway, and reaches each node
   over WireGuard.
 - **Nodes**: hosts with Docker on a private network with **no inbound**;
@@ -104,7 +105,7 @@ docker network create traefik-public
 docker volume  create ignition-dynamic        # shared with the control plane
 docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 
-# 2. The controller — once, the only public machine. Runs the edge (owns :443,
+# 2. The controller — once, the sole front door. Runs the edge (owns :443,
 #    all TLS/ACME), the SSO gateway, and the control plane.
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env       # DNS API creds for the ACME challenge

@@ -12,7 +12,7 @@ and can do is by role, not by which URL you hit. There is no CLI.
 
 ## Prerequisites
 
-- The **controller** — the one public machine — with Docker + Compose v2. It
+- The **controller** — the one machine that accepts inbound traffic — with Docker + Compose v2. It
   owns `:443`, terminates all TLS, runs the SSO gateway, and reaches each node
   over WireGuard.
 - **Nodes** — hosts with Docker on a private network with **no inbound**, each
@@ -45,7 +45,7 @@ docker network create traefik-public
 docker volume  create ignition-dynamic
 docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 
-# 2. The controller — once, the only public machine. Runs the edge
+# 2. The controller — once, the sole front door. Runs the edge
 #    (owns :443, all TLS/ACME), the SSO gateway, and the control plane.
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env          # DNS API creds for the ACME challenge

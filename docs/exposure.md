@@ -10,10 +10,10 @@
 A single model, deliberately: no per-topology choices, no hosted services.
 
 ```
-                 internet
+            clients / internet
                     │  :443 (and :80 for ACME / redirect)
         ┌───────────▼────────────┐
-        │      controller        │   public IP
+        │      controller        │   public internet, corp subnet, or both
         │  ── Traefik edge ──    │   • terminates TLS (the only place certs live)
         │  ── SSO gateway ──     │   • one forward-auth to your IdP for browser traffic
         │  ── ignition-control ──│   • routes by Host → the node running the zone
@@ -27,9 +27,13 @@ A single model, deliberately: no per-topology choices, no hosted services.
  └────────┘    └────────┘    └────────┘
 ```
 
-- The **controller** is the only machine with a public address and the only
-  thing that terminates TLS. It runs the Traefik **edge**, the **SSO gateway**,
-  and `ignition-control`.
+- The **controller** is the only machine that accepts inbound traffic and the
+  only thing that terminates TLS. It runs the Traefik **edge**, the **SSO
+  gateway**, and `ignition-control`. Where it sits is a deployment choice: on
+  the public internet with a public IP, on a private subnet routable only from
+  the corporate network, or dual-homed on both. Nothing in the design assumes a
+  public address — only that clients (browsers, `git`/`docker`) and the nodes
+  can each reach it.
 - **Nodes** sit on a private network with **no inbound at all**. The controller
   reaches them over a **WireGuard** link (`ignition-control` adds each node as a
   peer at registration). Everything behind the edge is **plain HTTP** — the
@@ -43,7 +47,7 @@ Set up **before** any event, never touched again:
 
 - **Delegate `<BASE_DOMAIN>` to the controller** (`<BASE_DOMAIN>  NS  <controller>`)
   and let it run a tiny authoritative DNS (CoreDNS / Technitium). It answers a
-  wildcard `*.<BASE_DOMAIN>  →  <controller-public-IP>` at any depth (RFC 4592),
+  wildcard `*.<BASE_DOMAIN>  →  <controller-IP>` at any depth (RFC 4592),
   so `<BASE_DOMAIN>` itself, `git.qb.<BASE_DOMAIN>`, and
   `x.apps.qb.<BASE_DOMAIN>` all resolve to the controller with **no per-team
   record**. Provisioning a team adds zero DNS.
@@ -52,7 +56,8 @@ Set up **before** any event, never touched again:
   can still do the ACME challenge.
 
 Corporate machines resolve it through their normal resolver — it's just a
-public domain. If corp egress goes through an explicit HTTP proxy,
+domain (the name can be public even when the address it points to is only
+reachable from the corporate network). If corp egress goes through an explicit HTTP proxy,
 `*.<BASE_DOMAIN>` has to be on its allow list.
 
 ## TLS — at the edge only
