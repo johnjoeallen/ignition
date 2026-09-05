@@ -72,9 +72,8 @@ admin access, and no visibility into any other team.
 
 ![Team console — apps and members](img/team-console.png)
 
-*The team console: apps (name, description, version) and members. Your own
-git password and PAT are shown on the top card beside the Forgejo link
-(screenshot above predates that move — still shown per-row here), each with
+*The team console: your git password and PAT on the top card beside the
+Forgejo link, apps (name, description, version), and members. Each secret has
 a copy icon and a regenerate icon — nobody else's, including other admins,
 are ever shown.*
 
