@@ -155,8 +155,9 @@ every app the control plane deploys, so teams get auto-reload without touching
 their repo — and never touches Traefik/Forgejo/DinD/runners.
 
 **One central control plane, not an agent per node.** `ignition-control`
-orchestrates across nodes: it holds `IGN_ADMIN_TOKEN` (platform), each zone's
-`zone-token` (zone admin) and `deploy-token` (CI), reaches every node's Docker
+orchestrates across nodes: platform-admin access is a real login (email +
+password, `PLATFORM_ADMIN` role — not a static token), each zone's
+`zone-token` (zone admin) and `deploy-token` (CI) still are; it reaches every node's Docker
 daemon over the `docker` CLI, and reaches every zone's Forgejo over the public
 `git.<slug>.<domain>` API with the admin token minted at provisioning. Zone
 admins never get node or Docker access — every action is a proxied Forgejo API

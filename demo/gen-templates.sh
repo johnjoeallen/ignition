@@ -46,6 +46,7 @@ IGN_SMTP_FROM=Ignition <ignition@classesarecode.net>
 
 # --- secrets (blank = auto-generate) ---
 IGN_SECRET_KEY=
+IGN_USER_SECRET_PEPPER=
 POSTGRES_PASSWORD=
 
 # --- WireGuard (blank keys = auto-generate with `wg`) ---
@@ -69,6 +70,7 @@ ACME_EMAIL=<ACME_EMAIL>
 ACME_DNS_PROVIDER=<ACME_DNS_PROVIDER>
 
 IGN_SECRET_KEY=<IGN_SECRET_KEY>
+IGN_USER_SECRET_PEPPER=<IGN_USER_SECRET_PEPPER>
 POSTGRES_PASSWORD=<POSTGRES_PASSWORD>
 IGN_PUBLIC_URL=https://<BASE_DOMAIN>
 

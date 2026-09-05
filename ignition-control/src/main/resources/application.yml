@@ -32,6 +32,7 @@ ignition:
   base-domain: ${IGN_BASE_DOMAIN:${BASE_DOMAIN:ignition.example}}
   work-dir: ${IGN_WORK_DIR:../work}
   secret-key: ${IGN_SECRET_KEY:}
+  user-secret-pepper: ${IGN_USER_SECRET_PEPPER:}
   public-url: ${IGN_PUBLIC_URL:http://localhost:8790}
   insecure-tls: ${IGN_INSECURE_TLS:false}
   recreate-zones-on-start: ${IGN_RECREATE_ZONES_ON_START:false}

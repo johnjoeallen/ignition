@@ -41,9 +41,11 @@ set_back() {                       # persist a generated value into CONFIG
 # ---- generate blanks -----------------------------------------------------
 gen_hex()  { openssl rand -hex "${1:-32}"; }
 gen_b64()  { head -c "${1:-32}" /dev/urandom | base64; }
+gen_uuid() { uuidgen 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())'; }
 
-[ -n "$(get IGN_SECRET_KEY)" ]    || set_back IGN_SECRET_KEY    "$(gen_b64 32)"
-[ -n "$(get POSTGRES_PASSWORD)" ] || set_back POSTGRES_PASSWORD "$(gen_hex 24)"
+[ -n "$(get IGN_SECRET_KEY)" ]         || set_back IGN_SECRET_KEY         "$(gen_b64 32)"
+[ -n "$(get IGN_USER_SECRET_PEPPER)" ] || set_back IGN_USER_SECRET_PEPPER "$(gen_uuid)"
+[ -n "$(get POSTGRES_PASSWORD)" ]      || set_back POSTGRES_PASSWORD      "$(gen_hex 24)"
 
 need_wg=0
 for k in HETZNER_WG_PRIVKEY HETZNER_WG_PUBKEY SPITFIRE_WG_PRIVKEY SPITFIRE_WG_PUBKEY; do

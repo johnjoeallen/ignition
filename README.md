@@ -100,6 +100,7 @@ docker compose --project-directory . -f templates/traefik-core-compose.yml up -d
 export BASE_DOMAIN=ignition.example ACME_EMAIL=ops@ignition.example ACME_DNS_PROVIDER=<your-dns>
 printf 'YOUR_PROVIDER_TOKEN=…\n' > acme.env       # DNS API creds for the ACME challenge
 export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64)   # zone-secret AES key — keep it
+export IGN_USER_SECRET_PEPPER=$(uuidgen)                    # per-user git secret key ingredient — keep it
 export IGN_PUBLIC_URL=https://ignition.example
 export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'

@@ -223,21 +223,15 @@ public class ZoneConsoleController {
         return "repo";
     }
 
+    /** Opening an issue creates its branch too — see {@link net.dublinux.ignition.zone.ZoneService#createIssue}. */
     @PostMapping("/teams/{slug}/repos/{repo}/issues")
     public String createIssue(@PathVariable String slug, @PathVariable String repo,
                               @RequestParam String title, @RequestParam(required = false) String body) {
-        var res = zones.createIssue(slug, repo, callerEmail(), callerId(), title, body);
-        return redirectRepo(slug, repo, res.ok() ? "issue opened"
-                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
-    }
-
-    @PostMapping("/teams/{slug}/repos/{repo}/branches")
-    public String createBranch(@PathVariable String slug, @PathVariable String repo,
-                               @RequestParam(name = "newBranch") String newBranch,
-                               @RequestParam(name = "fromBranch", required = false) String fromBranch) {
-        var res = zones.createBranch(slug, repo, callerEmail(), callerId(), newBranch, fromBranch);
-        return redirectRepo(slug, repo, res.ok() ? "branch " + newBranch + " created"
-                : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+        var r = zones.createIssue(slug, repo, callerEmail(), callerId(), title, body);
+        String msg = !r.ok() ? "Forgejo said: " + r.message()
+                : r.branchName() != null ? "issue #" + r.number() + " opened, branch " + r.branchName() + " created"
+                : "issue #" + r.number() + " opened, but " + r.message();
+        return redirectRepo(slug, repo, msg);
     }
 
     @PostMapping("/teams/{slug}/repos/{repo}/pulls")

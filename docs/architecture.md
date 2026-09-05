@@ -106,12 +106,13 @@ every app the team deployed**.
 
 ## The control plane
 
-`ignition-control` is one container on the controller. It authenticates the caller's
-bearer token and acts only within that scope:
+`ignition-control` is one container on the controller. It authenticates every
+caller — a session login for a human, a bearer token for CI — and acts only
+within that scope:
 
-| Token | Role | Can do |
+| Credential | Role | Can do |
 |---|---|---|
-| `IGN_ADMIN_TOKEN` | platform admin | every node, team, and app (platform view) |
+| email + password login, `PLATFORM_ADMIN` role | platform admin | every node, team, and app (platform view) |
 | `state/zones/<slug>/zone-token` | team admin | that team only: Forgejo users, repos, cut releases, the team's apps, restart the runner, read status |
 | `state/zones/<slug>/deploy-token` | CI | `POST /deploy` and `POST /undeploy` for that team's apps |
 

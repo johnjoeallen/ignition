@@ -41,17 +41,12 @@
           <input class="form-control form-control-sm" name="title" required style="min-width:16rem">
         </div>
         <div class="col-auto">
-          <label class="form-label small mb-1">head (from)</label>
+          <label class="form-label small mb-1">branch</label>
           <select class="form-select form-select-sm" name="head" required>
-            <option th:each="b : ${branches}" th:value="${b}" th:text="${b}">branch</option>
+            <option th:each="b : ${branches}" th:if="${b != 'main'}" th:value="${b}" th:text="${b}">branch</option>
           </select>
         </div>
-        <div class="col-auto">
-          <label class="form-label small mb-1">base (into)</label>
-          <select class="form-select form-select-sm" name="base">
-            <option th:each="b : ${branches}" th:value="${b}" th:text="${b}" th:selected="${b == 'main'}">branch</option>
-          </select>
-        </div>
+        <input type="hidden" name="base" value="main">
         <div class="col-auto">
           <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open PR</button>
         </div>
@@ -70,6 +65,8 @@
           </tbody>
         </table>
       </div>
+      <p class="text-body-secondary small mb-2">Opening an issue also creates its branch — <code>&lt;number&gt;-&lt;title, slugified&gt;</code>
+        off <code>main</code>. There's no separate way to create a branch; every one traces back to an issue.</p>
       <form method="post" th:action="@{/teams/{slug}/repos/{repo}/issues(slug=${zoneSlug},repo=${repoName})}"
             class="row g-2 align-items-end mb-4">
         <div class="col-auto">
@@ -81,28 +78,12 @@
           <input class="form-control form-control-sm" name="body" style="min-width:20rem">
         </div>
         <div class="col-auto">
-          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open issue</button>
+          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Open issue &amp; create branch</button>
         </div>
       </form>
 
       <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Branches</h2>
       <p class="text-body-secondary small" th:text="${#strings.listJoin(branches, ', ')}">main, feature-x</p>
-      <form method="post" th:action="@{/teams/{slug}/repos/{repo}/branches(slug=${zoneSlug},repo=${repoName})}"
-            class="row g-2 align-items-end">
-        <div class="col-auto">
-          <label class="form-label small mb-1">new branch</label>
-          <input class="form-control form-control-sm" name="newBranch" required>
-        </div>
-        <div class="col-auto">
-          <label class="form-label small mb-1">from</label>
-          <select class="form-select form-select-sm" name="fromBranch">
-            <option th:each="b : ${branches}" th:value="${b}" th:text="${b}" th:selected="${b == 'main'}">branch</option>
-          </select>
-        </div>
-        <div class="col-auto">
-          <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Create branch</button>
-        </div>
-      </form>
     </main>
   </div>
 </body>

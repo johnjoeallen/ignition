@@ -11,6 +11,9 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import net.dublinux.ignition.config.IgnitionProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -23,18 +26,24 @@ import org.springframework.stereotype.Component;
  * itself needs to be stored; only {@link #decrypt} with that same id can read
  * a value {@link #encrypt} wrote.
  *
- * <p>The "secret" PBKDF2 stretches is the user's UUID, not a real password —
- * it's a stored, knowable value once you're looking at the database, not
- * confidential like a passphrase. The salt below is a fixed, public constant
- * for exactly that reason: it only needs to make the derivation
- * reproducible, not to add secrecy the UUID itself can't provide. The
- * iteration count still buys something real, though — it's what stops a
- * fast brute-force sweep of the small (128-bit, and often *guessable* —
- * sequential or otherwise low-entropy in some UUID versions) input space.
+ * <p>The PBKDF2 input is the user's UUID <em>plus</em> {@code ignition.user-secret-pepper}
+ * ({@code IGN_USER_SECRET_PEPPER}) — a platform-wide secret that lives only
+ * in config, never in the database. The UUID alone used to be the whole
+ * input, and it's a stored, knowable value once you're looking at the
+ * database — a {@code pg_dump} alone was enough to brute-force every user's
+ * git password/PAT, no app config needed. The pepper closes that: leaking
+ * the database no longer leaks the means to decrypt what's in it. The salt
+ * below stays a fixed, public constant regardless — it only needs to make
+ * the derivation reproducible, not to add secrecy the pepper already
+ * provides. The iteration count still buys something real too — it's what
+ * stops a fast brute-force sweep of the UUID's own (128-bit, and often
+ * *guessable* — sequential or otherwise low-entropy in some UUID versions)
+ * input space, for anyone who does have the pepper.
  */
 @Component
 public class UserSecretCipher {
 
+    private static final Logger log = LoggerFactory.getLogger(UserSecretCipher.class);
     private static final int IV_LEN = 12;
     private static final int TAG_BITS = 128;
     private static final int KEY_BITS = 256;
@@ -42,9 +51,23 @@ public class UserSecretCipher {
     private static final byte[] SALT = "ignition-git-secret-v1".getBytes(StandardCharsets.UTF_8);
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    private final String pepper;
+
+    public UserSecretCipher(IgnitionProperties props) {
+        String configured = props.getUserSecretPepper();
+        if (configured == null || configured.isBlank()) {
+            log.warn("ignition.user-secret-pepper not set — using a fixed development value. "
+                    + "Set IGN_USER_SECRET_PEPPER (any UUID, e.g. `uuidgen`) before storing real credentials.");
+            this.pepper = "00000000-dev-pepper-not-for-production-0000";
+        } else {
+            this.pepper = configured.strip();
+        }
+    }
+
     private SecretKeySpec deriveKey(UUID userId) {
         try {
-            PBEKeySpec spec = new PBEKeySpec(userId.toString().toCharArray(), SALT, PBKDF2_ITERATIONS, KEY_BITS);
+            char[] password = (userId.toString() + ":" + pepper).toCharArray();
+            PBEKeySpec spec = new PBEKeySpec(password, SALT, PBKDF2_ITERATIONS, KEY_BITS);
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             byte[] keyBytes = factory.generateSecret(spec).getEncoded();
             return new SecretKeySpec(keyBytes, "AES");

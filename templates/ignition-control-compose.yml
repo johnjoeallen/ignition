@@ -6,6 +6,7 @@
 #   export BASE_DOMAIN=ignition.example
 #   export IGN_PUBLIC_URL=https://ignition.example      # builds the links in emails
 #   export IGN_SECRET_KEY=$(head -c32 /dev/urandom | base64) # zone_secret AES key — keep it
+#   export IGN_USER_SECRET_PEPPER=$(uuidgen)             # per-user git secret key ingredient — keep it
 #   export POSTGRES_PASSWORD=$(openssl rand -hex 24)
 #   # SMTP is required — the service will not start without it:
 #   export IGN_SMTP_HOST=… IGN_SMTP_USERNAME=… IGN_SMTP_PASSWORD=… IGN_SMTP_FROM='Ignition <ignition@ignition.example>'
@@ -66,6 +67,7 @@ services:
     environment:
       BASE_DOMAIN: ${BASE_DOMAIN:?set BASE_DOMAIN}
       IGN_SECRET_KEY: ${IGN_SECRET_KEY:?set IGN_SECRET_KEY}
+      IGN_USER_SECRET_PEPPER: ${IGN_USER_SECRET_PEPPER:?set IGN_USER_SECRET_PEPPER}
       IGN_PUBLIC_URL: ${IGN_PUBLIC_URL:?set IGN_PUBLIC_URL}
       IGN_WORK_DIR: /work
       # the bundled docker CLI usually negotiates, but pin it for a very new daemon

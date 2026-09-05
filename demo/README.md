@@ -18,7 +18,7 @@ cat out/INSTALL.txt               # where each rendered file goes
 - **`gen-templates.sh`** — writes the placeholder templates (`templates/*`) and
   `demo.conf.example`. Run once; re-run if the templates change.
 - **`render.sh demo.conf`** — substitutes `<KEY>` from `demo.conf` into every
-  template, into `out/`. Blank `IGN_ADMIN_TOKEN` / `IGN_SECRET_KEY` /
+  template, into `out/`. Blank `IGN_SECRET_KEY` / `IGN_USER_SECRET_PEPPER` /
   `POSTGRES_PASSWORD` are generated; blank WireGuard keys are generated with
   `wg` (`apt install wireguard-tools`). Generated values are written **back**
   into `demo.conf`, so a second run is reproducible.

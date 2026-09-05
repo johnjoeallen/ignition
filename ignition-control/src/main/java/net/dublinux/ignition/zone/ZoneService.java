@@ -583,13 +583,33 @@ public class ZoneService {
         return out;
     }
 
-    public ForgejoClient.Response createIssue(String slug, String repo, String email, java.util.UUID userId,
-                                              String title, String body) {
-        return forgejo.postAsUser(slug, "/repos/%s/%s/issues".formatted(slug, repo),
+    /**
+     * Opening an issue always creates its branch too — {@code <number>-<slugified-title>}
+     * off {@code main} — there's deliberately no other way to create a branch
+     * here, so every branch traces back to the issue that justified it.
+     */
+    public record IssueOpenResult(boolean ok, int number, String branchName, String message) {}
+
+    public IssueOpenResult createIssue(String slug, String repo, String email, java.util.UUID userId,
+                                       String title, String body) {
+        var res = forgejo.postAsUser(slug, "/repos/%s/%s/issues".formatted(slug, repo),
                 Map.of("title", title, "body", body == null ? "" : body), myPat(slug, email, userId));
+        if (!res.ok()) {
+            return new IssueOpenResult(false, 0, null, res.message());
+        }
+        int number = res.body().path("number").asInt();
+        String branchName = number + "-" + TeamNameSuggester.slugify(title);
+        var branchRes = createBranch(slug, repo, email, userId, branchName, "main");
+        if (!branchRes.ok()) {
+            log.warn("zone {}: issue #{} opened on {}/{} but branch {} failed: {}",
+                    slug, number, slug, repo, branchName, branchRes.message());
+            return new IssueOpenResult(true, number, null,
+                    "issue opened, but branch creation failed: " + branchRes.message());
+        }
+        return new IssueOpenResult(true, number, branchName, "");
     }
 
-    /** Branch names on a repo — plain strings, good enough for a "create from" dropdown. */
+    /** Branch names on a repo — plain strings, good enough for a PR head/base dropdown. */
     public List<String> branches(String slug, String repo) {
         var res = forgejo.get(slug, "/repos/%s/%s/branches?limit=50".formatted(slug, repo));
         List<String> out = new ArrayList<>();
@@ -601,8 +621,9 @@ public class ZoneService {
         return out;
     }
 
-    public ForgejoClient.Response createBranch(String slug, String repo, String email, java.util.UUID userId,
-                                               String newBranchName, String fromBranch) {
+    /** Not exposed on its own — only {@link #createIssue} calls this, so every branch traces back to an issue. */
+    private ForgejoClient.Response createBranch(String slug, String repo, String email, java.util.UUID userId,
+                                                String newBranchName, String fromBranch) {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("new_branch_name", newBranchName);
         if (fromBranch != null && !fromBranch.isBlank()) {

@@ -26,6 +26,17 @@ public class IgnitionProperties {
     /** 32 bytes base64 — AES-GCM key for {@code zone_secret} values. */
     private String secretKey = "";
 
+    /**
+     * A platform-wide secret UUID, combined with a user's own id when
+     * deriving their per-user secret key ({@code UserSecretCipher}) — without
+     * it, that derivation was PBKDF2 over the user's UUID alone, which is
+     * sitting right there in the same database row it protects, so a
+     * {@code pg_dump} alone (no app config) was enough to brute-force every
+     * user's git password/PAT. This value lives only in config, never in the
+     * database, so leaking the DB alone no longer leaks the means to decrypt it.
+     */
+    private String userSecretPepper = "";
+
     /** Public origin, e.g. {@code https://ignition.example} — used to build email links. */
     private String publicUrl = "http://localhost:8790";
 
@@ -96,6 +107,8 @@ public class IgnitionProperties {
     public void setWorkDir(Path workDir) { this.workDir = workDir; }
     public String getSecretKey() { return secretKey; }
     public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
+    public String getUserSecretPepper() { return userSecretPepper; }
+    public void setUserSecretPepper(String v) { this.userSecretPepper = v; }
     public String getPublicUrl() { return publicUrl; }
     public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
     public boolean isInsecureTls() { return insecureTls; }

@@ -26,9 +26,10 @@ flowchart TB
 
 ## Platform admin
 
-The person (or two) running the event. Signs into the **platform console** at
-`https://admin.<event-domain>/` with `IGN_ADMIN_TOKEN`. Every task is a
-console action — there is no CLI.
+The person (or two) running the event. Signs into the **one console** at
+`https://<event-domain>/` with email + password, same as everyone else — what
+they see and can do there is by role (`PLATFORM_ADMIN`), not by a separate
+hostname or token. Every task is a console action — there is no CLI.
 
 | Task | In the console |
 |---|---|

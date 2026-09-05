@@ -453,8 +453,10 @@ tag (~60s).
 
 - **No authentication anywhere but the consoles.** Every deployed app and every
   team's Forgejo web UI is open to anyone who resolves the domain.
-- **`IGN_ADMIN_TOKEN` is total control** — the bearer / session cookie for the
-  platform console. Rotate it after the demo.
+- **The platform-admin login is total control** — it's a real account (email +
+  password), not a static token, so there's nothing to rotate after the demo;
+  just don't reuse that password anywhere else, and remove the account (or the
+  whole demo database) once you're done.
 - **Client IPs:** `spitfire` sees every request from `10.44.0.1` (the tunnel).
   Apache, reached via `ssl_preread`, sees `127.0.0.1` — if that matters for your
   real sites' logs, add `proxy_protocol` to the nginx `proxy_pass` **and**

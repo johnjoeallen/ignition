@@ -53,8 +53,9 @@ host's core stack.
   entries, so the app keeps writing `state/control/dynamic/<slug>.yml` for
   Traefik's file provider (same as today — the writer is now the Java app).
 - **State volume.** Mounts `state/` (see "State").
-- **Secrets.** `IGN_ADMIN_TOKEN` from env / a Docker secret; per-zone tokens
-  live in `state/`.
+- **Secrets.** `IGN_SECRET_KEY` / `IGN_USER_SECRET_PEPPER` from env / a Docker
+  secret (see AUTH-DESIGN.md — platform-admin access is a real login now, not
+  a static token); per-zone tokens live in `state/`.
 - **Config.** `application.yml` + env overrides: `BASE_DOMAIN`, `ACME_*`, the
   per-zone quota defaults, the idle TTL, Docker / SSH settings.
 - **Self-exclusion.** The container that manages containers must never manage
@@ -163,13 +164,19 @@ Rationale: zero migration, human-auditable, `git`-diffable, teardown stays
 `rm -rf`, and the port stays reviewable. Move metadata to SQLite/H2 + Flyway
 only if the UI later needs richer history than the audit log gives.
 
-## Auth model (principals unchanged)
+## Auth model (superseded — see AUTH-DESIGN.md)
 
-- **Platform admin** — `IGN_ADMIN_TOKEN`. Form login at `admin.<BASE_DOMAIN>` →
-  session cookie; or `Authorization: Bearer`.
-- **Zone admin** — per-zone `zone-token` (in state). Form login at
-  `admin.<slug>.<BASE_DOMAIN>` → session scoped to that zone.
-- **CI** — per-zone `deploy-token`, bearer only, only `POST /deploy|/undeploy`.
+This section described the original design; AUTH-DESIGN.md's steps 4-5
+replaced the token-based platform/zone-admin logins below with real email +
+password accounts and roles (`PLATFORM_ADMIN`, `ZONE_ADMIN:<slug>`,
+`MEMBER:<slug>`) on the one console — kept here for history, not as current
+behavior:
+
+- ~~**Platform admin** — `IGN_ADMIN_TOKEN`. Form login at `admin.<BASE_DOMAIN>` →
+  session cookie; or `Authorization: Bearer`.~~
+- ~~**Zone admin** — per-zone `zone-token` (in state). Form login at
+  `admin.<slug>.<BASE_DOMAIN>` → session scoped to that zone.~~
+- **CI** — per-zone `deploy-token`, bearer only, only `POST /deploy|/undeploy` (unchanged).
 - A Spring Security filter resolves the token → `IgnitionPrincipal(kind, slug)`;
   URL / method rules enforce the split. The `ignition-bot` Forgejo account + API
   token stay a server-held service credential.
