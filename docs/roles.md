@@ -28,7 +28,7 @@ flowchart TB
 
 ## Platform admin
 
-The person (or two) running the event. Signs into the **one console** at
+The person (or two) running the event. Signs into the **console** at
 `https://<event-domain>/` with email + password, same as everyone else — what
 they see and can do there is by role (`PLATFORM_ADMIN`), not by a separate
 hostname or token. Every task is a console action — there is no CLI.
@@ -51,7 +51,7 @@ nodes and teams.
 
 ## Team admin
 
-One or more per team. Signs into the same one console, same email + password
+One or more per team. Signs into the same console, same email + password
 as everyone else — what makes them a team admin is the `ZONE_ADMIN:<slug>`
 role on that team, not a separate login or hostname. Their console is
 `/teams/<slug>` — everything below is a console action there:
