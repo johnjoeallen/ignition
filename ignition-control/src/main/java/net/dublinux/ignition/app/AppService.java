@@ -9,9 +9,12 @@ import java.util.regex.Pattern;
 
 import net.dublinux.ignition.docker.DockerCli;
 import net.dublinux.ignition.node.NodeRepository;
+import net.dublinux.ignition.provisioning.ProvisioningService;
 import net.dublinux.ignition.templates.RenderService;
 import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,6 +24,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AppService {
+
+    private static final Logger log = LoggerFactory.getLogger(AppService.class);
 
     private static final Pattern NAME = Pattern.compile("^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$");
     private static final DateTimeFormatter DEPLOY_ID =
@@ -66,12 +71,18 @@ public class AppService {
 
         String deployId = DEPLOY_ID.format(Instant.now());
         Path composeFile = render.appCompose(slug, name, z.baseDomain(), image, port, deployId);
+        log.info("deploy {}/{}: image={} port={} -> node {}", slug, name, image, port, z.node());
+
+        registryLogin(z);
 
         DockerCli.Result r = docker.compose(dockerHost(z), "app-" + slug + "-" + name,
                 composeFile.toString(), "up", "-d", "--pull", "always", "--remove-orphans");
         if (!r.ok()) {
-            throw new DeployException("compose up failed: " + firstLine(r.stderr()));
+            String detail = firstLine(r.stderr());
+            log.warn("deploy {}/{}: compose up failed: {}", slug, name, detail);
+            throw new DeployException("compose up failed: " + detail);
         }
+        log.info("deploy {}/{}: up (deploy_id {})", slug, name, deployId);
 
         DeployedApp app = apps.findByZoneAndName(slug, name).orElse(null);
         if (app == null) {
@@ -106,6 +117,34 @@ public class AppService {
     private String dockerHost(Zone z) {
         String node = z == null ? "" : z.node();
         return nodes.findById(node).map(n -> n.dockerHost()).orElse("local");
+    }
+
+    /**
+     * {@code docker login} the zone's Forgejo registry on the app's node before
+     * the compose {@code --pull} — app images are private packages, so the
+     * node needs credentials to pull them (and the per-node Watchtower reads
+     * the same {@code ~/.docker/config.json} it writes). Uses the zone bot's
+     * token. Best-effort: a warning, not a hard failure — a public package or
+     * an already-logged-in node still deploys, and the compose error is
+     * clearer than a login error if it really is missing.
+     */
+    private void registryLogin(Zone z) {
+        String registry = z.gitHost();
+        String token = zones.secret(z.slug(), "forgejo_token");
+        if (token.isBlank()) {
+            log.warn("deploy {}: no forgejo_token secret — not logging the node in to {}; "
+                    + "a private image pull will fail", z.slug(), registry);
+            return;
+        }
+        DockerCli.Result r = docker.docker(dockerHost(z),
+                List.of("login", registry, "-u", ProvisioningService.BOT_USER, "--password-stdin"),
+                token);
+        if (r.ok()) {
+            log.info("deploy {}: node logged in to registry {}", z.slug(), registry);
+        } else {
+            log.warn("deploy {}: docker login {} on node failed: {}",
+                    z.slug(), registry, firstLine(r.stderr()));
+        }
     }
 
     private void touch(Zone z) {

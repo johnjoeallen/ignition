@@ -163,8 +163,6 @@ The compose templates the service renders (`zone-compose.yml.tmpl`,
 - **`ignition-control` holds every token**, is the single public front door,
   and drives every node's Docker daemon — a concentrated blast radius that
   needs a locked-down deployment.
-- **The control plane and Watchtower pull images anonymously** — private
-  packages need `docker login git.<slug>.ignition.example` on the node.
 - **No repo seeding** — the starter repo + repo vars/secrets are still set by
   hand per team.
 - **No services catalogue yet** — an app's own infra (Postgres, Redis) belongs

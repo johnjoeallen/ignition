@@ -1,6 +1,7 @@
 package net.dublinux.ignition.docker;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +29,15 @@ public class DockerCli {
 
     /** {@code docker [-H <endpoint>] <args...>} */
     public Result docker(String dockerHost, List<String> args) {
+        return docker(dockerHost, args, null);
+    }
+
+    /**
+     * {@code docker [-H <endpoint>] <args...>} with {@code stdin} piped to the
+     * process (then closed) — for {@code docker login --password-stdin}, which
+     * keeps the token off the argv and out of any command log.
+     */
+    public Result docker(String dockerHost, List<String> args, String stdin) {
         List<String> cmd = new ArrayList<>();
         cmd.add("docker");
         if (dockerHost != null && !dockerHost.isBlank() && !dockerHost.equals("local")) {
@@ -35,7 +45,7 @@ public class DockerCli {
             cmd.add(dockerHost);
         }
         cmd.addAll(args);
-        return run(cmd);
+        return run(cmd, stdin);
     }
 
     /** {@code docker [-H …] compose -p <project> [-f <file>] <args...>} */
@@ -50,8 +60,19 @@ public class DockerCli {
     }
 
     private Result run(List<String> cmd) {
+        return run(cmd, null);
+    }
+
+    private Result run(List<String> cmd, String stdin) {
         try {
             Process p = new ProcessBuilder(cmd).redirectErrorStream(false).start();
+            if (stdin != null) {
+                try (var os = p.getOutputStream()) {
+                    os.write(stdin.getBytes(StandardCharsets.UTF_8));
+                }
+            } else {
+                p.getOutputStream().close();
+            }
             String out = new String(p.getInputStream().readAllBytes());
             String err = new String(p.getErrorStream().readAllBytes());
             boolean done = p.waitFor(120, TimeUnit.SECONDS);

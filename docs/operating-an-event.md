@@ -126,8 +126,6 @@ capacity per node.
 - **`ignition-control` holds every token**, is the single public front door,
   and drives every node's Docker daemon — the controller is a
   concentrated blast radius and needs a locked-down deployment.
-- **The control plane and the per-node Watchtower pull images anonymously** —
-  private packages need `docker login git.<slug>.<BASE_DOMAIN>` on the node.
 - **No repo seeding** — the starter repo + repo vars/secrets are still set by
   hand per team.
 - **No services catalogue** — org-standard shared services (a card-art lookup,
