@@ -84,6 +84,11 @@ services:
       # how the file-provider routers reach this service (it's on traefik-public)
       IGNITION_CONTROL_PLANE_URL: http://ignition-control:8790
       IGN_INSECURE_TLS: ${IGN_INSECURE_TLS:-false}
+      # Every team's org and its repos are private (git clone/browse needs an
+      # org login) by default — set to false only for a fully trusted/isolated
+      # demo where "anyone who resolves the host can clone with no auth" is
+      # actually fine. Applies to every team platform-wide, not per-team.
+      IGN_PRIVATE_REPOS: ${IGN_PRIVATE_REPOS:-true}
       IGN_SWEEP_TTL: ${IGN_SWEEP_TTL:-24h}
       # Recreate every zone's containers (down + up -d, never -v — no volume
       # is ever touched) once on this startup, so a compose/label/image

@@ -44,6 +44,18 @@ public class IgnitionProperties {
     private boolean insecureTls = false;
 
     /**
+     * Whether every team's org and its repos are private (git-clone/browse
+     * requires an org membership + login) or public (anyone who resolves the
+     * host can clone with no authentication at all). Platform-wide, not
+     * per-team — a corporate deployment wants this true; the original design
+     * defaulted to public on the reasoning that "no SSO, so private just
+     * hides work from teammates" — true for a same-team view, but it also
+     * means literally anyone on the network can clone, which isn't
+     * acceptable outside a fully trusted/isolated demo. Defaults true now.
+     */
+    private boolean privateRepos = true;
+
+    /**
      * Recreate every zone's stack (compose {@code down} + {@code up -d}, never
      * {@code -v}) once on startup — how a compose/label/image change (e.g. a
      * new Traefik router label) reaches zones that are already running,
@@ -113,6 +125,8 @@ public class IgnitionProperties {
     public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
     public boolean isInsecureTls() { return insecureTls; }
     public void setInsecureTls(boolean insecureTls) { this.insecureTls = insecureTls; }
+    public boolean isPrivateRepos() { return privateRepos; }
+    public void setPrivateRepos(boolean v) { this.privateRepos = v; }
     public boolean isRecreateZonesOnStart() { return recreateZonesOnStart; }
     public void setRecreateZonesOnStart(boolean v) { this.recreateZonesOnStart = v; }
     public Sweep getSweep() { return sweep; }

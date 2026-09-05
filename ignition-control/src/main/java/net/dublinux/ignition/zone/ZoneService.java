@@ -443,23 +443,29 @@ public class ZoneService {
      * account, which owns every zone, already owns it after the first call).
      * Returns the {@code Owners} team id, or -1 if it couldn't be found.
      */
+    /** {@code private} or {@code public}, per {@link IgnitionProperties#isPrivateRepos()} — platform-wide, not per-team. */
+    private String orgVisibility() {
+        return props.isPrivateRepos() ? "private" : "public";
+    }
+
     private int ensureOrg(String slug) {
-        var created = forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", "public"));
+        String visibility = orgVisibility();
+        var created = forgejo.post(slug, "/orgs", Map.of("username", slug, "visibility", visibility));
         if (!created.ok()) {
             log.debug("zone {}: org create said ({}): {} — fine if it already exists",
                     slug, created.status(), created.message());
         }
-        // idempotent — also fixes an org created before this was "public"
-        var patched = forgejo.patch(slug, "/orgs/" + slug, Map.of("visibility", "public"));
+        // idempotent — also fixes an org created under a different config value
+        var patched = forgejo.patch(slug, "/orgs/" + slug, Map.of("visibility", visibility));
         if (patched.ok()) {
             String actual = patched.body() == null ? "" : patched.body().path("visibility").asText("");
-            if (!"public".equals(actual)) {
-                log.warn("zone {}: PATCH visibility=public returned 200 but org now reports '{}'"
-                        + " — full body: {}", slug, actual, patched.body());
+            if (!visibility.equals(actual)) {
+                log.warn("zone {}: PATCH visibility={} returned 200 but org now reports '{}'"
+                        + " — full body: {}", slug, visibility, actual, patched.body());
             }
         } else {
-            log.warn("zone {}: could not set org visibility to public ({}): {}",
-                    slug, patched.status(), patched.message());
+            log.warn("zone {}: could not set org visibility to {} ({}): {}",
+                    slug, visibility, patched.status(), patched.message());
         }
         var teams = forgejo.get(slug, "/orgs/" + slug + "/teams?limit=50");
         if (teams.ok() && teams.body() != null && teams.body().isArray()) {
@@ -507,19 +513,23 @@ public class ZoneService {
      * the team for no benefit — force every repo in the org public, including
      * ones created some other way (self-heals like the org visibility above).
      */
-    private void unprivateRepos(String slug, JsonNode repoList) {
+    /** Self-heal: brings every repo's visibility in line with {@link IgnitionProperties#isPrivateRepos()}. */
+    private void fixRepoVisibility(String slug, JsonNode repoList) {
         if (repoList == null || !repoList.isArray()) {
             return;
         }
+        boolean wantPrivate = props.isPrivateRepos();
         for (JsonNode r : repoList) {
-            if (r.path("private").asBoolean(false)) {
+            boolean isPrivate = r.path("private").asBoolean(false);
+            if (isPrivate != wantPrivate) {
                 String name = r.path("name").asText("");
-                var patched = forgejo.patch(slug, "/repos/" + slug + "/" + name, Map.of("private", false));
+                var patched = forgejo.patch(slug, "/repos/" + slug + "/" + name, Map.of("private", wantPrivate));
                 if (patched.ok()) {
-                    log.info("zone {}: repo {} was private, made public", slug, name);
+                    log.info("zone {}: repo {} was {}, made {}", slug, name,
+                            isPrivate ? "private" : "public", wantPrivate ? "private" : "public");
                 } else {
-                    log.warn("zone {}: could not make repo {} public ({}): {}",
-                            slug, name, patched.status(), patched.message());
+                    log.warn("zone {}: could not make repo {} {} ({}): {}",
+                            slug, name, wantPrivate ? "private" : "public", patched.status(), patched.message());
                 }
             }
         }
@@ -535,7 +545,7 @@ public class ZoneService {
         ensureOrg(slug);
         migrateBotRepos(slug);
         var res = forgejo.get(slug, "/orgs/" + slug + "/repos?limit=50");
-        unprivateRepos(slug, res.body());
+        fixRepoVisibility(slug, res.body());
         List<RepoView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode r : res.body()) {
@@ -809,11 +819,6 @@ public class ZoneService {
     }
 
     /**
-     * New repos always belong to the zone's org, not the bot user, and
-     * are always public — this demo has no SSO, and a private repo/org just
-     * hides work from the rest of the team for no benefit.
-     */
-    /**
      * Every app listens on this port inside its container — Traefik routes
      * to it directly over the docker network (no host port is ever
      * published, so there's nothing to "expose"). Not user-configurable:
@@ -825,8 +830,10 @@ public class ZoneService {
 
     /**
      * "Create an app" — an app <em>is</em> its repo. Creates the repo in the
-     * zone's org (always public: no SSO, so a private repo just hides work
-     * from teammates), then seeds it with a starter {@code Dockerfile} +
+     * zone's org (private or public per {@link IgnitionProperties#isPrivateRepos()},
+     * platform-wide — org membership already governs who can see it either
+     * way; private additionally keeps it off anyone unauthenticated), then
+     * seeds it with a starter {@code Dockerfile} +
      * page and the deploy workflow, and sets the repo variables/secrets that
      * workflow needs — so the team can clone, push, and hit Release with
      * nothing to configure by hand.
@@ -835,7 +842,7 @@ public class ZoneService {
         ensureOrg(slug);
         ForgejoClient.Response repo = forgejo.post(slug, "/orgs/" + slug + "/repos", Map.of(
                 "name", name, "description", description == null ? "" : description,
-                "private", false, "auto_init", true));
+                "private", props.isPrivateRepos(), "auto_init", true));
         if (!repo.ok()) {
             return repo;
         }

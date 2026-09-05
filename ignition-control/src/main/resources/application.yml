@@ -35,6 +35,7 @@ ignition:
   user-secret-pepper: ${IGN_USER_SECRET_PEPPER:}
   public-url: ${IGN_PUBLIC_URL:http://localhost:8790}
   insecure-tls: ${IGN_INSECURE_TLS:false}
+  private-repos: ${IGN_PRIVATE_REPOS:true}
   recreate-zones-on-start: ${IGN_RECREATE_ZONES_ON_START:false}
   smtp:
     host: ${IGN_SMTP_HOST:}
