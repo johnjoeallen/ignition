@@ -516,7 +516,7 @@ public class ZoneService {
 
     // --- Forgejo repos -----------------------------------------------------
 
-    public record RepoView(String owner, String name, String fullName, String htmlUrl, String version) {}
+    public record RepoView(String owner, String name, String fullName, String htmlUrl, String cloneUrl, String version) {}
 
     /** Every repo in the zone's org — all repos are org-owned, so every zone user can see them. */
     public List<RepoView> repos(String slug) {
@@ -534,7 +534,7 @@ public class ZoneService {
                 String version = (v[0] == 0 && v[1] == 0 && v[2] == 0)
                         ? "no releases yet" : "v%d.%d.%d".formatted(v[0], v[1], v[2]);
                 out.add(new RepoView(owner, name, r.path("full_name").asText(""),
-                        r.path("html_url").asText(""), version));
+                        r.path("html_url").asText(""), r.path("clone_url").asText(""), version));
             }
         }
         return out;

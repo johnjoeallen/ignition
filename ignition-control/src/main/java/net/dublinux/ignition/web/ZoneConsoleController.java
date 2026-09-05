@@ -50,7 +50,7 @@ public class ZoneConsoleController {
     }
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
-    public record AppRow(String name, String htmlUrl, String version, boolean deployed,
+    public record AppRow(String name, String htmlUrl, String cloneUrl, String version, boolean deployed,
                          String image, String url, String deployId) {}
 
     @GetMapping("/teams/{slug}")
@@ -62,7 +62,7 @@ public class ZoneConsoleController {
         List<AppRow> rows = zones.repos(slug).stream()
                 .map(r -> {
                     DeployedApp d = deployed.get(r.name());
-                    return new AppRow(r.name(), r.htmlUrl(), r.version(), d != null,
+                    return new AppRow(r.name(), r.htmlUrl(), r.cloneUrl(), r.version(), d != null,
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
                             d == null ? null : d.deployId());
