@@ -656,19 +656,41 @@ public class ZoneService {
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode p : res.body()) {
                 int number = p.path("number").asInt();
+                String head = p.path("head").path("ref").asText("");
+                String base = p.path("base").path("ref").asText("");
                 // The list endpoint's own `mergeable` field isn't live —
                 // reported enabled for a PR that Forgejo's own UI shows only
-                // "Close" for (nothing to merge), confirmed live. Only the
-                // single-PR endpoint actually computes it fresh, so fetch that
-                // per PR instead of trusting the list.
-                boolean mergeable = forgejo.get(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, number))
+                // "Close" for, confirmed live. Fetch it per PR from the
+                // single-PR endpoint instead, which actually computes it fresh.
+                boolean noConflicts = forgejo.get(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, number))
                         .body().path("mergeable").asBoolean(false);
-                out.add(new PullView(number, p.path("title").asText(""),
-                        p.path("head").path("ref").asText(""), p.path("base").path("ref").asText(""),
-                        mergeable, p.path("html_url").asText("")));
+                // Still not enough on its own, though: "mergeable" means "no
+                // conflicts", not "there's something to merge" — a branch
+                // identical to base trivially has no conflicts, so it still
+                // reported true for exactly that case. hasDiff() below is a
+                // second, independent check for an actual diff between the two.
+                boolean mergeable = noConflicts && hasDiff(slug, repo, base, head);
+                out.add(new PullView(number, p.path("title").asText(""), head, base, mergeable,
+                        p.path("html_url").asText("")));
             }
         }
         return out;
+    }
+
+    /**
+     * Whether {@code head} actually differs from {@code base} — via
+     * Forgejo/Gitea's compare endpoint. {@code commits} as an array on the
+     * response is my best recollection of that endpoint's shape, not
+     * verified against a live instance; if this misbehaves (always true, or
+     * always false), that field is the first thing to check. Fails open
+     * (returns true) on anything unexpected, so a shape mismatch here can't
+     * make an actually-mergeable PR look permanently blocked — worst case is
+     * back to the original "no conflicts" check alone.
+     */
+    private boolean hasDiff(String slug, String repo, String base, String head) {
+        var res = forgejo.get(slug, "/repos/%s/%s/compare/%s...%s".formatted(slug, repo, base, head));
+        JsonNode commits = res.body() == null ? null : res.body().path("commits");
+        return commits == null || !commits.isArray() || !commits.isEmpty();
     }
 
     /**
