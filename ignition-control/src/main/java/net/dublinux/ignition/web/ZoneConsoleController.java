@@ -291,6 +291,19 @@ public class ZoneConsoleController {
         }
     }
 
+    /** Closes the PR without merging — for when there's nothing to merge (Forgejo's own UI offers only this then). */
+    @PostMapping("/teams/{slug}/repos/{repo}/issues/{number}/close")
+    public String closePrForIssue(@PathVariable String slug, @PathVariable String repo,
+                                  @PathVariable int number, @RequestParam String title) {
+        try {
+            var res = zones.closePrForIssue(slug, repo, callerEmail(), callerId(), number, title);
+            return redirectRepo(slug, repo, res.ok() ? "issue #" + number + "'s PR closed"
+                    : "Forgejo said (%d): %s".formatted(res.status(), res.message()));
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, repo, e.getMessage());
+        }
+    }
+
     private String callerEmail() {
         return currentUser.get().map(u -> u.email()).orElse("");
     }

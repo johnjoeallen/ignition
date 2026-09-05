@@ -703,6 +703,24 @@ public class ZoneService {
     }
 
     /**
+     * Closes the open PR for an issue's branch without merging it — the
+     * escape hatch for exactly the case Forgejo's own UI shows only "Close"
+     * for (a branch with nothing to merge): rather than a merge attempt that
+     * can only ever 405, just close it. Found the same way merging finds it —
+     * by matching the derived branch name, not a stored PR number.
+     */
+    public ForgejoClient.Response closePrForIssue(String slug, String repo, String email, java.util.UUID userId,
+                                                  int issueNumber, String issueTitle) {
+        String branch = issueBranch(issueNumber, issueTitle);
+        return pulls(slug, repo).stream()
+                .filter(p -> p.head().equals(branch))
+                .findFirst()
+                .map(p -> forgejo.patchAsUser(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, p.number()),
+                        Map.of("state", "closed"), myPat(slug, email, userId)))
+                .orElseThrow(() -> new IllegalArgumentException("no open PR for issue #" + issueNumber + " yet"));
+    }
+
+    /**
      * New repos always belong to the zone's org, not the bot user, and
      * are always public — this demo has no SSO, and a private repo/org just
      * hides work from the rest of the team for no benefit.

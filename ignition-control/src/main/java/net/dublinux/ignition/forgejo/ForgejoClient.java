@@ -113,6 +113,10 @@ public class ForgejoClient {
         return sendAsUser(slug, "POST", path, body, userToken);
     }
 
+    public Response patchAsUser(String slug, String path, Map<String, ?> body, String userToken) {
+        return sendAsUser(slug, "PATCH", path, body, userToken);
+    }
+
     private Response sendAsUser(String slug, String method, String path, Map<String, ?> body, String userToken) {
         if (userToken == null || userToken.isBlank()) {
             return new Response(401, error("you have no personal access token on file for this team yet"));
