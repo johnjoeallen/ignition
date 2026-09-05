@@ -59,7 +59,8 @@ role on that team, not a separate login or hostname. Their console is
 | Task | In the console |
 |---|---|
 | Add / remove team members | **Members** — creates their Forgejo account too, from their email |
-| Reset a member's git password, or your own | **Members** — the regenerate icon next to the password/PAT (yours is always self-service; another member's needs admin) |
+| Reset your own git password / PAT | The regenerate icon beside them, on the team console's top card (next to the Forgejo link) — always self-service |
+| Reset another member's git password | **Members** — the "reset git password" action (admin only) |
 | Create an app (a repo) | **Apps → Create app** — name + description, seeded with a starter Dockerfile + deploy workflow |
 | Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop |
 | Restart a stuck Actions runner | **Restart runner** button |
@@ -72,8 +73,10 @@ admin access, and no visibility into any other team.
 ![Team console — apps and members](img/team-console.png)
 
 *The team console: apps (name, description, version) and members. Your own
-git password and PAT show only on your own row, each with a copy icon and a
-regenerate icon — nobody else's, including other admins, are ever shown here.*
+git password and PAT are shown on the top card beside the Forgejo link
+(screenshot above predates that move — still shown per-row here), each with
+a copy icon and a regenerate icon — nobody else's, including other admins,
+are ever shown.*
 
 ## Team member / developer
 
