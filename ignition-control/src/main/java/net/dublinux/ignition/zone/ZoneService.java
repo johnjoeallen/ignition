@@ -581,12 +581,28 @@ public class ZoneService {
 
     public record IssueView(int number, String title, String htmlUrl, String branchName) {}
 
-    /** Open issues on a repo (not pull requests — Forgejo shares the tracker, {@code type=issue} excludes PRs). */
+    /**
+     * Open issues on a repo — not pull requests, even though Forgejo shares
+     * the tracker between them (a PR is stored as an issue with extra data,
+     * and shows up in this same endpoint's results). Seen live: a PR opened
+     * for issue #1 showed up as a second row, issue #2, with the PR's own
+     * title — meaning the previous filter, {@code type=issue} (singular),
+     * wasn't a value Forgejo actually recognized and was silently ignored,
+     * so every PR came back indistinguishable from a plain issue.
+     * {@code type=issues} (plural) is my best correction from memory of the
+     * API shape, not verified against a live swagger doc — so the
+     * {@code pull_request} check below filters again client-side regardless,
+     * since every issue object reliably carries that field (present only on
+     * a PR) and one query param already turned out to be wrong once.
+     */
     public List<IssueView> issues(String slug, String repo) {
-        var res = forgejo.get(slug, "/repos/%s/%s/issues?type=issue&state=open&limit=50".formatted(slug, repo));
+        var res = forgejo.get(slug, "/repos/%s/%s/issues?type=issues&state=open&limit=50".formatted(slug, repo));
         List<IssueView> out = new ArrayList<>();
         if (res.ok() && res.body() != null && res.body().isArray()) {
             for (JsonNode i : res.body()) {
+                if (i.hasNonNull("pull_request")) {
+                    continue; // a PR, not a plain issue — see above
+                }
                 int number = i.path("number").asInt();
                 String title = i.path("title").asText("");
                 out.add(new IssueView(number, title, i.path("html_url").asText(""), issueBranch(number, title)));
