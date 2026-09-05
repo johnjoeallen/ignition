@@ -22,7 +22,7 @@
 # Repo variables (Settings -> Actions -> Variables):
 #   REGISTRY     git.<slug>.<BASE_DOMAIN>            e.g. git.quantum-badgers.ignition.example
 #                (must match the zone's registry exactly — ignition-control checks it)
-#   CONTROL_URL  https://admin.<slug>.<BASE_DOMAIN>  the zone's control endpoint
+#   CONTROL_URL  the ignition-control public URL           its /deploy endpoint
 #   APP_NAME     my-app                              -> https://my-app.apps.<slug>.<BASE_DOMAIN>/
 #   APP_PORT     8080                                fixed by ignition (Create app) — listen on $PORT/8080
 # Repo secrets (Settings -> Actions -> Secrets):
@@ -51,6 +51,13 @@ jobs:
   deploy:
     runs-on: docker-cli
     steps:
+      # The job image (code.forgejo.org/oci/docker:cli) is Alpine with the
+      # Docker CLI but no Node.js; actions/checkout is a JavaScript action and
+      # needs a `node` on PATH. Alpine's nodejs package is current (Node 22),
+      # which satisfies checkout@v4. This runs in `sh`, before any JS action.
+      - name: Provide Node.js for JavaScript actions
+        run: apk add --no-cache nodejs
+
       - uses: actions/checkout@v4
 
       - name: Build and push

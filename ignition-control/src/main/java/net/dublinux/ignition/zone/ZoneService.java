@@ -905,9 +905,19 @@ public class ZoneService {
         }
     }
 
+    /**
+     * Forgejo splits create and update for Actions variables: {@code POST
+     * .../actions/variables/{name}} creates, {@code PUT} only updates an
+     * existing one (a {@code PUT} to a missing name 404s "variable not
+     * found"). We create on first seed and fall back to {@code PUT} if the
+     * name is already there (a re-seed), so this stays idempotent.
+     */
     private void setVar(String slug, String repo, String key, String value) {
-        var res = forgejo.put(slug, "/repos/" + slug + "/" + repo + "/actions/variables/" + key,
-                Map.of("value", value));
+        String path = "/repos/" + slug + "/" + repo + "/actions/variables/" + key;
+        var res = forgejo.post(slug, path, Map.of("value", value));
+        if (res.status() == 409) { // already exists — update it instead
+            res = forgejo.put(slug, path, Map.of("value", value));
+        }
         if (!res.ok()) {
             log.warn("zone {}: setting variable {} on {} failed ({}): {}",
                     slug, key, repo, res.status(), res.message());
