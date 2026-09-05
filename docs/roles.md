@@ -62,7 +62,7 @@ role on that team, not a separate login or hostname. Their console is
 | Reset your own git password / PAT | The regenerate icon beside them, on the team console's top card (next to the Forgejo link) — always self-service |
 | Reset another member's git password | **Members** — the "reset git password" action (admin only) |
 | Create an app (a repo) | **Apps → Create app** — name + description, seeded with a starter Dockerfile + deploy workflow |
-| Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop |
+| Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop, delete |
 | Restart a stuck Actions runner | **Restart runner** button |
 
 They never touch a Forgejo admin screen; the `ignition-bot` service account

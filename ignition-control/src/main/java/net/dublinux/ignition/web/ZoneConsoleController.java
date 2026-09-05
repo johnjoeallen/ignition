@@ -341,14 +341,33 @@ public class ZoneConsoleController {
         return redirect(slug, ok ? "runner restarted" : "runner restart failed");
     }
 
-    @PostMapping("/teams/{slug}/apps/delete")
-    public String deleteApp(@PathVariable String slug, @RequestParam String name) {
+    /** Stop the running container but keep the repo — the app can be Released again later. */
+    @PostMapping("/teams/{slug}/apps/stop")
+    public String stopApp(@PathVariable String slug, @RequestParam String name) {
         try {
             apps.undeploy(slug, name);
             return redirect(slug, "app " + name + " stopped");
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }
+    }
+
+    /**
+     * Delete the app entirely — an app <em>is</em> its repo, so this stops any
+     * live deployment and then removes the Forgejo repo (code, issues, PRs,
+     * releases). Irreversible; the template guards it with a confirm.
+     */
+    @PostMapping("/teams/{slug}/apps/delete")
+    public String deleteApp(@PathVariable String slug, @RequestParam String name) {
+        try {
+            apps.undeploy(slug, name);
+        } catch (IllegalArgumentException notDeployed) {
+            // nothing running — go straight to removing the repo
+        }
+        var res = zones.deleteApp(slug, name);
+        return redirect(slug, res.ok() || res.status() == 404
+                ? "app " + name + " deleted"
+                : "deleting " + name + " failed (" + res.status() + "): " + res.message());
     }
 
     private String back(String slug, ForgejoClient.Response res, String okMsg) {

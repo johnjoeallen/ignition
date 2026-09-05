@@ -100,9 +100,14 @@
                 <span th:unless="${a.deployed}" th:text="${a.version}">no releases yet</span>
               </td>
               <td class="text-end text-nowrap">
-                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline">
+                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="name" th:value="${a.name}">
-                  <button class="btn btn-sm btn-outline-danger">stop</button>
+                  <button class="btn btn-sm btn-outline-secondary">stop</button>
+                </form>
+                <form method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline"
+                      onsubmit="return confirm('Delete this app? This removes its repo — code, issues, PRs, releases — and cannot be undone.')">
+                  <input type="hidden" name="name" th:value="${a.name}">
+                  <button class="btn btn-sm btn-outline-danger">delete</button>
                 </form>
               </td>
             </tr>

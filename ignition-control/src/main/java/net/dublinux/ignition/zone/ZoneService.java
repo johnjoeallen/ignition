@@ -868,6 +868,23 @@ public class ZoneService {
     }
 
     /**
+     * "Delete app" — an app <em>is</em> its repo, so this drops the whole
+     * Forgejo repo: code, history, issues, PRs, releases, packages. The
+     * caller stops any live deployment first ({@link net.dublinux.ignition.app.AppService#undeploy});
+     * this is just the repo. Irreversible. A 404 means it was already gone —
+     * still a success from the console's point of view.
+     */
+    public ForgejoClient.Response deleteApp(String slug, String name) {
+        var res = forgejo.delete(slug, "/repos/" + slug + "/" + name);
+        if (res.ok()) {
+            log.info("zone {}: app {} deleted (repo removed)", slug, name);
+        } else if (res.status() != 404) {
+            log.warn("zone {}: deleting app {} failed ({}): {}", slug, name, res.status(), res.message());
+        }
+        return res;
+    }
+
+    /**
      * Direct pushes to {@code main} are blocked from here on — matches the
      * issue→branch→PR→merge flow the team console drives everything through
      * ({@link #createIssue}, {@link #openPrForIssue}, {@link #mergePrForIssue}).
