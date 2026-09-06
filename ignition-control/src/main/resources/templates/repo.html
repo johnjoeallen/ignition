@@ -75,17 +75,55 @@
             <div class="text-body-secondary small">Version</div>
             <div class="mb-3" th:text="${repoInfo.version}">v1.2.3</div>
             <div class="text-body-secondary small mb-1">Release</div>
+            <!-- suggested bump (from commit messages) is highlighted; if nothing is
+                 pending, releasing just redeploys the current commit, so confirm first -->
             <form method="post" th:action="@{/teams/{slug}/repos/release(slug=${zoneSlug})}"
-                  class="btn-group btn-group-sm" role="group">
+                  class="btn-group btn-group-sm" role="group"
+                  th:with="pendingWork=${pending != null and pending.hasWork()}"
+                  th:attr="onsubmit=${pendingWork} ? null : 'return confirm(\'Nothing new since this app was last released — this just redeploys the current commit as the next version. Continue?\')'">
               <input type="hidden" name="repo" th:value="${repoName}">
-              <button name="bump" value="major" class="btn btn-outline-secondary"
+              <button name="bump" value="major" class="btn"
+                      th:classappend="${pendingWork and pending.suggestedBump == 'major'} ? ' btn-accent' : ' btn-outline-secondary'"
                       title="X.0.0 — breaking change">major</button>
-              <button name="bump" value="minor" class="btn btn-outline-secondary"
+              <button name="bump" value="minor" class="btn"
+                      th:classappend="${pendingWork and pending.suggestedBump == 'minor'} ? ' btn-accent' : ' btn-outline-secondary'"
                       title="x.Y.0 — new feature">minor</button>
-              <button name="bump" value="patch" class="btn btn-outline-secondary"
+              <button name="bump" value="patch" class="btn"
+                      th:classappend="${pendingWork and pending.suggestedBump == 'patch'} ? ' btn-accent' : ' btn-outline-secondary'"
                       title="x.y.Z — fix">fix</button>
             </form>
           </div>
+        </div>
+
+        <!-- Unreleased-work strip: what's on main that the latest release doesn't have. -->
+        <div th:if="${pending != null}" class="card-footer small"
+             th:classappend="${pending.hasWork()} ? ' bg-warning-subtle' : ' text-body-secondary'">
+          <span th:if="${!pending.hasWork() and pending.everReleased}">
+            <i class="bi bi-check-circle"></i>
+            <span th:text="${pending.lastTag}">v1.1.0</span> is the latest commit on <code>main</code> — nothing to release.
+          </span>
+          <span th:if="${!pending.hasWork() and !pending.everReleased}">
+            <i class="bi bi-info-circle"></i> Never released, and <code>main</code> has no commits beyond the initial import.
+          </span>
+          <span th:if="${pending.hasWork()}">
+            <i class="bi bi-exclamation-triangle"></i>
+            <b th:text="${pending.commitCount}">3</b>
+            <span th:text="${pending.commitCount == 1 ? 'commit' : 'commits'}">commits</span>
+            on <code>main</code>
+            <span th:if="${pending.everReleased}">since <b th:text="${pending.lastTag}">v1.1.0</b></span>
+            <span th:unless="${pending.everReleased}">— <b>never released</b></span>,
+            not deployed yet.
+            <span th:if="${!pending.prs.isEmpty()}">
+              Merged:
+              <span th:each="pr,it : ${pending.prs}">
+                <a th:href="${repoInfo.htmlUrl + '/pulls/' + pr.number}"
+                   th:text="|#${pr.number} ${pr.title}|">#3 Add cards</a><span th:if="${!it.last}">, </span>
+              </span>
+            </span>
+            <span class="d-block mt-1">Click
+              <b th:text="${pending.suggestedBump == 'patch' ? 'fix' : pending.suggestedBump}">fix</b>
+              (suggested from the commit messages) to ship it.</span>
+          </span>
         </div>
       </div>
 
@@ -157,6 +195,27 @@
             <tr th:if="${issueRows.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-3">no open issues</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <div th:if="${unreleasedIssues != null and !unreleasedIssues.isEmpty()}">
+        <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">
+          Closed, not released yet
+          <span class="badge text-bg-warning" th:text="${unreleasedIssues.size()}">2</span>
+        </h2>
+        <p class="text-body-secondary small">Closed since this app was last released — the work is on
+          <code>main</code> but no release tag covers it. Cut a release to ship it.</p>
+        <div class="table-card mb-3">
+          <table class="table table-hover mb-0">
+            <thead><tr><th>#</th><th>title</th><th>branch</th></tr></thead>
+            <tbody>
+              <tr th:each="i : ${unreleasedIssues}">
+                <td th:text="${i.number}">3</td>
+                <td><a th:href="${i.htmlUrl}" th:text="${i.title}">Get US Mastercard cards</a></td>
+                <td><code th:text="${i.branchName}">3-get-us-mastercard-cards</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </main>
   </div>

@@ -990,6 +990,48 @@ public class ZoneService {
         return releases.cut(slug, owner, repo, kind);
     }
 
+    /** What's merged to {@code main} that the latest release doesn't cover — for the app page. */
+    public ReleaseService.Pending pendingRelease(String slug, String repo) {
+        return releases.pending(slug, slug, repo);
+    }
+
+    /**
+     * Closed issues whose work isn't in a release yet — approximated as
+     * "closed after the last release was cut" ({@code since}), or every closed
+     * issue if the repo has never been released ({@code since == null}). An
+     * issue closed without merging counts too; the point is to make "you
+     * closed this but never shipped it" visible, and that's still true.
+     */
+    public List<IssueView> unreleasedClosedIssues(String slug, String repo, java.time.Instant since) {
+        var res = forgejo.get(slug,
+                "/repos/%s/%s/issues?type=issues&state=closed&limit=50&sort=recentupdate".formatted(slug, repo));
+        List<IssueView> out = new ArrayList<>();
+        if (res.ok() && res.body() != null && res.body().isArray()) {
+            for (JsonNode i : res.body()) {
+                if (i.hasNonNull("pull_request")) {
+                    continue; // a PR, not a plain issue — see issues()
+                }
+                if (since != null) {
+                    String closedAt = i.path("closed_at").asText("");
+                    if (closedAt.isBlank()) {
+                        continue;
+                    }
+                    try {
+                        if (!java.time.Instant.parse(closedAt).isAfter(since)) {
+                            continue;
+                        }
+                    } catch (java.time.format.DateTimeParseException e) {
+                        continue;
+                    }
+                }
+                int number = i.path("number").asInt();
+                String title = i.path("title").asText("");
+                out.add(new IssueView(number, title, i.path("html_url").asText(""), issueBranch(number, title)));
+            }
+        }
+        return out;
+    }
+
     // --- runner / stack (project-scoped compose) --------------------------
 
     public boolean restartRunner(String slug) {

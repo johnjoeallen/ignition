@@ -90,6 +90,7 @@ public class ZoneConsoleController {
                         ZoneAccessService.MemberView::email, m -> zones.gitUsername(slug, m.email())));
 
         java.util.UUID currentUserId = currentUser.get().map(u -> u.id()).orElse(null);
+        addOwnGitCreds(slug, currentUserId, model);
 
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("zone", zone);
@@ -112,7 +113,7 @@ public class ZoneConsoleController {
             String username = zones.ensureGitAccess(slug, email, memberId);
             mail.sendAddedToTeam(email, slug, role.name().toLowerCase());
             return redirect(slug, email + " added as " + role.name().toLowerCase()
-                    + " — git access as " + username + " (they can see their own password/PAT on any app's page)");
+                    + " — git access as " + username + " (they can see their own password/PAT on the team page and any app's page)");
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }
@@ -178,6 +179,26 @@ public class ZoneConsoleController {
         return repo == null || repo.isBlank() ? redirect(slug, msg) : redirectRepo(slug, repo, msg);
     }
 
+    /**
+     * The viewer's own git login for {@code slug} — username, password, PAT —
+     * onto the model as {@code myGit*}. Shown on both the team page and each
+     * app page. Only ever computed for the viewer's own membership row, never
+     * fetched (let alone decrypted) for anyone else's, so there's nothing to
+     * leak even if the template gating had a bug; a platform admin who isn't a
+     * member of this team gets nulls.
+     */
+    private void addOwnGitCreds(String slug, java.util.UUID currentUserId, Model model) {
+        var me = access.membersOf(slug).stream()
+                .filter(m -> m.userId().equals(currentUserId)).findFirst();
+        String username = me.map(m -> zones.gitUsername(slug, m.email())).orElse(null);
+        ZoneService.GitCreds creds = me
+                .map(m -> zones.gitCredentials(slug, username, m.userId()))
+                .orElse(null);
+        model.addAttribute("myGitUsername", username);
+        model.addAttribute("myGitPassword", creds == null ? null : creds.password());
+        model.addAttribute("myGitPat", creds == null ? null : creds.pat());
+    }
+
     /** Member-management actions need team-admin rights, not just team access. */
     private void requireZoneAdmin(String slug) {
         if (!currentUser.isZoneAdmin(slug)) {
@@ -239,26 +260,23 @@ public class ZoneConsoleController {
 
         ZoneService.RepoView info = zones.repoInfo(slug, repo);
 
-        // The viewer's own git credentials — what you actually need to clone /
-        // push this repo — shown here beside the clone URL. Only ever computed
-        // for the viewer's own membership row (see the note in zone()); a
-        // platform admin who isn't a member of this team sees none.
+        // "You have unreleased work" — the merged PRs / commits on main that no
+        // release tag covers yet, plus the closed issues among them. Makes a
+        // merge-that-did-nothing visible instead of silent.
+        ReleaseService.Pending pending = zones.pendingRelease(slug, repo);
+        List<ZoneService.IssueView> unreleasedIssues =
+                zones.unreleasedClosedIssues(slug, repo, pending.lastReleaseAt());
+
         java.util.UUID currentUserId = currentUser.get().map(u -> u.id()).orElse(null);
-        var me = access.membersOf(slug).stream()
-                .filter(m -> m.userId().equals(currentUserId)).findFirst();
-        String myGitUsername = me.map(m -> zones.gitUsername(slug, m.email())).orElse(null);
-        ZoneService.GitCreds myCreds = me
-                .map(m -> zones.gitCredentials(slug, zones.gitUsername(slug, m.email()), m.userId()))
-                .orElse(null);
+        addOwnGitCreds(slug, currentUserId, model);
 
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("repoInfo", info);
         model.addAttribute("issueRows", issueRows);
+        model.addAttribute("pending", pending);
+        model.addAttribute("unreleasedIssues", unreleasedIssues);
         model.addAttribute("currentUserId", currentUserId);
-        model.addAttribute("myGitUsername", myGitUsername);
-        model.addAttribute("myGitPassword", myCreds == null ? null : myCreds.password());
-        model.addAttribute("myGitPat", myCreds == null ? null : myCreds.pat());
         return "repo";
     }
 
@@ -298,7 +316,8 @@ public class ZoneConsoleController {
             var res = zones.mergePrForIssue(slug, repo, callerEmail(), callerId(), number, title);
             String msg;
             if (res.ok()) {
-                msg = "issue #" + number + "'s PR merged";
+                msg = "issue #" + number + "'s PR merged into main — not deployed yet; "
+                        + "click a Release button to ship it";
             } else if (res.status() == 405) {
                 // Forgejo's merge endpoint returns this exact 405 for more than
                 // one underlying state, and doesn't distinguish them in the

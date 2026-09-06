@@ -29,11 +29,72 @@ public class ReleaseService {
         this.forgejo = forgejo;
     }
 
+    /** First line of a Forgejo merge-commit message: {@code Merge pull request 'Title' (#12) from …}. */
+    private static final Pattern MERGE_PR = Pattern.compile("Merge pull request '(.+)' \\(#(\\d+)\\)");
+
     /** {@code (status, forgejo body message, tag, resolved kind)} */
     public record Result(int status, String message, String tag, String kind) {
         public boolean ok() {
             return status >= 200 && status < 300;
         }
+    }
+
+    /** A merged PR sitting on {@code main} that no release tag covers yet. */
+    public record PendingPr(int number, String title) {}
+
+    /**
+     * What's on {@code main} that the latest release doesn't have — so the app
+     * page can say "you have unreleased work" instead of leaving the team to
+     * notice a merge did nothing.
+     *
+     * @param everReleased   false if the repo has no {@code vX.Y.Z} tag yet
+     * @param lastTag        the latest release tag, or {@code "—"} if none
+     * @param lastReleaseAt  when that release was cut (for the closed-issue
+     *                       filter), or {@code null}
+     * @param commitCount    commits on {@code main} since {@code lastTag}
+     * @param prs            merged PRs among those commits (best-effort parse)
+     * @param suggestedBump  {@code major}/{@code minor}/{@code patch} from
+     *                       Conventional Commits over those messages
+     */
+    public record Pending(boolean everReleased, String lastTag, java.time.Instant lastReleaseAt,
+                          int commitCount, List<PendingPr> prs, String suggestedBump) {
+        public boolean hasWork() {
+            return commitCount > 0;
+        }
+    }
+
+    public Pending pending(String slug, String owner, String repo) {
+        if (!REPO.matcher(owner).matches() || !REPO.matcher(repo).matches()) {
+            throw new IllegalArgumentException("bad owner/repo");
+        }
+        int[] cur = latestSemver(forgejo.get(slug, "/repos/%s/%s/tags?limit=50".formatted(owner, repo)).body());
+        boolean everReleased = !isZero(cur);
+        String lastTag = everReleased ? "v%d.%d.%d".formatted(cur[0], cur[1], cur[2]) : "—";
+
+        List<String> messages = commitsSince(slug, owner, repo, everReleased ? lastTag : "");
+        List<PendingPr> prs = new ArrayList<>();
+        for (String m : messages) {
+            Matcher mm = MERGE_PR.matcher(m.lines().findFirst().orElse(""));
+            if (mm.find()) {
+                prs.add(new PendingPr(Integer.parseInt(mm.group(2)), mm.group(1)));
+            }
+        }
+        return new Pending(everReleased, lastTag, latestReleaseInstant(slug, owner, repo),
+                messages.size(), prs, classifyBump(messages));
+    }
+
+    private java.time.Instant latestReleaseInstant(String slug, String owner, String repo) {
+        JsonNode body = forgejo.get(slug,
+                "/repos/%s/%s/releases?limit=1".formatted(owner, repo)).body();
+        if (body != null && body.isArray() && !body.isEmpty()) {
+            String at = body.get(0).path("published_at").asText(body.get(0).path("created_at").asText(""));
+            try {
+                return at.isBlank() ? null : java.time.Instant.parse(at);
+            } catch (java.time.format.DateTimeParseException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     public Result cut(String slug, String owner, String repo, String kind) {

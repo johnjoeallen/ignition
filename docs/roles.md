@@ -67,7 +67,7 @@ role on that team, not a separate login or hostname. Their console is
 | Task | In the console |
 |---|---|
 | Add / remove team members | **Members** — creates their Forgejo account too, from their email |
-| Reset your own git password / PAT | The regenerate icon beside them, under the clone URL on any app's page — always self-service, every member can do it |
+| Reset your own git password / PAT | The regenerate icon beside them, on the team page's top card and under the clone URL on any app's page — always self-service, every member can do it |
 | Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, the deploy workflow, and every variable/secret it needs. Re-running it on an existing app re-applies that config |
 | Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop (undeploy, keep the repo), delete (undeploy and remove the repo) |
 | Restart a stuck Actions runner | **Restart runner** button |
@@ -79,10 +79,10 @@ admin access, and no visibility into any other team.
 
 ![Team console — apps and members](img/team-console.png)
 
-*The team console: apps (name, description, version) and members. Your own
-git username, password and PAT live on each app's page, under its clone URL —
-each with a copy icon, and password/PAT a regenerate icon; nobody else's,
-including other admins, are ever shown.*
+*The team console: your git username, password and PAT on the top card, apps
+(name, description, version), and members. The same credentials also appear on
+each app's page under its clone URL. Each has a copy icon, and password/PAT a
+regenerate icon; nobody else's, including other admins, are ever shown.*
 
 ## Team member / developer
 
@@ -129,12 +129,20 @@ day-to-day work happens, not in Forgejo's own UI.*
    without merging — either way, an issue's branch never outlives the issue,
    and there's no way to reopen a PR for a closed issue (open a new issue
    instead).
-5. **Ship a build — a release, from the same management page.** Under the
-   clone URL are three buttons — **major**, **minor**, **fix**. Click the one
-   that fits the change and `ignition-control` tags the next `vX.Y.Z` on
-   `main` for that [semver](https://semver.org/) bump (`fix` → **patch**,
-   `minor` → **minor**, `major` → **major**; first release `v0.1.0`, or
-   `v1.0.0` from **major**). Nobody types a version.
+5. **Ship a build — a release, from the same management page.** The Release
+   card has three buttons — **major**, **minor**, **fix**. Click the one that
+   fits the change and `ignition-control` tags the next `vX.Y.Z` on `main` for
+   that [semver](https://semver.org/) bump (`fix` → **patch**, `minor` →
+   **minor**, `major` → **major**; first release `v0.1.0`, or `v1.0.0` from
+   **major**). Nobody types a version.
+
+   The card also shows **what's on `main` that the last release doesn't
+   have** — the merged PRs and a count of unreleased commits, with the bump
+   the commit messages suggest already highlighted — and a **"Closed, not
+   released yet"** list of issues you've closed since the last release. If
+   there's nothing pending, the buttons ask you to confirm before cutting a
+   release that just redeploys the same commit. So a merge that hasn't been
+   shipped is visible, not silent.
 
    ![After merging and releasing — v0.1.0, no open issues](img/released.png)
 
