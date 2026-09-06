@@ -358,18 +358,17 @@ command's stdout.
      which honours the app's `visibility`.
    - **Quota.** `dev` currently counts against the zone quota like any app;
      a smaller `ignition.quotas.*-dev` set would let it oversubscribe less.
-7. **PR-preview environments** — Phase 2 of the multi-service work (Phase 1,
-   `compose.yaml` deploys, is done). A preview is just a `/deploy` with a
-   computed name (`<repo>-pr-<n>`, PR number not branch) and the PR head as
-   `ref`, so the PR's `compose.yaml` (DB and all) comes along. Needs: a seeded
-   `scaffold/pr-preview.yml` (`on: pull_request`, `deploy-preview` label gate,
-   `POST /deploy` then `POST /undeploy` on close/unlabel, per-PR concurrency
-   with `cancel-in-progress`); an **in-process reaper** in `ignition-control`
-   (`@Scheduled` — list `<repo>-pr-*` `DeployedApp` rows, ask Forgejo for that
-   repo's open PRs, `undeploy` the stragglers, best-effort delete their
-   `:pr-<n>` package tags — no list-apps HTTP endpoint needed); a
-   max-open-previews cap; and the carried gap that preview hosts are
-   internet-reachable with no auth (front-door work). Previews are headless
-   (no repo of their own → invisible in the console Apps table). Design notes
-   from the `cardart` session; plan at
-   `~/.claude/plans/rustling-mapping-trinket.md`.
+7. **PR-preview environments — built.** Add the `deploy-preview` label to a PR
+   → `scaffold/pr-preview.yml` builds `:pr-<n>` and `POST /deploy`s it as
+   `<repo>-pr-<n>` (`{repo}` in the payload so the compose/`.env` still come
+   from `<repo>` at the PR head sha) → `<repo>-pr-<n>.apps.<slug>.<BASE_DOMAIN>`,
+   with that branch's `compose.yaml` + `.env`. Closing the PR / removing the
+   label tears it down + drops the `:pr-<n>` tag. Per-PR concurrency,
+   `cancel-in-progress`. `PreviewReaper` (`@Scheduled`,
+   `ignition.preview.reap-interval`, default 1h) is the backstop: for each
+   `<repo>-pr-<n>` `app` row, if the PR isn't open, `undeploy` + delete the
+   tag. Previews are headless (no repo of their own → not in the zone Apps
+   table; listed on the source repo's page). Left: preview hosts are public
+   (front-door `forward-auth` unbuilt); no max-open cap; existing apps need
+   **Create app** re-run to get `pr-preview.yml`; `<repo>-pr-<n>` must fit the
+   40-char app-name limit.

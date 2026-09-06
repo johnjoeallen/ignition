@@ -1,0 +1,93 @@
+# Per-PR preview environments. Seeded as .forgejo/workflows/pr-preview.yml.
+#
+# Add the `deploy-preview` label to a pull request and it deploys as a
+# throwaway app at  <repo>-pr-<number>.apps.<slug>.<BASE_DOMAIN>  — the PR
+# branch's own compose.yaml + .env, so a preview can carry different config
+# without touching main. Pushes to the PR rebuild it; closing the PR (or
+# removing the label) tears it down. A nightly reaper in ignition-control
+# cleans up any that slip through.
+#
+# The label is the gate on purpose: a fork PR gets no secrets, so a maintainer
+# adding the label is also vouching for the code.
+#
+# Uses the same repo vars/secrets as deploy.yml (all seeded by Create app).
+
+name: pr preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, closed, unlabeled]
+
+concurrency:
+  group: preview-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    # deploy/rebuild while the PR is open and carries the label
+    if: >
+      github.event.action != 'closed'
+      && github.event.action != 'unlabeled'
+      && contains(github.event.pull_request.labels.*.name, 'deploy-preview')
+    runs-on: docker-cli
+    steps:
+      - name: Prepare job tools
+        run: apk add --no-cache nodejs curl
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Build, push, deploy
+        run: |
+          REPO="${{ vars.REGISTRY }}/${{ github.repository }}"
+          N="${{ github.event.pull_request.number }}"
+          APP="${{ github.event.repository.name }}-pr-$N"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
+            | docker login "${{ vars.REGISTRY }}" -u "${{ vars.REGISTRY_USER || github.actor }}" --password-stdin
+          docker build -t "$REPO:pr-$N" .
+          docker push "$REPO:pr-$N"
+          curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H 'content-type: application/json' \
+            -d "{\"app\": \"$APP\", \"repo\": \"${{ github.event.repository.name }}\", \"image\": \"$REPO:pr-$N\", \"port\": ${{ vars.APP_PORT || 8080 }}, \"ref\": \"$SHA\"}"
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Comment the URL (first deploy only)
+        if: github.event.action == 'opened' || github.event.action == 'labeled'
+        run: |
+          HOST_SUFFIX="${{ vars.REGISTRY }}"; HOST_SUFFIX="${HOST_SUFFIX#git.}"
+          URL="https://$APP.apps.$HOST_SUFFIX/"
+          curl -fsS -X POST \
+            "${{ github.api_url }}/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            -H "Authorization: token ${{ secrets.FORGEJO_TOKEN }}" \
+            -H 'content-type: application/json' \
+            -d "{\"body\": \"🚀 Preview deployed: $URL\"}" || true
+
+  teardown:
+    # PR closed, or the label removed
+    if: >
+      github.event.action == 'closed'
+      || (github.event.action == 'unlabeled' && github.event.label.name == 'deploy-preview')
+    runs-on: docker-cli
+    steps:
+      - name: Prepare job tools
+        run: apk add --no-cache curl
+
+      - name: Undeploy + drop the image tag
+        run: |
+          N="${{ github.event.pull_request.number }}"
+          APP="${{ github.event.repository.name }}-pr-$N"
+          curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/undeploy" \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            -H 'content-type: application/json' \
+            -d "{\"app\": \"$APP\"}" || true
+          curl -fsS -X DELETE \
+            "${{ github.api_url }}/packages/${{ github.repository_owner }}/container/${{ github.event.repository.name }}/pr-$N" \
+            -H "Authorization: token ${{ secrets.FORGEJO_TOKEN }}" || true

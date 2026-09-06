@@ -66,35 +66,38 @@ public class AppService {
 
     /** {@code POST /deploy} on the release channel, {@code main}. */
     public DeployResult deploy(String slug, String name, String image, int port) {
-        return deploy(slug, name, image, port, Channel.RELEASE, "main");
+        return deploy(slug, name, image, port, Channel.RELEASE, "main", name);
     }
 
     /**
      * {@code POST /deploy} — bearer already resolved to {@code slug}. The
      * channel picks the host ({@code .apps.} / {@code .dev.}), the compose
-     * project, and which table the deployment is recorded in. The app's own
-     * {@code compose.yaml} at {@code ref} (if it has one) describes the whole
-     * stack — web plus any DB/cache/queue — transformed by
-     * {@link AppComposeBuilder}; no file → a synthesised single-service deploy.
+     * project, and which table the deployment is recorded in. {@code sourceRepo}
+     * is the Forgejo repo to read {@code compose.yaml} / {@code .env} from at
+     * {@code ref} — normally the same as {@code name}, but a PR preview deploys
+     * as {@code <repo>-pr-<n>} from the {@code <repo>} repo. No compose file → a
+     * synthesised single-service deploy.
      */
     public DeployResult deploy(String slug, String name, String image, int port,
-                               Channel channel, String ref) {
+                               Channel channel, String ref, String sourceRepo) {
         Zone z = zones.find(slug)
                 .orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
         if (!NAME.matcher(name).matches()) {
             throw new IllegalArgumentException(
-                    "app name must be [a-z0-9-], 1–40 chars, no leading/trailing dash");
+                    "app name must be [a-z0-9-], 1–40 chars, no leading/trailing dash"
+                    + (name.length() > 40 ? " (this one is " + name.length() + ")" : ""));
         }
         String registry = z.gitHost();
         if (!image.startsWith(registry + "/")) {
             throw new IllegalArgumentException("image must be from " + registry + "/");
         }
+        String repo = (sourceRepo == null || sourceRepo.isBlank()) ? name : sourceRepo;
 
         String project = "app-" + slug + "-" + name + channel.projectSuffix();
         String deployId = DEPLOY_ID.format(Instant.now());
 
-        String repoYaml = zoneService.appCompose(slug, name, ref).orElse(null);
-        String repoEnv = zoneService.appEnv(slug, name, ref).orElse(null);
+        String repoYaml = zoneService.appCompose(slug, repo, ref).orElse(null);
+        String repoEnv = zoneService.appEnv(slug, repo, ref).orElse(null);
         String rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml, repoEnv);
         Path composeFile = render.writeAppCompose(slug, name, channel, rendered);
         log.info("deploy {}/{} [{}]: image={} port={} ref={} compose={} env={} -> node {}",
@@ -169,6 +172,13 @@ public class AppService {
 
     public java.util.Optional<DevDeployment> devDeployment(String slug, String name) {
         return devApps.findByZoneAndName(slug, name);
+    }
+
+    /** Live PR previews of {@code repo} in this zone — the {@code <repo>-pr-<n>} deployments. */
+    public List<DeployedApp> previewsForApp(String slug, String repo) {
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                "^" + java.util.regex.Pattern.quote(repo) + "-pr-\\d+$");
+        return apps.findByZone(slug).stream().filter(a -> p.matcher(a.name()).matches()).toList();
     }
 
     public List<DevDeployment> devDeploymentsForZone(String slug) {

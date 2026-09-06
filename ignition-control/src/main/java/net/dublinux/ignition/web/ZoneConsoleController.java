@@ -285,6 +285,10 @@ public class ZoneConsoleController {
                 .map(d -> DateTimeFormatter.ofPattern("d MMM HH:mm").withZone(java.time.ZoneOffset.UTC)
                         .format(d.deployedAt()) + " UTC")
                 .orElse(null));
+        String baseDomain = zones.get(slug).map(Zone::baseDomain).orElse("");
+        model.addAttribute("previews", apps.previewsForApp(slug, repo).stream()
+                .map(p -> Map.of("name", p.name(), "url", p.url(baseDomain)))
+                .toList());
         model.addAttribute("currentUserId", currentUserId);
         return "repo";
     }

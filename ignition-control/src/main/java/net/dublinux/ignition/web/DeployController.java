@@ -36,8 +36,10 @@ public class DeployController {
         if (ref.isEmpty()) {
             ref = "main";
         }
+        String repo = str(body.get("repo"));   // preview deploys as <repo>-pr-N from <repo>
         try {
-            AppService.DeployResult r = apps.deploy(slug, app, image, port, channel, ref);
+            AppService.DeployResult r = apps.deploy(slug, app, image, port, channel, ref,
+                    repo.isEmpty() ? app : repo);
             return ResponseEntity.ok(Map.of(
                     "ok", true, "zone", r.zone(), "app", r.app(),
                     "deploy_id", r.deployId(), "url", r.url()));

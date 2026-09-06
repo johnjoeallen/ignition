@@ -68,7 +68,7 @@ role on that team, not a separate login or hostname. Their console is
 |---|---|
 | Add / remove team members | **Members** — creates their Forgejo account too, from their email |
 | Reset your own git password / PAT | The regenerate icon beside them, on the team page's top card and under the clone URL on any app's page — always self-service, every member can do it |
-| Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, a `compose.yaml` (what Ignition deploys — web plus any DB/cache you uncomment) + `compose.override.yaml` (local dev only), a `.env` (runtime config, read at the deployed commit), `.gitignore`, the deploy workflow, and every variable/secret it needs. Re-running it on an existing app re-applies that config |
+| Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, a `compose.yaml` (what Ignition deploys — web plus any DB/cache you uncomment) + `compose.override.yaml` (local dev only), a `.env` (runtime config, read at the deployed commit), `.gitignore`, the deploy + PR-preview workflows, and every variable/secret they need. Re-running it on an existing app re-applies that config |
 | Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop (undeploy, keep the repo), delete (undeploy and remove the repo) |
 | Restart a stuck Actions runner | **Restart runner** button |
 
@@ -159,6 +159,15 @@ of the latest merged code, alongside the release. It's **public**, like the
 release, and it only ever changes when someone clicks the button (a plain push
 still doesn't deploy). **stop** on that row tears down the dev copy; the
 release is untouched.
+
+**Preview a pull request.** Add the **`deploy-preview`** label to a PR and it
+deploys as a throwaway app at
+`https://<APP_NAME>-pr-<number>.apps.<slug>.<event-domain>/`, built from that
+PR's branch — including any `compose.yaml` / `.env` changes on the branch, so a
+preview can carry different config without touching `main`. Pushes to the PR
+rebuild it; closing the PR (or removing the label) tears it down. Live previews
+are listed on the app's page. The label is the gate on purpose — a fork PR gets
+no secrets, so a maintainer adding it is also vouching for the code.
 Re-pushing an image to the **same** tag later (a base-image rebuild, say)
 needs no new release: the per-node Watchtower notices the new digest and
 rolls the app forward on its own within ~60s.

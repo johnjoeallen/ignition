@@ -53,6 +53,7 @@ class RepoPageRenderTest {
         ctx.setVariable("baseDomain", "ignition.example");
         ctx.setVariable("devUrl", null);
         ctx.setVariable("devDeployedAt", null);
+        ctx.setVariable("previews", List.of());
         ctx.setVariable("repoInfo", new ZoneService.RepoView("acme", "cards", "acme/cards",
                 "https://git.acme.example/acme/cards", "https://git.acme.example/acme/cards.git",
                 "a card app", "v1.1.0"));
@@ -119,5 +120,20 @@ class RepoPageRenderTest {
         assertThat(html).contains("https://cards.dev.acme.ignition.example/");
         assertThat(html).contains("6 Sep 09:30 UTC");
         assertThat(html).contains(">stop<");
+    }
+
+    @Test
+    void rendersPrPreviews() {
+        var ctx = baseContext();
+        ctx.setVariable("pending", new ReleaseService.Pending(true, "v1.1.0", Instant.now(), 0, List.of(), "patch"));
+        ctx.setVariable("previews", List.of(
+                Map.of("name", "cards-pr-3", "url", "https://cards-pr-3.apps.acme.ignition.example/"),
+                Map.of("name", "cards-pr-7", "url", "https://cards-pr-7.apps.acme.ignition.example/")));
+
+        String html = engine().process("repo", ctx);
+        assertThat(html).contains("PR previews");
+        assertThat(html).contains("cards-pr-3");
+        assertThat(html).contains("https://cards-pr-7.apps.acme.ignition.example/");
+        assertThat(html).contains("deploy-preview");
     }
 }

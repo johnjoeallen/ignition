@@ -148,6 +148,19 @@
         </div>
       </div>
 
+      <div th:if="${previews != null and !previews.isEmpty()}" class="mb-4">
+        <div class="text-body-secondary small mb-1">PR previews
+          <span class="badge text-bg-secondary" th:text="${previews.size()}">2</span>
+        </div>
+        <ul class="list-unstyled mb-0 small">
+          <li th:each="p : ${previews}">
+            <a th:href="${p.url}" target="_blank" th:text="${p.name}">app-pr-12</a>
+          </li>
+        </ul>
+        <div class="text-body-secondary small mt-1">Add the <code>deploy-preview</code> label to a
+          pull request to get one; it's torn down when the PR closes.</div>
+      </div>
+
       <form method="post" th:action="@{/teams/{slug}/repos/{repo}/description(slug=${zoneSlug},repo=${repoName})}"
             class="row g-2 align-items-end mb-4">
         <div class="col-auto flex-grow-1">

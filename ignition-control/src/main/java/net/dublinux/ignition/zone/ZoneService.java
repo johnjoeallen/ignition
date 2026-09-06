@@ -727,6 +727,25 @@ public class ZoneService {
 
     public record PullView(int number, String title, String head, String base, boolean mergeable, String htmlUrl) {}
 
+    /** Open PR numbers for a repo — cheap (no per-PR mergeability probe). {@code null} if the repo/API is unreachable. */
+    public java.util.Set<Integer> openPullNumbers(String slug, String repo) {
+        var res = forgejo.get(slug, "/repos/%s/%s/pulls?state=open&limit=50".formatted(slug, repo));
+        if (!res.ok() || res.body() == null || !res.body().isArray()) {
+            return null;
+        }
+        java.util.Set<Integer> out = new java.util.HashSet<>();
+        res.body().forEach(p -> out.add(p.path("number").asInt()));
+        return out;
+    }
+
+    /** Best-effort delete of a container package tag (a preview's {@code :pr-<n>}). */
+    public void deletePackageTag(String slug, String repo, String tag) {
+        var res = forgejo.delete(slug, "/packages/%s/container/%s/%s".formatted(slug, repo, tag));
+        if (!res.ok() && res.status() != 404) {
+            log.warn("zone {}: deleting package {} :{} failed ({}): {}", slug, repo, tag, res.status(), res.message());
+        }
+    }
+
     public List<PullView> pulls(String slug, String repo) {
         var res = forgejo.get(slug, "/repos/%s/%s/pulls?state=open&limit=50".formatted(slug, repo));
         List<PullView> out = new ArrayList<>();
@@ -919,6 +938,8 @@ public class ZoneService {
         putFile(slug, name, ".env", scaffold("app.env"),
                 "ignition: add .env (runtime config, read at the deployed commit)");
         putFile(slug, name, ".gitignore", scaffold("gitignore"), "ignition: add .gitignore");
+        putFile(slug, name, ".forgejo/workflows/pr-preview.yml", scaffold("pr-preview.yml"),
+                "ignition: add the PR-preview workflow (deploy-preview label)");
 
         setVar(slug, name, "REGISTRY", zone.gitHost());
         setVar(slug, name, "CONTROL_URL", props.getPublicUrl().replaceAll("/+$", ""));

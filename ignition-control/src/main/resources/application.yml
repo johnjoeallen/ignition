@@ -47,6 +47,9 @@ ignition:
   sweep:
     ttl: ${IGN_SWEEP_TTL:24h}
     interval: ${IGN_SWEEP_INTERVAL:15m}
+  preview:
+    # how often the PR-preview reaper checks for previews whose PR has closed
+    reap-interval: ${IGN_PREVIEW_REAP_INTERVAL:1h}
   services:
     # image repos a dependent service in an app's compose.yaml may not use
     # (globs, comma-separated); empty = any image allowed
