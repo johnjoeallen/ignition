@@ -218,20 +218,51 @@ public class AppService {
     }
 
     /**
-     * {@code docker compose -p <project> -f <compose> stop|start}. Needs the
-     * rendered compose file — {@code compose stop}/{@code start} (unlike
-     * {@code down}) can't reconstruct a project from container labels alone. If
-     * the file is missing (state dir wiped since the deploy), fall back to
-     * {@code docker stop|start} on the project's containers by label.
+     * Stop or (re)start an app's containers without a redeploy. {@code compose
+     * stop}/{@code start} (unlike {@code down}) can't reconstruct a project from
+     * container labels alone, so the last deploy's rendered compose file is
+     * passed — it pins the exact images, so even if the containers were removed
+     * (node reboot, prune) a {@code start} can recreate them with {@code up -d}.
+     * Cases:
+     * <ul>
+     *   <li>compose file on disk, containers exist → {@code compose -f … stop|start}</li>
+     *   <li>compose file on disk, {@code start} but containers gone → {@code compose -f … up -d}</li>
+     *   <li>no compose file → label-filtered {@code docker stop|start}; a
+     *       {@code start} with nothing to act on is unrecoverable here (cut a release)</li>
+     * </ul>
      */
     private void lifecycle(String slug, String name, Channel channel, String verb) {
         Zone z = zones.find(slug).orElse(null);
         String host = dockerHost(z);
         String project = "app-" + slug + "-" + name + channel.projectSuffix();
         Path composeFile = render.appComposePath(slug, name, channel);
-        DockerCli.Result r = java.nio.file.Files.exists(composeFile)
-                ? docker.compose(host, project, composeFile.toString(), verb)
-                : lifecycleByLabel(host, project, verb);
+        boolean start = verb.equals("start");
+
+        DockerCli.Result r;
+        if (java.nio.file.Files.exists(composeFile)) {
+            String cf = composeFile.toString();
+            if (start && containerIds(host, project, true).isEmpty()) {
+                if (z != null) {
+                    registryLogin(z);
+                }
+                r = docker.composeUp(host, project, cf);
+            } else {
+                r = docker.compose(host, project, cf, verb);
+            }
+        } else {
+            List<String> ids = containerIds(host, project, start);
+            if (ids.isEmpty()) {
+                if (start) {
+                    throw new DeployException("nothing to start — the containers and the rendered "
+                            + "compose are both gone. Cut a release (or Deploy from main) to redeploy.");
+                }
+                r = new DockerCli.Result(0, "", "");
+            } else {
+                List<String> args = new java.util.ArrayList<>(List.of(verb));
+                args.addAll(ids);
+                r = docker.docker(host, args);
+            }
+        }
         if (!r.ok()) {
             throw new DeployException("compose " + verb + " failed: " + firstLine(r.stderr()));
         }
@@ -240,17 +271,11 @@ public class AppService {
         }
     }
 
-    private DockerCli.Result lifecycleByLabel(String host, String project, String verb) {
+    private List<String> containerIds(String host, String project, boolean includeStopped) {
         DockerCli.Result ps = docker.docker(host, List.of("ps",
-                verb.equals("start") ? "-aq" : "-q",
+                includeStopped ? "-aq" : "-q",
                 "--filter", "label=com.docker.compose.project=" + project));
-        List<String> ids = ps.stdout().lines().map(String::strip).filter(s -> !s.isEmpty()).toList();
-        if (ids.isEmpty()) {
-            return new DockerCli.Result(0, "", "");
-        }
-        List<String> args = new java.util.ArrayList<>(List.of(verb));
-        args.addAll(ids);
-        return docker.docker(host, args);
+        return ps.stdout().lines().map(String::strip).filter(s -> !s.isEmpty()).toList();
     }
 
     public java.util.Optional<DevDeployment> devDeployment(String slug, String name) {

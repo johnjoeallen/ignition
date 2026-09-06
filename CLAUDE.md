@@ -166,11 +166,14 @@ the project from the running resources' labels, so a multi-service app's DB
 volume is never left behind. The console's **Stop** / **Start** buttons are
 lighter: `docker compose -p <project> -f <rendered compose> stop` / `start`
 (`stop`/`start`, unlike `down`, can't rebuild a project from container labels, so
-the last-deploy compose file is passed; if it's gone, a label-filtered
-`docker stop`/`start` is the fallback), keeping the containers, networks and
-volumes and the `app` row (`app.running` tracks the state). A stopped app
-restarts with no new release; a redeploy (`app.update`) also clears the flag.
-Idempotent — Stop on a stopped app is a no-op, not a 500.
+the last-deploy compose file is passed — it pins the images, so a **Start** whose
+containers were removed since (node reboot, prune) recreates them with `up -d`
+off that same file; if the file itself is gone, a label-filtered
+`docker stop`/`start` is the fallback and a Start with nothing to act on tells
+you to cut a release), keeping the networks and volumes and the `app` row
+(`app.running` tracks the state). A stopped app restarts with no new release; a
+redeploy (`app.update`) also clears the flag. Idempotent — Stop on a stopped app
+is a no-op, not a 500.
 
 **Deploys to the `.apps.` host come only from a release — never a plain push to
 `main`.** A second host per app, `<name>.dev.<slug>.<BASE_DOMAIN>`, runs the
