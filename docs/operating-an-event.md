@@ -79,9 +79,9 @@ credential; it never leaves the controller, and nobody signs in as it.)
 `Dockerfile`, `.forgejo/workflows/deploy.yml` (see `examples/deploy.yml`), and
 every variable/secret that workflow needs — `REGISTRY`, `REGISTRY_USER`,
 `CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, `FORGEJO_TOKEN`. The
-team admin hits **Release** in the console — which reads the commits since the
-last release, picks the bump, and tags the next `vX.Y.Z` on `main` — and that
-tag builds, pushes, and deploys `APP_NAME.apps.<slug>.ignition.example`.
+team admin clicks **major** / **minor** / **fix** on the app's page — which
+tags the next `vX.Y.Z` on `main` for that bump — and that tag builds, pushes,
+and deploys `APP_NAME.apps.<slug>.ignition.example`.
 **A plain push to `main` does not deploy.** More repos → more apps.
 
 ## During the event

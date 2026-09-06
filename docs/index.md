@@ -105,10 +105,9 @@ flowchart TB
 
 ## How a team's apps get deployed
 
-1. The team admin hits **Release** in the team console — ignition-control reads the
-   commits since the last release, picks the version bump from them
-   (Conventional Commits; override available) and tags the next `vX.Y.Z` on
-   `main`. That release tag is the only thing that deploys — a plain push to
+1. The team admin clicks **major**, **minor**, or **fix** on the app's page in
+   the team console — ignition-control tags the next `vX.Y.Z` on `main` for
+   that bump. That release tag is the only thing that deploys — a plain push to
    `main` does not. See
    [Roles → Operating model](roles.md#operating-model-how-a-team-actually-works-day-to-day).
 2. A **Forgejo Actions** job builds a container image inside the team's

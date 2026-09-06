@@ -67,7 +67,7 @@ role on that team, not a separate login or hostname. Their console is
 | Task | In the console |
 |---|---|
 | Add / remove team members | **Members** — creates their Forgejo account too, from their email |
-| Reset your own git password / PAT | The regenerate icon beside them, on the team console's top card (next to the Forgejo link) — always self-service, every member can do it |
+| Reset your own git password / PAT | The regenerate icon beside them, under the clone URL on any app's page — always self-service, every member can do it |
 | Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, the deploy workflow, and every variable/secret it needs. Re-running it on an existing app re-applies that config |
 | Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop (undeploy, keep the repo), delete (undeploy and remove the repo) |
 | Restart a stuck Actions runner | **Restart runner** button |
@@ -79,10 +79,10 @@ admin access, and no visibility into any other team.
 
 ![Team console — apps and members](img/team-console.png)
 
-*The team console: your git password and PAT on the top card beside the
-Forgejo link, apps (name, description, version), and members. Each secret has
-a copy icon and a regenerate icon — nobody else's, including other admins,
-are ever shown.*
+*The team console: apps (name, description, version) and members. Your own
+git username, password and PAT live on each app's page, under its clone URL —
+each with a copy icon, and password/PAT a regenerate icon; nobody else's,
+including other admins, are ever shown.*
 
 ## Team member / developer
 
@@ -102,9 +102,10 @@ issue/PR/release *lifecycle* that has one intended path.
 
 ![An app's management page](img/app-management.png)
 
-*An app's management page — the clone URL, the current version, Release, an
-editable description, and the issue list. This is where day-to-day work
-happens, not in Forgejo's own UI.*
+*An app's management page — the clone URL with your git username / password /
+PAT beneath it, the current version, the **major** / **minor** / **fix**
+release buttons, an editable description, and the issue list. This is where
+day-to-day work happens, not in Forgejo's own UI.*
 
 1. **Open an issue** for the work, on the app's management page. This
    automatically creates its branch too — `<issue-number>-<title, slugified>`
@@ -128,14 +129,12 @@ happens, not in Forgejo's own UI.*
    without merging — either way, an issue's branch never outlives the issue,
    and there's no way to reopen a PR for a closed issue (open a new issue
    instead).
-5. **Ship a build — a release, from the same management page.** Version
-   bumps are automatic, not something anyone picks by hand: click **Release**
-   and `ignition-control` reads the commits since the last release, picks the
-   bump by [Conventional Commits](https://www.conventionalcommits.org/) (a
-   `fix:` → **patch**, a `feat:` → **minor**, a `feat!:`/`BREAKING CHANGE:` →
-   **major**; nothing conventional → patch), and tags the next `vX.Y.Z` on
-   `main`. The dropdown next to **Release** defaults to *auto (from
-   commits)*; override it for that one release if needed.
+5. **Ship a build — a release, from the same management page.** Under the
+   clone URL are three buttons — **major**, **minor**, **fix**. Click the one
+   that fits the change and `ignition-control` tags the next `vX.Y.Z` on
+   `main` for that [semver](https://semver.org/) bump (`fix` → **patch**,
+   `minor` → **minor**, `major` → **major**; first release `v0.1.0`, or
+   `v1.0.0` from **major**). Nobody types a version.
 
    ![After merging and releasing — v0.1.0, no open issues](img/released.png)
 

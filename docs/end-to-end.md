@@ -352,13 +352,16 @@ day: open an issue (its branch is created automatically), push to that branch,
 open a PR from the issue row, merge (closes the issue, deletes the branch).
 Then, from the app's management page:
 
-**Release** → `ReleaseService.cut(slug, owner, repo, kind)`:
+**Release** — the **major** / **minor** / **fix** buttons POST
+`bump=major|minor|patch` → `ReleaseService.cut(slug, owner, repo, kind)`:
 
 1. `GET /repos/<slug>/<repo>/tags?limit=50` → the latest `vX.Y.Z`.
-2. If `kind == auto`, read the commit messages since that tag and classify by
-   [Conventional Commits](https://www.conventionalcommits.org/): `feat:` →
-   **minor**, `feat!:` / `BREAKING CHANGE:` → **major**, anything else →
-   **patch**. The dropdown next to **Release** overrides this for one release.
+2. `kind` (`major`/`minor`/`patch`) is applied directly to that version. The
+   console always sends an explicit bump; `ReleaseService` still accepts
+   `kind == auto` for API callers — read the commit messages since the tag and
+   classify by [Conventional Commits](https://www.conventionalcommits.org/):
+   `feat:` → **minor**, `feat!:` / `BREAKING CHANGE:` → **major**, anything
+   else → **patch**.
 3. `POST /repos/<slug>/<repo>/tags` with `tag_name = vX.Y.Z`,
    `target_commitish = main` — the tag is created on Forgejo, always from
    reviewed, already-pushed history.

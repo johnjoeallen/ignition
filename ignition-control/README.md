@@ -27,7 +27,8 @@ Working now:
   **stop an app**, a **roster** page + **sweep idle zones now**
 - **zone console** (`/z`) — ported 1:1 from `ign-control.py`: status + apps,
   Users (create / delete), Repositories (create), per-repo **Release**
-  (auto / patch / minor / major, via `ForgejoClient` + `ReleaseService`),
+  (major / minor / fix buttons, via `ForgejoClient` + `ReleaseService`;
+  `auto` still supported for API callers),
   runner restart + stack status (via `DockerCli`)
 - **CI bridge** (`POST /deploy {app,image,port}`, `POST /undeploy {app}`) —
   renders `app-compose.tmpl` and applies `docker compose -p app-<slug>-<name>`

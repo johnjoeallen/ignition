@@ -130,9 +130,8 @@ Two authenticated consoles served by the one app.
   connectivity, control-plane version.
 
 **Zone console** — `admin.<slug>.<BASE_DOMAIN>`, zone token: unchanged from
-today — Users, Repositories (create + per-repo **Release** with
-auto / patch / minor / major), Apps (status / remove), Restart runner, status
-card.
+today — Users, Repositories (create + per-repo **Release**: three buttons,
+major / minor / fix), Apps (status / remove), Restart runner, status card.
 
 **CI bridge** — bearer = deploy token: `POST /deploy`, `POST /undeploy`. The
 JSON contract is **unchanged**, so `examples/deploy.yml` does not change.
@@ -215,7 +214,8 @@ conditionals — the reason it isn't a template today).
    ported 1:1** from `ign-control.py`: `ForgejoClient` (per-zone REST via the
    `ignition-bot` token), `ReleaseService` (`latestSemver` / `bump` /
    `classifyBump` / `cut`, unit-tested), Users create/delete, Repositories
-   create + per-repo **Release** (auto / patch / minor / major), runner restart
+   create + per-repo **Release** (major / minor / fix buttons; `auto` still in
+   `ReleaseService` for API callers), runner restart
    and stack status via a `DockerCli` (`docker -H <endpoint> compose …`).
 4. **done** — the CI bridge. `ComposeTemplate` (explicit `${VAR}` render,
    unit-tested), `AppService.deploy` / `undeploy` (name + registry checks,

@@ -438,9 +438,8 @@ the apex).
    (copy [`examples/deploy.yml`](examples/deploy.yml)).
 2. Repo vars / secrets: `REGISTRY`, `REGISTRY_USER`, `CONTROL_URL`, `APP_NAME`,
    `APP_PORT`, `DEPLOY_TOKEN`, `FORGEJO_TOKEN` — all seeded by **Create app**.
-3. **Team console → Repositories → Release** — `ignition-control` reads the
-   commits since the last tag, picks the semver bump (Conventional Commits;
-   dropdown overrides), tags `vX.Y.Z` on `main`; the tag builds, pushes, deploys.
+3. **The app's page → major / minor / fix** — `ignition-control` tags the next
+   `vX.Y.Z` on `main` for that bump; the tag builds, pushes, deploys.
 4. Live at `https://<APP_NAME>.apps.quantum-badgers.ignition.classesarecode.net/`.
 
 A plain `git push` to `main` does **not** deploy — only a release tag.

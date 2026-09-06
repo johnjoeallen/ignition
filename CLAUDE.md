@@ -52,10 +52,9 @@ one specific zone, both at once (see AUTH-DESIGN.md):
   Implicitly a team admin of every zone too.
 - **Team admin** — one or more per zone (the team lead(s)). Manages *their*
   zone only — add/remove team members and their roles, add/remove Forgejo
-  users, create repos, **cut releases** (the console's *Release* button
-  derives the bump from the commits since the last release and tags the next
-  `vX.Y.Z` on `main` — a dropdown overrides), restart the runner, stop apps,
-  watch status.
+  users, create repos, **cut releases** (the console's three *Release* buttons —
+  **major** / **minor** / **fix** — tag the next `vX.Y.Z` on `main` for that
+  bump), restart the runner, stop apps, watch status.
 - **Team member** — the rest of the team. Same zone console, everything but
   member/user management.
 
@@ -142,12 +141,14 @@ in the console) tears one down.
 
 **Deploys come only from a release — never a plain push to `main`.** The CI
 workflow (`examples/deploy.yml`) triggers on a git tag only. Tags are created
-by the zone console's **Release** button: `ReleaseService` diffs the last tag
-against `main`, classifies the bump from those commit messages (Conventional
-Commits: `feat!:`/`BREAKING CHANGE:` → major, `feat:` → minor, else patch; a
-`bump=` override skips this), and creates the next `vMAJOR.MINOR.PATCH` tag on
-`main` (first release `v0.1.0` or `v1.0.0`). The zone admin never types a
-version. Each run pushes `:<sha>` (immutable) + `:<tag>` and `POST /deploy`s
+by the zone console's three **Release** buttons — **major** / **minor** /
+**fix** — which POST `bump=major|minor|patch`; `ReleaseService` reads the last
+tag and creates the next `vMAJOR.MINOR.PATCH` on `main` for that bump (first
+release `v0.1.0`, or `v1.0.0` for major). The zone admin picks the bump but
+never types a version. (`ReleaseService` still supports `bump=auto` —
+Conventional-Commits classification from the commit messages, `feat!:` →
+major, `feat:` → minor, else patch — for API callers; the console no longer
+offers it.) Each run pushes `:<sha>` (immutable) + `:<tag>` and `POST /deploy`s
 `:<tag>`, rolling the app forward immediately. Independently, a **per-node
 Watchtower** (in `traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls a
 new digest for any container labelled

@@ -193,11 +193,11 @@ sequenceDiagram
 ```
 
 The workflow triggers **only on a release tag** — a plain push to `main` does
-not deploy. Teams don't tag locally and don't use Forgejo's Releases form: the
-**Release** button in the team console has ignition-control diff the last tag against
-`main`, pick the semver bump from those commit messages (Conventional Commits;
-the admin can override), and create the next `vX.Y.Z` tag on `main` through the
-Forgejo API — so the tag is always made from reviewed, pushed history. Each run
+not deploy. Teams don't tag locally and don't use Forgejo's Releases form: on
+an app's page the team console offers three **Release** buttons — **major** /
+**minor** / **fix** — and clicking one has ignition-control read the last tag
+and create the next `vX.Y.Z` on `main` for that bump through the Forgejo API,
+so the tag is always made from reviewed, pushed history. Each run
 pushes an immutable `:<sha>` **and** the `:<tag>` and deploys `:<tag>`.
 `POST /deploy` is the immediate rollout; if CI later re-runs for the same tag
 (a base-image rebuild), the per-node **Watchtower** (see below) picks up the

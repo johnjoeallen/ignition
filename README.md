@@ -137,11 +137,9 @@ plus every var/secret that workflow needs — `REGISTRY`, `REGISTRY_USER`,
 `CONTROL_URL`, `APP_NAME`, `APP_PORT`, `DEPLOY_TOKEN`, `FORGEJO_TOKEN` — so
 there's nothing to wire up by hand.
 
-Builds **start from a release** — in the team console under Repositories the
-team admin clicks **Release**; `ignition-control` reads the commits since the
-last release, picks the bump (Conventional Commits: `fix:` → patch, `feat:` →
-minor, `feat!:`/`BREAKING CHANGE:` → major; a dropdown overrides), and tags the
-next `vX.Y.Z` on `main`. The tag builds, pushes to
+Builds **start from a release** — on an app's page in the team console the team
+admin clicks one of **major** / **minor** / **fix**, and `ignition-control`
+tags the next `vX.Y.Z` on `main` for that bump. The tag builds, pushes to
 `git.<slug>.ignition.example`, and deploys `APP_NAME.apps.<slug>.ignition.example`.
 **A plain push to `main` does not deploy.** After a release, rollout is automatic
 two ways: the workflow's `POST /deploy` rolls the app forward immediately, and

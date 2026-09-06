@@ -63,6 +63,22 @@ body { background: var(--ign-bg); }
 .ign-sidebar .nav-link i { font-size: 1.1rem; }
 .ign-sidebar .nav-link:hover { background: rgba(255,255,255,.08); color: #fff; }
 .ign-sidebar .nav-link.active { background: rgba(255,255,255,.16); color: #fff; font-weight: 600; }
+/* the sidebar bg is the dark gradient in both themes, so Bootstrap's
+   theme-aware .text-body-secondary goes near-black (and invisible) in light
+   mode — pin a light tint like the nav links use. */
+.ign-sidebar-version {
+  color: rgba(255,255,255,.55);
+  font-size: .7rem; letter-spacing: .02em;
+}
+
+/* the git-login rows under a repo's clone URL: label / value / actions,
+   columns aligned down the block */
+.ign-creds {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  column-gap: .75rem; row-gap: .3rem;
+  align-items: center; justify-content: start;
+}
 
 .ign-main { min-width: 0; }
 .ign-topbar {
