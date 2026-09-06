@@ -157,8 +157,10 @@ per-node Watchtower pulls a re-pushed digest on its own (~60s).
 | `state/{nodes,zones,control}/` | generated — never hand-edit |
 | `DESIGN.md` | the control-plane design |
 
-The compose templates the service renders (`zone-compose.yml.tmpl`,
-`app-compose.tmpl`) live in `ignition-control/src/main/resources/compose/`.
+The zone compose template (`zone-compose.yml.tmpl`) lives in
+`ignition-control/src/main/resources/compose/`. An app's compose is the app
+repo's own `compose.yaml`, transformed at deploy time by `AppComposeBuilder`
+(web service + any DB/cache/queue it declares).
 
 ## Rough edges
 

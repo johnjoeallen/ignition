@@ -199,12 +199,25 @@ an app's page the team console offers three **Release** buttons — **major** /
 and create the next `vX.Y.Z` on `main` for that bump through the Forgejo API,
 so the tag is always made from reviewed, pushed history. Each run
 pushes an immutable `:<sha>` **and** the `:<tag>` and deploys `:<tag>`.
-`POST /deploy` is the immediate rollout; if CI later re-runs for the same tag
-(a base-image rebuild), the per-node **Watchtower** (see below) picks up the
-new digest without another deploy call. `ignition-control` stamps
-`com.centurylinklabs.watchtower.enable=true` onto every app it deploys (the
-label is in `app-compose.tmpl` — teams don't opt in); Watchtower manages only
-those containers and never touches Traefik, Forgejo, DinD or runners.
+`POST /deploy` (`{app, image, port, channel?, ref?}`) is the immediate rollout;
+if CI later re-runs for the same tag (a base-image rebuild), the per-node
+**Watchtower** (see below) picks up the new digest without another deploy call.
+`ignition-control` stamps `com.centurylinklabs.watchtower.enable=true` onto
+every deployed web container (`AppComposeBuilder`, not an opt-in); Watchtower
+manages only those and never touches Traefik, Forgejo, DinD or runners.
+
+**An app is one compose.** `ignition-control` reads the app repo's own
+`compose.yaml` at the deployed commit and runs the whole stack — the web
+service plus any Postgres / Redis / queue it declares — as one compose project
+`app-<slug>-<name>`. `AppComposeBuilder` transforms it first: the one
+`ignition.web: "true"` service gets the CI image and the Traefik router and
+joins `traefik-public`; every other service is pinned to the project's private
+network with a resource limit and no router; `privileged`, host namespaces and
+bind mounts are rejected, host `ports:` stripped (local-only settings live in
+`compose.override.yaml`, which the platform never reads). A repo with no
+`compose.yaml` gets a synthesised single-service deploy. Teardown is
+`docker compose -p <project> down -v` with no file, so a multi-service app's
+DB volume never leaks.
 
 Same shape as any CI-to-orchestrator handoff (GitLab CI → Kubernetes): the
 build sandbox stays isolated, the serving layer does not.

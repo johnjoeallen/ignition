@@ -411,9 +411,11 @@ Key rules enforced along the way:
   `DeployTokenFilter` matches it (constant-time) against every zone's secret to
   resolve the slug, and `AppService.deploy` refuses any image ref not under that
   zone's own registry.
-- **The app compose** (`app-compose.tmpl`) stamps
+- **The app compose** (built by `AppComposeBuilder` from the app repo's
+  `compose.yaml`, or synthesised if it has none) stamps
   `com.centurylinklabs.watchtower.enable=true`, the Traefik router/rule/port
-  labels, `PORT=8080`, and CPU/memory limits. No host port is published.
+  labels, `PORT`, and CPU/memory limits on the web service. No host port is
+  published.
 
 ### 3.5 Rollout and roll-forward
 

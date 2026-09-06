@@ -1,0 +1,37 @@
+# What Ignition deploys for this app.
+#
+# Ignition reads THIS file from your repo on every release (and on "Deploy from
+# main"), applies a safety transform, and runs it on your team's node:
+#   - the service labelled `ignition.web: "true"` is the one that gets a public
+#     URL; its image is swapped for the one CI just built (any `build:` here is
+#     ignored by Ignition, kept only so `docker compose up` works locally)
+#   - every other service (a DB, cache, queue, …) runs alongside it on a private
+#     network only your app can reach, by service name (`db`, `cache`, …)
+#   - host `ports:`, `container_name:`, bind mounts and a few unsafe keys are
+#     stripped or rejected — put anything like that in `compose.override.yaml`,
+#     which Ignition never reads
+#
+# Listen on $PORT (Ignition sets it; defaults to 8080).
+
+services:
+  web:
+    build: .
+    labels:
+      ignition.web: "true"
+    # environment:
+    #   DATABASE_URL: postgres://app:app@db:5432/app
+
+  # Uncomment to give the app a Postgres. Any image / registry works; a small
+  # blocklist applies. Data lives in a named volume, wiped when the app is
+  # stopped or the team is torn down.
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: app
+  #     POSTGRES_USER: app
+  #     POSTGRES_PASSWORD: app
+  #   volumes:
+  #     - dbdata:/var/lib/postgresql/data
+
+# volumes:
+#   dbdata:

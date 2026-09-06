@@ -14,11 +14,14 @@
 #     Builds the current main HEAD and deploys to the .dev. host.
 #
 # Each run builds and pushes :<sha> (immutable) and a moving tag (:<version> or
-# :main-<sha>), then POSTs ignition-control /deploy with the channel. If CI
-# re-runs for the same tag (e.g. a base-image rebuild) the per-node Watchtower
-# rolls the running container forward without another deploy call.
+# :main-<sha>), then POSTs ignition-control /deploy with the channel + the built
+# commit as `ref`. ignition-control reads THAT commit's compose.yaml to bring up
+# the app's whole stack (web + any DB/cache/queue it declares). If CI re-runs for
+# the same tag (e.g. a base-image rebuild) the per-node Watchtower rolls the web
+# container forward without another deploy call.
 #
-# Assumes a Dockerfile at the repo root. The runner's config forwards
+# Assumes a Dockerfile and a compose.yaml at the repo root (both seeded by
+# "Create app"). The runner's config forwards
 # DOCKER_HOST=tcp://dind:2375, so `docker` here talks to the zone's private
 # build engine.
 #
@@ -96,7 +99,9 @@ jobs:
 
       - name: Deploy
         run: |
+          # ref = the exact commit built, so ignition-control reads THIS commit's
+          # compose.yaml (web + any DB/cache it declares).
           curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
             -H 'content-type: application/json' \
-            -d "{\"app\": \"${{ vars.APP_NAME }}\", \"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}, \"channel\": \"$CHANNEL\"}"
+            -d "{\"app\": \"${{ vars.APP_NAME }}\", \"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}, \"channel\": \"$CHANNEL\", \"ref\": \"${{ github.sha }}\"}"

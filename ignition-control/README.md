@@ -30,9 +30,12 @@ Working now:
   (major / minor / fix buttons, via `ForgejoClient` + `ReleaseService`;
   `auto` still supported for API callers),
   runner restart + stack status (via `DockerCli`)
-- **CI bridge** (`POST /deploy {app,image,port}`, `POST /undeploy {app}`) —
-  renders `app-compose.tmpl` and applies `docker compose -p app-<slug>-<name>`
-  on the zone's node; name + registry checks; 400 / 502 on failure
+- **CI bridge** (`POST /deploy {app,image,port,channel?,ref?}`,
+  `POST /undeploy {app}`) — fetches the app repo's `compose.yaml` at `ref`,
+  transforms it (`AppComposeBuilder`: one routed web service + isolated
+  dependent services, disallowed keys rejected), applies
+  `docker compose -p app-<slug>-<name>` on the zone's node; name + registry
+  checks; 400 / 422 (bad compose) / 502 on failure
 
 ## Run
 
@@ -82,7 +85,7 @@ docker build -t ghcr.io/johnjoeallen/ignition-control:dev .
 | `templates` | `ComposeTemplate` (explicit `${VAR}` render) + `RenderService` (DB rows → work-dir files) |
 | `web` | `PlatformConsoleController`, `ZoneConsoleController`, `RosterController`, `LoginController`, `DeployController` |
 | `sweep` | `IdleSweeper` (`@Scheduled`) |
-| `resources/compose` | `zone-compose.yml.tmpl`, `app-compose.tmpl` (moved from repo `templates/`) |
+| `resources/compose` | `zone-compose.yml.tmpl` (app compose comes from the app repo, built by `AppComposeBuilder`) |
 
 ## Build the image
 

@@ -11,33 +11,27 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /**
- * Renders the bundled compose templates. Substitution is <b>explicit</b> — only
- * {@code ${KEY}} for a {@code KEY} present in the supplied map is replaced;
+ * Renders the bundled zone compose template. Substitution is <b>explicit</b> —
+ * only {@code ${KEY}} for a {@code KEY} present in the supplied map is replaced;
  * anything else (a stray {@code $x}, a compose var we don't own) is left
  * verbatim. Same discipline as {@code envsubst "$VARLIST"} in the shell
  * scripts, so a literal {@code $} in a compose file is never clobbered.
+ *
+ * <p>App compose files are no longer templated — they come from the app repo's
+ * own {@code compose.yaml} (or a synthesised default) and are built by
+ * {@link net.dublinux.ignition.app.AppComposeBuilder}.
  */
 @Component
 public class ComposeTemplate {
 
     private static final Pattern VAR = Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)}");
 
-    private final String appTemplate = load("/compose/app-compose.tmpl");
     private final String zoneTemplate = load("/compose/zone-compose.yml.tmpl");
-
-    /** Vars {@code app-compose.tmpl} references — the allow-list. */
-    public static final java.util.Set<String> APP_VARS = java.util.Set.of(
-            "APP_NAME", "ZONE_SLUG", "BASE_DOMAIN", "APP_HOST", "APP_PROJECT",
-            "APP_IMAGE", "APP_PORT", "DEPLOY_ID", "CPU_APP", "MEM_APP");
 
     /** Vars {@code zone-compose.yml.tmpl} references. */
     public static final java.util.Set<String> ZONE_VARS = java.util.Set.of(
             "ZONE_SLUG", "BASE_DOMAIN", "CPU_FORGEJO", "MEM_FORGEJO",
             "CPU_DIND", "MEM_DIND", "CPU_RUNNER", "MEM_RUNNER");
-
-    public String renderApp(Map<String, String> vars) {
-        return substitute(appTemplate, vars);
-    }
 
     public String renderZone(Map<String, String> vars) {
         return substitute(zoneTemplate, vars);

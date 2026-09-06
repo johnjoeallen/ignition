@@ -13,6 +13,7 @@ import net.dublinux.ignition.provisioning.ProvisioningService;
 import net.dublinux.ignition.templates.RenderService;
 import net.dublinux.ignition.zone.Zone;
 import net.dublinux.ignition.zone.ZoneRepository;
+import net.dublinux.ignition.zone.ZoneService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -34,18 +35,23 @@ public class AppService {
     private final AppRepository apps;
     private final DevDeploymentRepository devApps;
     private final ZoneRepository zones;
+    private final ZoneService zoneService;
     private final NodeRepository nodes;
     private final DockerCli docker;
     private final RenderService render;
+    private final AppComposeBuilder composeBuilder;
 
     public AppService(AppRepository apps, DevDeploymentRepository devApps, ZoneRepository zones,
-                      NodeRepository nodes, DockerCli docker, RenderService render) {
+                      ZoneService zoneService, NodeRepository nodes, DockerCli docker,
+                      RenderService render, AppComposeBuilder composeBuilder) {
         this.apps = apps;
         this.devApps = devApps;
         this.zones = zones;
+        this.zoneService = zoneService;
         this.nodes = nodes;
         this.docker = docker;
         this.render = render;
+        this.composeBuilder = composeBuilder;
     }
 
     public List<DeployedApp> list() {
@@ -58,17 +64,21 @@ public class AppService {
 
     public record DeployResult(String zone, String app, String deployId, String url) {}
 
-    /** {@code POST /deploy} on the release channel. */
+    /** {@code POST /deploy} on the release channel, {@code main}. */
     public DeployResult deploy(String slug, String name, String image, int port) {
-        return deploy(slug, name, image, port, Channel.RELEASE);
+        return deploy(slug, name, image, port, Channel.RELEASE, "main");
     }
 
     /**
      * {@code POST /deploy} — bearer already resolved to {@code slug}. The
      * channel picks the host ({@code .apps.} / {@code .dev.}), the compose
-     * project, and which table the deployment is recorded in.
+     * project, and which table the deployment is recorded in. The app's own
+     * {@code compose.yaml} at {@code ref} (if it has one) describes the whole
+     * stack — web plus any DB/cache/queue — transformed by
+     * {@link AppComposeBuilder}; no file → a synthesised single-service deploy.
      */
-    public DeployResult deploy(String slug, String name, String image, int port, Channel channel) {
+    public DeployResult deploy(String slug, String name, String image, int port,
+                               Channel channel, String ref) {
         Zone z = zones.find(slug)
                 .orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
         if (!NAME.matcher(name).matches()) {
@@ -82,14 +92,16 @@ public class AppService {
 
         String project = "app-" + slug + "-" + name + channel.projectSuffix();
         String deployId = DEPLOY_ID.format(Instant.now());
-        Path composeFile = render.appCompose(slug, name, z.baseDomain(), image, port, deployId, channel);
-        log.info("deploy {}/{} [{}]: image={} port={} -> node {}",
-                slug, name, channel, image, port, z.node());
+
+        String repoYaml = zoneService.appCompose(slug, name, ref).orElse(null);
+        String rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml);
+        Path composeFile = render.writeAppCompose(slug, name, channel, rendered);
+        log.info("deploy {}/{} [{}]: image={} port={} ref={} compose={} -> node {}",
+                slug, name, channel, image, port, ref, repoYaml == null ? "synthesised" : "from repo", z.node());
 
         registryLogin(z);
 
-        DockerCli.Result r = docker.compose(dockerHost(z), project,
-                composeFile.toString(), "up", "-d", "--pull", "always", "--remove-orphans");
+        DockerCli.Result r = docker.composeUp(dockerHost(z), project, composeFile.toString());
         if (!r.ok()) {
             String detail = firstLine(r.stderr());
             log.warn("deploy {}/{} [{}]: compose up failed: {}", slug, name, channel, detail);
@@ -125,31 +137,24 @@ public class AppService {
         undeploy(slug, name, Channel.RELEASE);
     }
 
-    /** Tear down one channel of an app. No-op-safe if the row is already gone. */
+    /**
+     * Tear down one channel of an app — every container, network and named
+     * volume in the compose project. {@code docker compose -p <project> down -v}
+     * with <em>no</em> {@code -f}: compose reconstructs the whole project from
+     * the running resources' labels, so a stale/absent rendered file can't
+     * leave a multi-service app's DB volume behind.
+     */
     public void undeploy(String slug, String name, Channel channel) {
-        int port;
-        String image;
-        String deployId;
-        if (channel == Channel.DEV) {
-            DevDeployment dev = devApps.findByZoneAndName(slug, name)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "zone " + slug + " has no dev deployment of '" + name + "'"));
-            port = dev.port();
-            image = dev.image();
-            deployId = dev.deployId();
-        } else {
-            DeployedApp app = apps.findByZoneAndName(slug, name)
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "zone " + slug + " has no app '" + name + "'"));
-            port = app.port();
-            image = app.image();
-            deployId = app.deployId();
+        boolean known = channel == Channel.DEV
+                ? devApps.findByZoneAndName(slug, name).isPresent()
+                : apps.findByZoneAndName(slug, name).isPresent();
+        if (!known) {
+            throw new IllegalArgumentException("zone " + slug
+                    + (channel == Channel.DEV ? " has no dev deployment of '" : " has no app '") + name + "'");
         }
         Zone z = zones.find(slug).orElse(null);
-        String baseDomain = z != null ? z.baseDomain() : "";
-        Path composeFile = render.appCompose(slug, name, baseDomain, image, port, deployId, channel);
         docker.compose(dockerHost(z), "app-" + slug + "-" + name + channel.projectSuffix(),
-                composeFile.toString(), "down", "-v", "--remove-orphans");
+                null, "down", "-v", "--remove-orphans");
         if (channel == Channel.DEV) {
             devApps.deleteByZoneAndName(slug, name);
         } else {

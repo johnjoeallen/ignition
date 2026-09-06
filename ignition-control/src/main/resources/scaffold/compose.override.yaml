@@ -1,0 +1,11 @@
+# Local development only — Docker Compose merges this on top of compose.yaml
+# automatically when you run `docker compose up`. Ignition NEVER reads this file,
+# so anything the deploy transform disallows (bind mounts for hot-reload, host
+# port bindings, extra dev-only services) belongs here.
+
+services:
+  web:
+    ports:
+      - "8080:8080"
+    # volumes:
+    #   - .:/app          # hot reload

@@ -78,10 +78,11 @@ ignition-control/                # the control plane — one Spring Boot service
     release/       ReleaseService — Conventional-Commits bump + cut via Forgejo
     docker/        DockerCli — docker -H <endpoint> compose ...
     traefik/       TraefikDynamicConfig — writes state/control/dynamic/*
-    templates/     ComposeTemplate — explicit ${VAR} render
+    templates/     ComposeTemplate — explicit ${VAR} render (zone compose only)
+    app/           AppService, AppComposeBuilder (app compose.yaml → transformed stack)
     sweep/         IdleSweeper (@Scheduled)
     web/           Platform / Zone / Roster / Login / Deploy controllers + Thymeleaf
-  src/main/resources/compose/     zone-compose.yml.tmpl, app-compose.tmpl
+  src/main/resources/compose/     zone-compose.yml.tmpl
 templates/
   ignition-control-compose.yml   # run the control plane on the controller
   traefik-core-compose.yml       # per-node core: Traefik + Watchtower
@@ -135,19 +136,36 @@ single-label). `ignition-control` writes the edge router + cert config per zone
 **Apps are deployed from the controller onto the zone's node, not from inside
 the zone's DinD sandbox.** A container built and run inside a nested Docker
 engine is in that engine's private netns — Traefik can't route to it. So CI
-builds + pushes an image, then `POST /deploy` (`{app, image, port}`, per-zone
-deploy token); `AppService` renders `app-compose.tmpl` and runs it on the
-zone's node's real daemon, on `traefik-public`. `POST /undeploy` (or **Stop**
-in the console) tears one down.
+builds + pushes an image, then `POST /deploy` (`{app, image, port, channel?,
+ref?}`, per-zone deploy token).
+
+**An app is one compose.** `AppService` fetches the app repo's own
+`compose.yaml` (at the deploy's `ref`) and runs the whole stack — web plus any
+DB/cache/queue it declares — as compose project `app-<slug>-<name>` on the
+node's real daemon. `AppComposeBuilder` parses it (SnakeYAML, `SafeConstructor`)
+and applies a transform that is the security boundary: exactly one service
+(`labels: {ignition.web: "true"}`) gets its image replaced by the `/deploy`
+image, joins `traefik-public`, and gets the Traefik router labels; every other
+service is pinned to the project's private network with a resource limit and no
+router; `privileged` / `cap_add` / host namespaces / bind mounts are rejected,
+host `ports:` / `container_name` stripped (put them in `compose.override.yaml`,
+which the platform never reads); images are open with a small
+`ignition.services.blocked-images` blocklist. A repo with no `compose.yaml`
+falls back to a synthesised single-service deploy (what `app-compose.tmpl` used
+to render — now retired). `POST /undeploy` (or **Stop** in the console) runs
+`docker compose -p <project> down -v` with **no** `-f` — compose reconstructs
+the project from the running resources' labels, so a multi-service app's DB
+volume is never left behind.
 
 **Deploys to the `.apps.` host come only from a release — never a plain push to
 `main`.** A second host per app, `<name>.dev.<slug>.<BASE_DOMAIN>`, runs the
 latest `main` HEAD, but *only* when someone clicks **Deploy from main** on the
 app's page — a plain push still deploys nothing. The `dev` host is public (no
 gate); the button is the only trigger. It's compose project
-`app-<slug>-<name>-dev`, tracked in `app_dev`, rendered from the same
-`app-compose.tmpl` (now parameterised on `APP_HOST` / `APP_PROJECT`), torn down
-with the app and the zone. `deploy.yml` gained an `on: workflow_dispatch`
+`app-<slug>-<name>-dev`, tracked in `app_dev`, built by `AppComposeBuilder` from
+the same `compose.yaml` (channel decides the `.apps.` vs `.dev.` host and the
+project suffix), torn down with the app and the zone. `deploy.yml` gained an
+`on: workflow_dispatch`
 (`channel` input) that the button fires via the Forgejo API; CI builds
 `:main-<sha>` and `POST /deploy`s with `channel=dev`. The CI tag-push path is
 unchanged. The CI workflow (`examples/deploy.yml`) still triggers on a git tag
@@ -163,8 +181,8 @@ offers it.) Each run pushes `:<sha>` (immutable) + `:<tag>` and `POST /deploy`s
 `:<tag>`, rolling the app forward immediately. Independently, a **per-node
 Watchtower** (in `traefik-core-compose.yml`, `--label-enable`, 60s poll) pulls a
 new digest for any container labelled
-`com.centurylinklabs.watchtower.enable=true` — which `app-compose.tmpl` sets on
-every app the control plane deploys, so teams get auto-reload without touching
+`com.centurylinklabs.watchtower.enable=true` — which `AppComposeBuilder` stamps
+on every deployed web container, so teams get auto-reload without touching
 their repo — and never touches Traefik/Forgejo/DinD/runners.
 
 **One central control plane, not an agent per node.** `ignition-control`
@@ -196,13 +214,14 @@ command's stdout.
 
 ## Conventions
 
-- Compose templates are rendered by `ComposeTemplate` — explicit `${VAR}`
-  substitution over a fixed allow-list (`APP_VARS` / `ZONE_VARS`); anything not
-  in the map (a stray `$x`, an unknown `${VAR}`) is left verbatim. Never a
-  template engine. `runner-config.yml` has conditionals, so it's built in code,
-  not templated.
-- Per-zone resource limits are `ignition.quotas.*` in `application.yml`
-  (`cpu-forgejo`, `mem-dind`, …), overridable by env.
+- The **zone** compose is rendered by `ComposeTemplate` — explicit `${VAR}`
+  substitution over a fixed allow-list (`ZONE_VARS`); anything not in the map
+  (a stray `$x`, an unknown `${VAR}`) is left verbatim. Never a template engine.
+  Things with dynamic structure — `runner-config.yml`, and now an app's
+  compose (`AppComposeBuilder`, SnakeYAML) — are built in code, not templated.
+- Per-zone resource limits are `ignition.quotas.*` (`cpu-forgejo`, `mem-dind`,
+  `cpu-app`/`mem-app` for a web container, `cpu-svc`/`mem-svc` for a dependent
+  service), overridable by env.
 - The control plane is stdlib + Spring — no ORM, no SPA build step. State is a
   file tree under `state/` (repository interfaces wrap it); move to SQLite only
   if the UI outgrows it. Compose ops shell out to the `docker` CLI.
@@ -222,11 +241,16 @@ command's stdout.
   container. A Traefik-per-zone network or an L3 policy would close it.
 - **`ignition-control` holds every token**, is the single public front door,
   and drives every node's Docker daemon — a concentrated blast radius that
-  needs a locked-down deployment.
-- **No repo seeding.** The starter repo, `deploy.yml`, and repo vars/secrets
-  are still set up by hand per zone.
-- **No services catalogue.** A team that needs Postgres, a mock of an internal
-  API, or a keyed proxy to an external one stands it up by hand. See task 3.
+  needs a locked-down deployment. **Multi-service apps widen it**: a team's
+  `compose.yaml` can pull any image (minus a blocklist) onto the node's real
+  daemon. `AppComposeBuilder`'s transform (no privileged/caps/host-ns/binds,
+  forced limits, sidecars off `traefik-public`) is the only boundary; CVE
+  scanning of those images is not done yet.
+- **Stop wipes a stateful app's data** — `undeploy` is `compose down -v`, so a
+  DB volume declared in `compose.yaml` goes with it. No "keep volumes on Stop"
+  yet.
+- **No `pr-preview.yml` seeding / preview reaper** — Phase 2 of the
+  multi-service work (per-PR environments). See task 3-adjacent notes.
 - **`move` rebuilds the zone empty** — the Forgejo data volume doesn't follow.
 
 ## Likely next tasks
@@ -238,8 +262,9 @@ command's stdout.
 2. Zone-level quota requests (zone admin asks, platform admin approves) and a
    `move` that carries the Forgejo data volume.
 3. **A per-zone services catalogue** — a "Services" section in the console. An
-   app's *own* infrastructure (Postgres, Redis, a cache) lives in that app's
-   Dockerfile, versioned and owned by the team. The catalogue is for
+   app's *own* infrastructure (Postgres, Redis, a cache) is declared in that
+   app's `compose.yaml`, versioned and owned by the team, and deployed
+   alongside it (`AppComposeBuilder`). The catalogue is for
    **org-standard shared services** a team would otherwise fake or beg for: a
    card-art lookup, a rewards/points engine, a payments sandbox, an internal
    data API, an LLM gateway. One click adds one to the zone. Two kinds:
@@ -325,3 +350,18 @@ command's stdout.
      which honours the app's `visibility`.
    - **Quota.** `dev` currently counts against the zone quota like any app;
      a smaller `ignition.quotas.*-dev` set would let it oversubscribe less.
+7. **PR-preview environments** — Phase 2 of the multi-service work (Phase 1,
+   `compose.yaml` deploys, is done). A preview is just a `/deploy` with a
+   computed name (`<repo>-pr-<n>`, PR number not branch) and the PR head as
+   `ref`, so the PR's `compose.yaml` (DB and all) comes along. Needs: a seeded
+   `scaffold/pr-preview.yml` (`on: pull_request`, `deploy-preview` label gate,
+   `POST /deploy` then `POST /undeploy` on close/unlabel, per-PR concurrency
+   with `cancel-in-progress`); an **in-process reaper** in `ignition-control`
+   (`@Scheduled` — list `<repo>-pr-*` `DeployedApp` rows, ask Forgejo for that
+   repo's open PRs, `undeploy` the stragglers, best-effort delete their
+   `:pr-<n>` package tags — no list-apps HTTP endpoint needed); a
+   max-open-previews cap; and the carried gap that preview hosts are
+   internet-reachable with no auth (front-door work). Previews are headless
+   (no repo of their own → invisible in the console Apps table). Design notes
+   from the `cardart` session; plan at
+   `~/.claude/plans/rustling-mapping-trinket.md`.

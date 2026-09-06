@@ -48,22 +48,45 @@ public class DockerCli {
         return run(cmd, stdin);
     }
 
+    /** Default wait for a docker/compose command. */
+    private static final int DEFAULT_TIMEOUT_S = 120;
+    /** {@code compose up} can spend this long pulling several images on a cold node. */
+    private static final int COMPOSE_UP_TIMEOUT_S = 600;
+
     /** {@code docker [-H …] compose -p <project> [-f <file>] <args...>} */
     public Result compose(String dockerHost, String project, String composeFile, String... args) {
+        return compose(DEFAULT_TIMEOUT_S, dockerHost, project, composeFile, args);
+    }
+
+    /** {@code docker compose -p <project> -f <file> up -d --pull always --remove-orphans}, long timeout. */
+    public Result composeUp(String dockerHost, String project, String composeFile) {
+        return compose(COMPOSE_UP_TIMEOUT_S, dockerHost, project, composeFile,
+                "up", "-d", "--pull", "always", "--remove-orphans");
+    }
+
+    private Result compose(int timeoutSeconds, String dockerHost, String project,
+                           String composeFile, String... args) {
         List<String> a = new ArrayList<>(List.of("compose", "-p", project));
         if (composeFile != null && !composeFile.isBlank()) {
             a.add("-f");
             a.add(composeFile);
         }
         a.addAll(List.of(args));
-        return docker(dockerHost, a);
-    }
-
-    private Result run(List<String> cmd) {
-        return run(cmd, null);
+        List<String> cmd = new ArrayList<>();
+        cmd.add("docker");
+        if (dockerHost != null && !dockerHost.isBlank() && !dockerHost.equals("local")) {
+            cmd.add("-H");
+            cmd.add(dockerHost);
+        }
+        cmd.addAll(a);
+        return run(cmd, null, timeoutSeconds);
     }
 
     private Result run(List<String> cmd, String stdin) {
+        return run(cmd, stdin, DEFAULT_TIMEOUT_S);
+    }
+
+    private Result run(List<String> cmd, String stdin, int timeoutSeconds) {
         try {
             Process p = new ProcessBuilder(cmd).redirectErrorStream(false).start();
             if (stdin != null) {
@@ -75,7 +98,7 @@ public class DockerCli {
             }
             String out = new String(p.getInputStream().readAllBytes());
             String err = new String(p.getErrorStream().readAllBytes());
-            boolean done = p.waitFor(120, TimeUnit.SECONDS);
+            boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!done) {
                 p.destroyForcibly();
                 return new Result(-1, out, "timed out: " + String.join(" ", cmd));

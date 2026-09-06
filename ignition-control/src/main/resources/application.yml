@@ -47,6 +47,12 @@ ignition:
   sweep:
     ttl: ${IGN_SWEEP_TTL:24h}
     interval: ${IGN_SWEEP_INTERVAL:15m}
+  services:
+    # image repos a dependent service in an app's compose.yaml may not use
+    # (globs, comma-separated); empty = any image allowed
+    blocked-images: ${IGN_SERVICES_BLOCKED_IMAGES:}
+  # quotas.* keep their Java defaults; override per-key via env, e.g.
+  # IGNITION_QUOTAS_CPUSVC / IGNITION_QUOTAS_MEMSVC for dependent services
 
 logging:
   level:

@@ -182,6 +182,11 @@ behavior:
 
 ## Templates
 
+> Since superseded for apps: `app-compose.tmpl` was retired — an app's compose
+> is now the app repo's own `compose.yaml`, transformed in code by
+> `AppComposeBuilder` (multi-service: web + DB/cache/queue). `zone-compose.yml.tmpl`
+> stays as below.
+
 `zone-compose.yml.tmpl` and `app-compose.tmpl` move into
 `src/main/resources/compose/`. Rendering stays **explicit-variable
 substitution** — a small `${VAR}` replacer given the exact allowed key set

@@ -106,10 +106,11 @@ public class ZoneService {
                 .orElseThrow(() -> new IllegalArgumentException("no such zone: " + slug));
         String dockerHost = dockerHost(zone);
 
+        // No -f: `compose -p <project> down -v` rebuilds the project model from
+        // the running resources' labels, so every container / network / named
+        // volume goes even for a multi-service app whose rendered file is gone.
         for (DeployedApp app : apps.findByZone(slug)) {
-            Path composeFile = render.appCompose(slug, app.name(), zone.baseDomain(),
-                    app.image(), app.port(), app.deployId(), net.dublinux.ignition.app.Channel.RELEASE);
-            docker.compose(dockerHost, "app-" + slug + "-" + app.name(), composeFile.toString(),
+            docker.compose(dockerHost, "app-" + slug + "-" + app.name(), null,
                     "down", "-v", "--remove-orphans");
             if (!keepState) {
                 apps.deleteByZoneAndName(slug, app.name());
@@ -117,9 +118,7 @@ public class ZoneService {
         }
 
         for (var dev : devApps.findByZoneOrderByName(slug)) {
-            Path composeFile = render.appCompose(slug, dev.name(), zone.baseDomain(),
-                    dev.image(), dev.port(), dev.deployId(), net.dublinux.ignition.app.Channel.DEV);
-            docker.compose(dockerHost, "app-" + slug + "-" + dev.name() + "-dev", composeFile.toString(),
+            docker.compose(dockerHost, "app-" + slug + "-" + dev.name() + "-dev", null,
                     "down", "-v", "--remove-orphans");
             if (!keepState) {
                 devApps.deleteByZoneAndName(slug, dev.name());
@@ -587,6 +586,26 @@ public class ZoneService {
                 r.path("clone_url").asText(""), r.path("description").asText(""), version);
     }
 
+    /**
+     * The app repo's own {@code compose.yaml} (or {@code compose.yml} /
+     * {@code docker-compose.y*ml}), at {@code ref}, as raw text — for
+     * {@link net.dublinux.ignition.app.AppComposeBuilder}. {@code compose.override.yaml}
+     * is deliberately never read (it's local-dev only). Empty if the repo has none.
+     */
+    public java.util.Optional<String> appCompose(String slug, String repo, String ref) {
+        String r = (ref == null || ref.isBlank()) ? "main" : ref;
+        for (String file : net.dublinux.ignition.app.AppComposeBuilder.COMPOSE_FILENAMES) {
+            var res = forgejo.get(slug, "/repos/%s/%s/contents/%s?ref=%s"
+                    .formatted(slug, repo, file, java.net.URLEncoder.encode(r, StandardCharsets.UTF_8)));
+            if (res.ok() && res.body() != null && res.body().hasNonNull("content")) {
+                String b64 = res.body().get("content").asText().replaceAll("\\s", "");
+                return java.util.Optional.of(
+                        new String(Base64.getDecoder().decode(b64), StandardCharsets.UTF_8));
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
     /** Repo description is a plain Forgejo repo setting — the bot's own token is enough, no PAT needed. */
     public ForgejoClient.Response updateRepoDescription(String slug, String repo, String description) {
         return forgejo.patch(slug, "/repos/" + slug + "/" + repo, Map.of("description", description));
@@ -875,6 +894,10 @@ public class ZoneService {
         putFile(slug, name, "Dockerfile", scaffold("Dockerfile"), "ignition: starter Dockerfile");
         putFile(slug, name, "nginx.conf", scaffold("nginx.conf"), "ignition: starter nginx config");
         putFile(slug, name, "index.html", scaffold("index.html"), "ignition: starter page");
+        putFile(slug, name, "compose.yaml", scaffold("compose.yaml"),
+                "ignition: add compose.yaml (what Ignition deploys)");
+        putFile(slug, name, "compose.override.yaml", scaffold("compose.override.yaml"),
+                "ignition: add compose.override.yaml (local dev only)");
 
         setVar(slug, name, "REGISTRY", zone.gitHost());
         setVar(slug, name, "CONTROL_URL", props.getPublicUrl().replaceAll("/+$", ""));

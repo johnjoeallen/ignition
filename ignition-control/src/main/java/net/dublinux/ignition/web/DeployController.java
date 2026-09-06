@@ -32,11 +32,17 @@ public class DeployController {
         String image = str(body.get("image"));
         int port = intOr(body.get("port"), 8080);
         var channel = net.dublinux.ignition.app.Channel.fromPayload(str(body.get("channel")));
+        String ref = str(body.get("ref"));
+        if (ref.isEmpty()) {
+            ref = "main";
+        }
         try {
-            AppService.DeployResult r = apps.deploy(slug, app, image, port, channel);
+            AppService.DeployResult r = apps.deploy(slug, app, image, port, channel, ref);
             return ResponseEntity.ok(Map.of(
                     "ok", true, "zone", r.zone(), "app", r.app(),
                     "deploy_id", r.deployId(), "url", r.url()));
+        } catch (net.dublinux.ignition.app.ComposeSpecException e) {
+            return err(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
         } catch (IllegalArgumentException e) {
             return err(HttpStatus.BAD_REQUEST, e.getMessage());
         } catch (AppService.DeployException e) {

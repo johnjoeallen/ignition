@@ -2,6 +2,8 @@ package net.dublinux.ignition.config;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -68,6 +70,7 @@ public class IgnitionProperties {
 
     private final Sweep sweep = new Sweep();
     private final Quotas quotas = new Quotas();
+    private final Services services = new Services();
 
     public static class Sweep {
         /** Reclaim a zone idle longer than this. */
@@ -91,6 +94,9 @@ public class IgnitionProperties {
         private String memRunner = "2g";
         private double cpuApp = 1.0;
         private String memApp = "1g";
+        /** Per dependent service (a DB/cache/queue declared in an app's compose.yaml). */
+        private double cpuSvc = 0.5;
+        private String memSvc = "512m";
         private int runnerCapacity = 4;
 
         public double getCpuForgejo() { return cpuForgejo; }
@@ -109,8 +115,31 @@ public class IgnitionProperties {
         public void setCpuApp(double v) { this.cpuApp = v; }
         public String getMemApp() { return memApp; }
         public void setMemApp(String v) { this.memApp = v; }
+        public double getCpuSvc() { return cpuSvc; }
+        public void setCpuSvc(double v) { this.cpuSvc = v; }
+        public String getMemSvc() { return memSvc; }
+        public void setMemSvc(String v) { this.memSvc = v; }
         public int getRunnerCapacity() { return runnerCapacity; }
         public void setRunnerCapacity(int v) { this.runnerCapacity = v; }
+    }
+
+    /**
+     * App-deployment policy for the multi-service ({@code compose.yaml}) path.
+     * The compose transform ({@code AppComposeBuilder}) is the real security
+     * boundary; this is the one knob on top of it.
+     */
+    public static class Services {
+        /**
+         * Image repositories a dependent service may NOT use — glob patterns
+         * matched against the image ref with the tag/digest stripped (e.g.
+         * {@code "docker.io/library/*"}, {@code "*mcr.microsoft.com*"}). Empty
+         * by default: any image is allowed. A leaked/known-bad image is blocked
+         * here; CVE-database scanning is the intended automated layer on top.
+         */
+        private List<String> blockedImages = new ArrayList<>();
+
+        public List<String> getBlockedImages() { return blockedImages; }
+        public void setBlockedImages(List<String> v) { this.blockedImages = v; }
     }
 
     public String getBaseDomain() { return baseDomain; }
@@ -131,6 +160,7 @@ public class IgnitionProperties {
     public void setRecreateZonesOnStart(boolean v) { this.recreateZonesOnStart = v; }
     public Sweep getSweep() { return sweep; }
     public Quotas getQuotas() { return quotas; }
+    public Services getServices() { return services; }
 
     public Path zoneWorkDir(String slug) { return workDir.resolve("zones").resolve(slug); }
     public Path appWorkDir(String slug) { return zoneWorkDir(slug).resolve("apps"); }

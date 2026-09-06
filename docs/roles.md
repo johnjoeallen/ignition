@@ -68,7 +68,7 @@ role on that team, not a separate login or hostname. Their console is
 |---|---|
 | Add / remove team members | **Members** — creates their Forgejo account too, from their email |
 | Reset your own git password / PAT | The regenerate icon beside them, on the team page's top card and under the clone URL on any app's page — always self-service, every member can do it |
-| Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, the deploy workflow, and every variable/secret it needs. Re-running it on an existing app re-applies that config |
+| Create an app (a repo) | **Apps → Create app** — name + description; seeds the repo with a starter Dockerfile, a `compose.yaml` (what Ignition deploys — web plus any DB/cache you uncomment) + `compose.override.yaml` (local dev only), the deploy workflow, and every variable/secret it needs. Re-running it on an existing app re-applies that config |
 | Manage the team's apps | **Apps** — list, description, current version (links to the live app once deployed), stop (undeploy, keep the repo), delete (undeploy and remove the repo) |
 | Restart a stuck Actions runner | **Restart runner** button |
 
