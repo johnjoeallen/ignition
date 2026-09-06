@@ -110,6 +110,22 @@ body { background: var(--ign-bg); }
 
 code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem .35rem; border-radius: 4px; }
 
+/* ---- busy overlay (busy.js — slow form submits like app Start/Stop) ---- */
+.ign-busy-overlay {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .5);
+}
+.ign-busy-card {
+  background: var(--bs-body-bg); color: var(--bs-body-color);
+  border: 1px solid var(--bs-border-color); border-radius: .75rem;
+  padding: 1.75rem 2.25rem; text-align: center; min-width: 16rem;
+  box-shadow: var(--ign-shadow);
+}
+.ign-busy-card .spinner-border { width: 2rem; height: 2rem; margin-bottom: .9rem; color: var(--ign-accent); }
+.ign-busy-msg { font-weight: 600; }
+.ign-busy-sub { font-size: .85rem; color: var(--bs-secondary-color); margin-top: .25rem; }
+
 /* ---- auth pages (login/setup/signup/...) ---- */
 .ign-auth-page { min-height: 100vh; padding: 1.5rem; background: var(--ign-bg); }
 .ign-auth-card { width: 100%; max-width: 26rem; }

@@ -104,15 +104,18 @@
                 <span th:unless="${a.deployed}" th:text="${a.version}">no releases yet</span>
               </td>
               <td class="text-end text-nowrap">
-                <form th:if="${a.running}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline">
+                <form th:if="${a.running}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}"
+                      class="d-inline" th:attr="data-busy=|Stopping ${a.name}…|">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-secondary">stop</button>
                 </form>
-                <form th:if="${a.deployed and !a.running}" method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}" class="d-inline">
+                <form th:if="${a.deployed and !a.running}" method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}"
+                      class="d-inline" th:attr="data-busy=|Starting ${a.name}…|">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-secondary">start</button>
                 </form>
                 <form method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline"
+                      th:attr="data-busy=|Deleting ${a.name}…|"
                       onsubmit="return confirm('Delete this app? This removes its repo — code, issues, PRs, releases — and cannot be undone.')">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-danger">delete</button>
