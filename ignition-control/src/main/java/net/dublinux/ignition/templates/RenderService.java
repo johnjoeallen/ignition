@@ -54,8 +54,12 @@ public class RenderService {
      */
     public Path writeAppCompose(String slug, String name,
                                 net.dublinux.ignition.app.Channel channel, String composeYaml) {
-        return write(props.appWorkDir(slug).resolve(name + channel.projectSuffix() + "-compose.yml"),
-                composeYaml);
+        return write(appComposePath(slug, name, channel), composeYaml);
+    }
+
+    /** The path {@link #writeAppCompose} wrote — last deploy's rendered compose. May not exist. */
+    public Path appComposePath(String slug, String name, net.dublinux.ignition.app.Channel channel) {
+        return props.appWorkDir(slug).resolve(name + channel.projectSuffix() + "-compose.yml");
     }
 
     /** {@code <work>/zones/<slug>/runner-config.yml} — returns its path. */

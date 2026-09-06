@@ -397,7 +397,7 @@ public class ZoneConsoleController {
         try {
             apps.stop(slug, name);
             return redirect(slug, "app " + name + " stopped");
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
             return redirect(slug, e.getMessage());
         }
     }
@@ -408,7 +408,7 @@ public class ZoneConsoleController {
         try {
             apps.start(slug, name);
             return redirect(slug, "app " + name + " started");
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
             return redirect(slug, e.getMessage());
         }
     }
@@ -433,7 +433,7 @@ public class ZoneConsoleController {
         try {
             apps.stopDev(slug, name);
             return redirectRepo(slug, name, "dev deployment stopped");
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
             return redirectRepo(slug, name, e.getMessage());
         }
     }
@@ -444,7 +444,7 @@ public class ZoneConsoleController {
         try {
             apps.startDev(slug, name);
             return redirectRepo(slug, name, "dev deployment started");
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
             return redirectRepo(slug, name, e.getMessage());
         }
     }
