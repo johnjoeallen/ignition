@@ -139,8 +139,10 @@ deploy token); `AppService` renders `app-compose.tmpl` and runs it on the
 zone's node's real daemon, on `traefik-public`. `POST /undeploy` (or **Stop**
 in the console) tears one down.
 
-**Deploys come only from a release — never a plain push to `main`.** The CI
-workflow (`examples/deploy.yml`) triggers on a git tag only. Tags are created
+**Deploys to the public `.apps.` host come only from a release — never a plain
+push to `main`.** (A planned `dev` channel — task 6 — adds a button that
+deploys `main` HEAD to a separate team-only host; a plain push still deploys
+nothing.) The CI workflow (`examples/deploy.yml`) triggers on a git tag only. Tags are created
 by the zone console's three **Release** buttons — **major** / **minor** /
 **fix** — which POST `bump=major|minor|patch`; `ReleaseService` reads the last
 tag and creates the next `vMAJOR.MINOR.PATCH` on `main` for that bump (first
@@ -294,3 +296,38 @@ command's stdout.
    decision on format/export (reveal.js-style HTML deck rendered per team,
    vs. a PPTX/PDF export) and where the content lives (Forgejo-backed like
    an app, or its own console-managed model).
+6. **A `dev` channel per app — deploy `main` HEAD to a team-only host,
+   on a button.** A second host per app, `<name>.dev.<slug>.<BASE_DOMAIN>`
+   (sibling subtree to `.apps.`), that runs the latest `main` — so a team can
+   see their app before cutting a release, while the public `.apps.` host
+   stays release-only. **Needs the front-door forward-auth (task 4) first** —
+   that's the gate. Still no auto-deploy: a plain push to `main` deploys
+   nothing; only the button does.
+
+   - **The button.** An app-page action next to major/minor/fix — "Deploy
+     from main". The control plane has no build engine, so (like Release
+     drives CI via a tag) the button proxies Forgejo:
+     `POST /repos/<slug>/<repo>/actions/workflows/deploy.yml/dispatches` with
+     `ref=main`, `inputs.channel=dev`. `deploy.yml` gains
+     `on: workflow_dispatch` (Forgejo ≥ ~1.21; fallback is a force-updated
+     mutable `dev` tag with `on: push: tags: [dev]`). CI builds `:main-<sha>`
+     + `:main` and `POST /deploy`s with `channel=dev`.
+   - **`channel` through the deploy path.** `/deploy` payload +
+     `AppService.deploy` take `channel` (`release` default | `dev`). `dev`
+     changes: compose project `app-<slug>-<name>-dev`, host
+     `<name>.dev.<slug>`, a throwaway volume prefix, image `:main-<sha>`, and
+     the edge router **always** carries `forward-auth` (scoped to the team's
+     IdP group) + `noindex` regardless of the app's `visibility`. The app
+     registry gets `DEV_IMAGE` / `DEV_DEPLOY_ID` (or an `apps/<name>-dev.env`).
+   - **Certs**: add a third per-zone wildcard `*.dev.<slug>.<BASE_DOMAIN>` to
+     the edge ACME set (next to `*.<slug>` / `*.apps.<slug>`). DNS needs
+     nothing — `*.<BASE_DOMAIN>` already matches at any depth.
+   - **Lifecycle**: **Stop** on the dev block tears down only the `-dev`
+     project; `IdleSweeper` gives `-dev` projects a short TTL (~30 min,
+     cold-start on next hit); `dev` counts against the zone quota (or a
+     smaller `ignition.quotas.*-dev` set). Watchtower's existing
+     `enable=true` label means a re-pushed `:main` digest rolls dev forward
+     with no second `/deploy`.
+   - **Invariant, restated**: *Release* (major/minor/fix) → `<name>.apps.<slug>`,
+     public per `visibility`. **Deploy from main** → `<name>.dev.<slug>`,
+     team-only, always. A plain `git push` to `main` deploys nothing.
