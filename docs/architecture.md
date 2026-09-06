@@ -209,6 +209,14 @@ those containers and never touches Traefik, Forgejo, DinD or runners.
 Same shape as any CI-to-orchestrator handoff (GitLab CI → Kubernetes): the
 build sandbox stays isolated, the serving layer does not.
 
+**Dev host.** Each app also has `<app>.dev.<slug>.<BASE_DOMAIN>` running the
+latest `main` HEAD. It's populated only by the team console's **Deploy from
+main** button, which dispatches the same `deploy.yml` (`workflow_dispatch`,
+`channel=dev`) — CI builds `:main-<sha>` and `POST /deploy`s with
+`channel=dev`, landing it as compose project `app-<slug>-<name>-dev`. Public,
+same as the release host; the button is the only trigger. A plain push to
+`main` still deploys nothing.
+
 ## Decision 3 — no per-team host ports, one central control plane
 
 Everything is routed by hostname — the controller's edge terminates it and, for

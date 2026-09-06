@@ -92,6 +92,27 @@
                       th:classappend="${pendingWork and pending.suggestedBump == 'patch'} ? ' btn-accent' : ' btn-outline-secondary'"
                       title="x.y.Z — fix">fix</button>
             </form>
+
+            <div class="text-body-secondary small mt-3 mb-1">Dev
+              <span class="fw-normal" th:text="|· ${repoName}.dev.${zoneSlug}.${baseDomain}|">· app.dev…</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <form method="post" th:action="@{/teams/{slug}/repos/dev(slug=${zoneSlug})}" class="d-inline">
+                <input type="hidden" name="repo" th:value="${repoName}">
+                <button class="btn btn-sm btn-outline-secondary" title="Build and deploy the latest main HEAD">
+                  Deploy from main</button>
+              </form>
+              <a th:if="${devUrl != null}" th:href="${devUrl}" class="small" target="_blank"
+                 th:text="${devDeployedAt != null} ? 'live · ' + ${devDeployedAt} : 'live'">live</a>
+              <form th:if="${devUrl != null}" method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
+                    class="d-inline" onsubmit="return confirm('Stop the dev deployment? The release stays up.')">
+                <input type="hidden" name="repo" th:value="${repoName}">
+                <button class="btn btn-sm btn-link p-0 text-body-secondary">stop</button>
+              </form>
+            </div>
+            <div class="text-body-secondary small mt-1" style="max-width:22rem;white-space:normal">
+              Latest <code>main</code>, public. Only this button deploys it — a plain push doesn't.
+            </div>
           </div>
         </div>
 

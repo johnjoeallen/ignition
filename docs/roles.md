@@ -104,8 +104,8 @@ issue/PR/release *lifecycle* that has one intended path.
 
 *An app's management page — the clone URL with your git username / password /
 PAT beneath it, the current version, the **major** / **minor** / **fix**
-release buttons, an editable description, and the issue list. This is where
-day-to-day work happens, not in Forgejo's own UI.*
+release buttons, **Deploy from main**, an editable description, and the issue
+list. This is where day-to-day work happens, not in Forgejo's own UI.*
 
 1. **Open an issue** for the work, on the app's management page. This
    automatically creates its branch too — `<issue-number>-<title, slugified>`
@@ -148,9 +148,17 @@ day-to-day work happens, not in Forgejo's own UI.*
 
 The new tag fires the `build and deploy` workflow; on success the app is live
 at `https://<APP_NAME>.apps.<slug>.<event-domain>/` within a minute or two.
-**Only a release deploys** — a plain push to `main` does not (and `main` is
-protected against direct pushes anyway — every change goes through a PR) —
-so every running image carries a version you can redeploy or roll back to.
+**Only a release deploys to that host** — a plain push to `main` does not (and
+`main` is protected against direct pushes anyway — every change goes through a
+PR) — so every running image carries a version you can redeploy or roll back to.
+
+**See `main` before you release — the dev host.** Next to the release buttons
+is **Deploy from main**. It builds the current `main` HEAD and runs it at
+`https://<APP_NAME>.dev.<slug>.<event-domain>/` — a second, always-on preview
+of the latest merged code, alongside the release. It's **public**, like the
+release, and it only ever changes when someone clicks the button (a plain push
+still doesn't deploy). **stop** on that row tears down the dev copy; the
+release is untouched.
 Re-pushing an image to the **same** tag later (a base-image rebuild, say)
 needs no new release: the per-node Watchtower notices the new digest and
 rolls the app forward on its own within ~60s.

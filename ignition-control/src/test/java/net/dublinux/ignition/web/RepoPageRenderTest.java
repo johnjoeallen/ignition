@@ -50,6 +50,9 @@ class RepoPageRenderTest {
         ctx.setVariable("buildCommit", "");
         ctx.setVariable("zoneSlug", "acme");
         ctx.setVariable("repoName", "cards");
+        ctx.setVariable("baseDomain", "ignition.example");
+        ctx.setVariable("devUrl", null);
+        ctx.setVariable("devDeployedAt", null);
         ctx.setVariable("repoInfo", new ZoneService.RepoView("acme", "cards", "acme/cards",
                 "https://git.acme.example/acme/cards", "https://git.acme.example/acme/cards.git",
                 "a card app", "v1.1.0"));
@@ -95,5 +98,26 @@ class RepoPageRenderTest {
         assertThat(html).contains("confirm(");                     // empty-state guard on the release form
         assertThat(html).doesNotContainPattern("value=\"[a-z]+\"[^>]*btn-accent");  // no bump highlighted
         assertThat(html).doesNotContain("Closed, not released yet");
+    }
+
+    @Test
+    void rendersDevBlock() {
+        var ctx = baseContext();
+        ctx.setVariable("pending", new ReleaseService.Pending(true, "v1.1.0", Instant.now(),
+                0, List.of(), "patch"));
+
+        // no dev deployment yet
+        String html = engine().process("repo", ctx);
+        assertThat(html).contains("Deploy from main");
+        assertThat(html).contains("cards.dev.acme.ignition.example");
+        assertThat(html).doesNotContain(">stop<");
+
+        // with a live dev deployment
+        ctx.setVariable("devUrl", "https://cards.dev.acme.ignition.example/");
+        ctx.setVariable("devDeployedAt", "6 Sep 09:30 UTC");
+        html = engine().process("repo", ctx);
+        assertThat(html).contains("https://cards.dev.acme.ignition.example/");
+        assertThat(html).contains("6 Sep 09:30 UTC");
+        assertThat(html).contains(">stop<");
     }
 }

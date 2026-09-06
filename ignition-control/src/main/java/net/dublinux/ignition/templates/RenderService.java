@@ -46,20 +46,27 @@ public class RenderService {
                 templates.renderZone(vars));
     }
 
-    /** {@code <work>/zones/<slug>/apps/<name>-compose.yml} — returns its path. */
+    /**
+     * {@code <work>/zones/<slug>/apps/<name>[-dev]-compose.yml} — returns its
+     * path. The channel picks the host ({@code .apps.} vs {@code .dev.}) and
+     * the compose-project / file name suffix.
+     */
     public Path appCompose(String slug, String name, String baseDomain,
-                           String image, int port, String deployId) {
+                           String image, int port, String deployId,
+                           net.dublinux.ignition.app.Channel channel) {
         Quotas q = props.getQuotas();
         Map<String, String> vars = new LinkedHashMap<>();
         vars.put("APP_NAME", name);
         vars.put("ZONE_SLUG", slug);
         vars.put("BASE_DOMAIN", baseDomain);
+        vars.put("APP_HOST", "%s.%s.%s.%s".formatted(name, channel.subdomain(), slug, baseDomain));
+        vars.put("APP_PROJECT", "app-" + slug + "-" + name + channel.projectSuffix());
         vars.put("APP_IMAGE", image);
         vars.put("APP_PORT", Integer.toString(port));
         vars.put("DEPLOY_ID", deployId);
         vars.put("CPU_APP", Double.toString(q.getCpuApp()));
         vars.put("MEM_APP", q.getMemApp());
-        return write(props.appWorkDir(slug).resolve(name + "-compose.yml"),
+        return write(props.appWorkDir(slug).resolve(name + channel.projectSuffix() + "-compose.yml"),
                 templates.renderApp(vars));
     }
 

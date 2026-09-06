@@ -122,6 +122,11 @@ flowchart TB
    later re-push of that tag rolls out on its own (~60s), no workflow rerun.
    App names are unique within a team, not global.
 
+A team can also preview `main` before releasing: **Deploy from main** on the
+app's page builds the current HEAD and runs it at
+`https://<app>.dev.<slug>.ignition.example/` — public, and refreshed only by
+that button.
+
 ## Why an isolated stack per team
 
 Even with no policy to satisfy and budget to spare, an isolated stack per team

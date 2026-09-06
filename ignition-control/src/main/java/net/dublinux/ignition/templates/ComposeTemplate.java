@@ -27,8 +27,8 @@ public class ComposeTemplate {
 
     /** Vars {@code app-compose.tmpl} references — the allow-list. */
     public static final java.util.Set<String> APP_VARS = java.util.Set.of(
-            "APP_NAME", "ZONE_SLUG", "BASE_DOMAIN", "APP_IMAGE", "APP_PORT",
-            "DEPLOY_ID", "CPU_APP", "MEM_APP");
+            "APP_NAME", "ZONE_SLUG", "BASE_DOMAIN", "APP_HOST", "APP_PROJECT",
+            "APP_IMAGE", "APP_PORT", "DEPLOY_ID", "CPU_APP", "MEM_APP");
 
     /** Vars {@code zone-compose.yml.tmpl} references. */
     public static final java.util.Set<String> ZONE_VARS = java.util.Set.of(

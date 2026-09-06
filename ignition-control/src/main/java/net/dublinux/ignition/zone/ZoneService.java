@@ -46,6 +46,7 @@ public class ZoneService {
     private final ZoneRepository zones;
     private final NodeRepository nodes;
     private final AppRepository apps;
+    private final net.dublinux.ignition.app.DevDeploymentRepository devApps;
     private final ForgejoClient forgejo;
     private final ReleaseService releases;
     private final DockerCli docker;
@@ -55,12 +56,14 @@ public class ZoneService {
     private final IgnitionProperties props;
 
     public ZoneService(ZoneRepository zones, NodeRepository nodes, AppRepository apps,
+                       net.dublinux.ignition.app.DevDeploymentRepository devApps,
                        ForgejoClient forgejo, ReleaseService releases, DockerCli docker,
                        RenderService render, TraefikDynamicConfig traefik,
                        ProvisioningStatusRepository statuses, IgnitionProperties props) {
         this.zones = zones;
         this.nodes = nodes;
         this.apps = apps;
+        this.devApps = devApps;
         this.forgejo = forgejo;
         this.releases = releases;
         this.docker = docker;
@@ -105,11 +108,21 @@ public class ZoneService {
 
         for (DeployedApp app : apps.findByZone(slug)) {
             Path composeFile = render.appCompose(slug, app.name(), zone.baseDomain(),
-                    app.image(), app.port(), app.deployId());
+                    app.image(), app.port(), app.deployId(), net.dublinux.ignition.app.Channel.RELEASE);
             docker.compose(dockerHost, "app-" + slug + "-" + app.name(), composeFile.toString(),
                     "down", "-v", "--remove-orphans");
             if (!keepState) {
                 apps.deleteByZoneAndName(slug, app.name());
+            }
+        }
+
+        for (var dev : devApps.findByZoneOrderByName(slug)) {
+            Path composeFile = render.appCompose(slug, dev.name(), zone.baseDomain(),
+                    dev.image(), dev.port(), dev.deployId(), net.dublinux.ignition.app.Channel.DEV);
+            docker.compose(dockerHost, "app-" + slug + "-" + dev.name() + "-dev", composeFile.toString(),
+                    "down", "-v", "--remove-orphans");
+            if (!keepState) {
+                devApps.deleteByZoneAndName(slug, dev.name());
             }
         }
 
@@ -993,6 +1006,19 @@ public class ZoneService {
     /** What's merged to {@code main} that the latest release doesn't cover — for the app page. */
     public ReleaseService.Pending pendingRelease(String slug, String repo) {
         return releases.pending(slug, slug, repo);
+    }
+
+    /**
+     * "Deploy from main" — dispatch the repo's {@code deploy.yml} workflow
+     * against {@code main} with {@code channel=dev}, so CI builds the current
+     * HEAD and {@code POST /deploy}s it to {@code <app>.dev.<slug>.<domain>}.
+     * A plain push to {@code main} still deploys nothing; this button is the
+     * only trigger for the dev host.
+     */
+    public ForgejoClient.Response deployFromMain(String slug, String repo) {
+        return forgejo.post(slug,
+                "/repos/%s/%s/actions/workflows/deploy.yml/dispatches".formatted(slug, repo),
+                Map.of("ref", "main", "inputs", Map.of("channel", "dev")));
     }
 
     /**

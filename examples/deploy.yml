@@ -1,19 +1,22 @@
 # Seed this into a zone's repo as .forgejo/workflows/deploy.yml
 #
-# A zone can run this from several repos — each deploys its own app at
-# <APP_NAME>.apps.<slug>.<BASE_DOMAIN>. App names are unique within the zone.
+# A zone can run this from several repos — each deploys its own app. App names
+# are unique within the zone. Two hosts per app:
 #
-# Deploys happen ONLY on a release tag (e.g. `v1.2.0`) — never on a plain push
-# to `main`. The tag is created by the zone console's "Release" button:
-# ignition-control diffs the last tag against `main`, picks the semver bump from those
-# commit messages (Conventional Commits; the admin can override), and creates
-# the next vX.Y.Z tag on `main` via the Forgejo API — always from reviewed,
-# already-pushed history, never `git push --tags`. See docs/roles.md
-# ("Shipping a release").
+#   <APP_NAME>.apps.<slug>.<BASE_DOMAIN>   the RELEASE — from a version tag
+#   <APP_NAME>.dev.<slug>.<BASE_DOMAIN>    DEV — the latest main HEAD
 #
-# Each run builds and pushes :<sha> (immutable) and :<tag>, then deploys :<tag>.
-# If CI ever re-runs for the same tag (e.g. a base-image rebuild), the per-node
-# Watchtower rolls the running app forward without a manual redeploy.
+# This workflow runs on two triggers, and NEVER on a plain push to `main`:
+#
+#  1. push of a version tag (vX.Y.Z) — created by the console's Release
+#     buttons (major / minor / fix). Builds and deploys to the .apps. host.
+#  2. workflow_dispatch — fired by the console's "Deploy from main" button.
+#     Builds the current main HEAD and deploys to the .dev. host.
+#
+# Each run builds and pushes :<sha> (immutable) and a moving tag (:<version> or
+# :main-<sha>), then POSTs ignition-control /deploy with the channel. If CI
+# re-runs for the same tag (e.g. a base-image rebuild) the per-node Watchtower
+# rolls the running container forward without another deploy call.
 #
 # Assumes a Dockerfile at the repo root. The runner's config forwards
 # DOCKER_HOST=tcp://dind:2375, so `docker` here talks to the zone's private
@@ -39,15 +42,23 @@ name: build and deploy
 on:
   push:
     tags: ["*"]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "target host"
+        default: dev
+        type: choice
+        options: [dev]
 
 permissions:
   contents: read
   packages: write
 
-# one deploy at a time per repo; a newer run waits rather than clobbering
 concurrency:
-  group: deploy-${{ github.repository }}
-  cancel-in-progress: false
+  # releases queue (never clobber); a newer "Deploy from main" supersedes an
+  # in-flight one
+  group: deploy-${{ github.repository }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   deploy:
@@ -66,19 +77,26 @@ jobs:
       - name: Build and push
         run: |
           REPO="${{ vars.REGISTRY }}/${{ github.repository }}"
-          # the release tag, '/' -> '-' for a valid image tag (POSIX sh: the
-          # job image is Alpine, no bash)
-          TAG=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
+          # POSIX sh (Alpine, no bash). Pick the channel + moving tag from the
+          # trigger: a tag push is the release; workflow_dispatch is dev.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHANNEL=dev
+            TAG="main-$(printf '%s' "${{ github.sha }}" | cut -c1-12)"
+          else
+            CHANNEL=release
+            TAG=$(printf '%s' "$GITHUB_REF_NAME" | tr '/' '-')
+          fi
           echo "${{ secrets.FORGEJO_TOKEN || github.token }}" \
             | docker login "${{ vars.REGISTRY }}" -u "${{ vars.REGISTRY_USER || github.actor }}" --password-stdin
           docker build -t "$REPO:${{ github.sha }}" -t "$REPO:$TAG" .
           docker push "$REPO:${{ github.sha }}"
           docker push "$REPO:$TAG"
           echo "IMAGE=$REPO:$TAG" >> "$GITHUB_ENV"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
 
       - name: Deploy
         run: |
           curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
             -H 'content-type: application/json' \
-            -d "{\"app\": \"${{ vars.APP_NAME }}\", \"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}}"
+            -d "{\"app\": \"${{ vars.APP_NAME }}\", \"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}, \"channel\": \"$CHANNEL\"}"

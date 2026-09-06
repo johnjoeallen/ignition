@@ -1,13 +1,19 @@
-# One deployed app. A zone can deploy many; each app name is unique within its
-# zone and the app lives at https://${APP_NAME}.apps.${ZONE_SLUG}.${BASE_DOMAIN}/.
-# Rendered and applied by the control plane (control/ign-control.py) on the owning
-# zone's node — NOT inside the zone's DinD sandbox (see CLAUDE.md) — so that
-# node's Traefik can route to it. The zone's Forgejo router holds a
-# *.apps.${ZONE_SLUG}.${BASE_DOMAIN} cert, so no per-name cert is needed.
+# One deployed app on one channel. A zone can deploy many; each app name is
+# unique within its zone. The release channel lives at
+# https://${APP_NAME}.apps.${ZONE_SLUG}.${BASE_DOMAIN}/ (from a release tag);
+# the dev channel at https://${APP_NAME}.dev.${ZONE_SLUG}.${BASE_DOMAIN}/ (the
+# latest main HEAD, shipped only from the console's "Deploy from main" button).
+# ${APP_HOST} / ${APP_PROJECT} carry whichever this render is for.
 #
-# Substituted vars: APP_NAME ZONE_SLUG BASE_DOMAIN APP_IMAGE APP_PORT DEPLOY_ID CPU_APP MEM_APP
+# Rendered and applied by the control plane on the owning zone's node — NOT
+# inside the zone's DinD sandbox (see CLAUDE.md) — so that node's Traefik can
+# route to it. The zone's Forgejo router holds *.apps.${ZONE_SLUG}.${BASE_DOMAIN}
+# and *.dev.${ZONE_SLUG}.${BASE_DOMAIN} certs, so no per-name cert is needed.
+#
+# Substituted vars: APP_NAME ZONE_SLUG BASE_DOMAIN APP_HOST APP_PROJECT
+#                   APP_IMAGE APP_PORT DEPLOY_ID CPU_APP MEM_APP
 
-name: app-${ZONE_SLUG}-${APP_NAME}
+name: ${APP_PROJECT}
 
 networks:
   traefik-public:
@@ -16,7 +22,7 @@ networks:
 services:
   app:
     image: ${APP_IMAGE}
-    container_name: app-${ZONE_SLUG}-${APP_NAME}
+    container_name: ${APP_PROJECT}
     restart: unless-stopped
     networks: [traefik-public]
     environment:
@@ -31,10 +37,10 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
       traefik.enable: "true"
       traefik.docker.network: traefik-public
-      traefik.http.routers.app-${ZONE_SLUG}-${APP_NAME}.rule: Host(`${APP_NAME}.apps.${ZONE_SLUG}.${BASE_DOMAIN}`)
-      traefik.http.routers.app-${ZONE_SLUG}-${APP_NAME}.entrypoints: websecure
-      traefik.http.routers.app-${ZONE_SLUG}-${APP_NAME}.tls: "true"
-      traefik.http.services.app-${ZONE_SLUG}-${APP_NAME}.loadbalancer.server.port: "${APP_PORT}"
+      traefik.http.routers.${APP_PROJECT}.rule: Host(`${APP_HOST}`)
+      traefik.http.routers.${APP_PROJECT}.entrypoints: websecure
+      traefik.http.routers.${APP_PROJECT}.tls: "true"
+      traefik.http.services.${APP_PROJECT}.loadbalancer.server.port: "${APP_PORT}"
     deploy:
       resources:
         limits: { cpus: "${CPU_APP}", memory: "${MEM_APP}" }

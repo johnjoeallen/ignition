@@ -58,9 +58,11 @@ services:
       traefik.http.routers.zone-${ZONE_SLUG}-git.entrypoints: websecure
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls: "true"
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls.certresolver: le
-      # git.<slug> is two labels deep — this zone gets its own *.<slug> cert.
+      # git.<slug> is two labels deep — this zone gets its own *.<slug> cert,
+      # plus the *.apps.<slug> (release) and *.dev.<slug> (dev host) wildcards
+      # every app router relies on.
       traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].main: ${ZONE_SLUG}.${BASE_DOMAIN}
-      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].sans: "*.${ZONE_SLUG}.${BASE_DOMAIN},*.apps.${ZONE_SLUG}.${BASE_DOMAIN}"
+      traefik.http.routers.zone-${ZONE_SLUG}-git.tls.domains[0].sans: "*.${ZONE_SLUG}.${BASE_DOMAIN},*.apps.${ZONE_SLUG}.${BASE_DOMAIN},*.dev.${ZONE_SLUG}.${BASE_DOMAIN}"
       traefik.http.services.zone-${ZONE_SLUG}-git.loadbalancer.server.port: "3000"
     volumes:
       - forgejo-data:/data

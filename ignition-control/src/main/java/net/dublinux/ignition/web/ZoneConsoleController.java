@@ -2,6 +2,7 @@ package net.dublinux.ignition.web;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -276,6 +277,14 @@ public class ZoneConsoleController {
         model.addAttribute("issueRows", issueRows);
         model.addAttribute("pending", pending);
         model.addAttribute("unreleasedIssues", unreleasedIssues);
+        var dev = apps.devDeployment(slug, repo);
+        model.addAttribute("devUrl", dev
+                .map(d -> d.url(zones.get(slug).map(Zone::baseDomain).orElse("")))
+                .orElse(null));
+        model.addAttribute("devDeployedAt", dev
+                .map(d -> DateTimeFormatter.ofPattern("d MMM HH:mm").withZone(java.time.ZoneOffset.UTC)
+                        .format(d.deployedAt()) + " UTC")
+                .orElse(null));
         model.addAttribute("currentUserId", currentUserId);
         return "repo";
     }
@@ -384,6 +393,31 @@ public class ZoneConsoleController {
     }
 
     /**
+     * "Deploy from main" — build and ship the current {@code main} HEAD to
+     * {@code <name>.dev.<slug>.<domain>}. Dispatches the repo's deploy workflow;
+     * CI does the build + {@code POST /deploy?channel=dev}. Any team member can,
+     * same as Release.
+     */
+    @PostMapping("/teams/{slug}/repos/dev")
+    public String deployFromMain(@PathVariable String slug, @RequestParam("repo") String name) {
+        var res = zones.deployFromMain(slug, name);
+        return redirectRepo(slug, name, res.ok()
+                ? "building main — the dev site refreshes in a minute or two"
+                : "couldn't start the build (%d): %s".formatted(res.status(), res.message()));
+    }
+
+    /** Tear down the dev deployment (the release stays untouched). */
+    @PostMapping("/teams/{slug}/repos/dev/stop")
+    public String stopDev(@PathVariable String slug, @RequestParam("repo") String name) {
+        try {
+            apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
+            return redirectRepo(slug, name, "dev deployment stopped");
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, name, e.getMessage());
+        }
+    }
+
+    /**
      * Delete the app entirely — an app <em>is</em> its repo, so this stops any
      * live deployment and then removes the Forgejo repo (code, issues, PRs,
      * releases). Irreversible; the template guards it with a confirm.
@@ -394,6 +428,11 @@ public class ZoneConsoleController {
             apps.undeploy(slug, name);
         } catch (IllegalArgumentException notDeployed) {
             // nothing running — go straight to removing the repo
+        }
+        try {
+            apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
+        } catch (IllegalArgumentException noDev) {
+            // no dev deployment — fine
         }
         var res = zones.deleteApp(slug, name);
         return redirect(slug, res.ok() || res.status() == 404

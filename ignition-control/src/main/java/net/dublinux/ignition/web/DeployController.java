@@ -31,8 +31,9 @@ public class DeployController {
         String app = str(body.get("app"));
         String image = str(body.get("image"));
         int port = intOr(body.get("port"), 8080);
+        var channel = net.dublinux.ignition.app.Channel.fromPayload(str(body.get("channel")));
         try {
-            AppService.DeployResult r = apps.deploy(slug, app, image, port);
+            AppService.DeployResult r = apps.deploy(slug, app, image, port, channel);
             return ResponseEntity.ok(Map.of(
                     "ok", true, "zone", r.zone(), "app", r.app(),
                     "deploy_id", r.deployId(), "url", r.url()));
@@ -47,8 +48,9 @@ public class DeployController {
     public ResponseEntity<?> undeploy(@RequestBody Map<String, Object> body) {
         String slug = zoneOr403();
         String app = str(body.get("app"));
+        var channel = net.dublinux.ignition.app.Channel.fromPayload(str(body.get("channel")));
         try {
-            apps.undeploy(slug, app);
+            apps.undeploy(slug, app, channel);
             return ResponseEntity.ok(Map.of("ok", true, "removed", app));
         } catch (IllegalArgumentException e) {
             return err(HttpStatus.BAD_REQUEST, e.getMessage());

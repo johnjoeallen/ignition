@@ -29,7 +29,8 @@ role (platform admin / team admin / team member), not by hostname:
 |---|---|
 | `<BASE_DOMAIN>` | the console (`ignition-control`) — a team's own view is `/teams/<slug>` on this same host |
 | `git.<slug>.<BASE_DOMAIN>` | that zone's Forgejo — git, PRs, Actions, registry |
-| `<app>.apps.<slug>.<BASE_DOMAIN>` | a deployed app (name unique within the zone) |
+| `<app>.apps.<slug>.<BASE_DOMAIN>` | a deployed app's release (name unique within the zone) |
+| `<app>.dev.<slug>.<BASE_DOMAIN>` | that app's `dev` deployment — latest `main`, deployed on a button |
 
 `ignition.example` in the docs is a placeholder; `BASE_DOMAIN` is whatever apex
 the deploying org controls, provided its DNS can serve names two labels deep and
@@ -139,10 +140,18 @@ deploy token); `AppService` renders `app-compose.tmpl` and runs it on the
 zone's node's real daemon, on `traefik-public`. `POST /undeploy` (or **Stop**
 in the console) tears one down.
 
-**Deploys to the public `.apps.` host come only from a release — never a plain
-push to `main`.** (A planned `dev` channel — task 6 — adds a button that
-deploys `main` HEAD to a separate team-only host; a plain push still deploys
-nothing.) The CI workflow (`examples/deploy.yml`) triggers on a git tag only. Tags are created
+**Deploys to the `.apps.` host come only from a release — never a plain push to
+`main`.** A second host per app, `<name>.dev.<slug>.<BASE_DOMAIN>`, runs the
+latest `main` HEAD, but *only* when someone clicks **Deploy from main** on the
+app's page — a plain push still deploys nothing. The `dev` host is public (no
+gate); the button is the only trigger. It's compose project
+`app-<slug>-<name>-dev`, tracked in `app_dev`, rendered from the same
+`app-compose.tmpl` (now parameterised on `APP_HOST` / `APP_PROJECT`), torn down
+with the app and the zone. `deploy.yml` gained an `on: workflow_dispatch`
+(`channel` input) that the button fires via the Forgejo API; CI builds
+`:main-<sha>` and `POST /deploy`s with `channel=dev`. The CI tag-push path is
+unchanged. The CI workflow (`examples/deploy.yml`) still triggers on a git tag
+for releases. Tags are created
 by the zone console's three **Release** buttons — **major** / **minor** /
 **fix** — which POST `bump=major|minor|patch`; `ReleaseService` reads the last
 tag and creates the next `vMAJOR.MINOR.PATCH` on `main` for that bump (first
@@ -272,8 +281,9 @@ command's stdout.
      controller` at any depth (RFC 4592) — or a plain `*.<BASE_DOMAIN>` A-record
      + a DNS API token for ACME. Provisioning a zone adds **zero** DNS records.
    - **Certs**: the edge does DNS-01 for `*.<BASE_DOMAIN>` + per-zone
-     `*.<slug>.<BASE_DOMAIN>` / `*.apps.<slug>.<BASE_DOMAIN>` (cert wildcards are
-     single-label). CA is Let's Encrypt or a self-hosted `step-ca`
+     `*.<slug>.<BASE_DOMAIN>` / `*.apps.<slug>.<BASE_DOMAIN>` /
+     `*.dev.<slug>.<BASE_DOMAIN>` (cert wildcards are single-label). CA is
+     Let's Encrypt or a self-hosted `step-ca`
      (`ACME_CA_SERVER`). `ignition-control` writes the edge router + cert config
      per zone, like it already writes `state/control/dynamic/<slug>.yml`.
      `http-only` (no cert, SSO refused) only for an offline demo.
@@ -296,38 +306,22 @@ command's stdout.
    decision on format/export (reveal.js-style HTML deck rendered per team,
    vs. a PPTX/PDF export) and where the content lives (Forgejo-backed like
    an app, or its own console-managed model).
-6. **A `dev` channel per app — deploy `main` HEAD to a team-only host,
-   on a button.** A second host per app, `<name>.dev.<slug>.<BASE_DOMAIN>`
-   (sibling subtree to `.apps.`), that runs the latest `main` — so a team can
-   see their app before cutting a release, while the public `.apps.` host
-   stays release-only. **Needs the front-door forward-auth (task 4) first** —
-   that's the gate. Still no auto-deploy: a plain push to `main` deploys
-   nothing; only the button does.
-
-   - **The button.** An app-page action next to major/minor/fix — "Deploy
-     from main". The control plane has no build engine, so (like Release
-     drives CI via a tag) the button proxies Forgejo:
-     `POST /repos/<slug>/<repo>/actions/workflows/deploy.yml/dispatches` with
-     `ref=main`, `inputs.channel=dev`. `deploy.yml` gains
-     `on: workflow_dispatch` (Forgejo ≥ ~1.21; fallback is a force-updated
-     mutable `dev` tag with `on: push: tags: [dev]`). CI builds `:main-<sha>`
-     + `:main` and `POST /deploy`s with `channel=dev`.
-   - **`channel` through the deploy path.** `/deploy` payload +
-     `AppService.deploy` take `channel` (`release` default | `dev`). `dev`
-     changes: compose project `app-<slug>-<name>-dev`, host
-     `<name>.dev.<slug>`, a throwaway volume prefix, image `:main-<sha>`, and
-     the edge router **always** carries `forward-auth` (scoped to the team's
-     IdP group) + `noindex` regardless of the app's `visibility`. The app
-     registry gets `DEV_IMAGE` / `DEV_DEPLOY_ID` (or an `apps/<name>-dev.env`).
-   - **Certs**: add a third per-zone wildcard `*.dev.<slug>.<BASE_DOMAIN>` to
-     the edge ACME set (next to `*.<slug>` / `*.apps.<slug>`). DNS needs
-     nothing — `*.<BASE_DOMAIN>` already matches at any depth.
-   - **Lifecycle**: **Stop** on the dev block tears down only the `-dev`
-     project; `IdleSweeper` gives `-dev` projects a short TTL (~30 min,
-     cold-start on next hit); `dev` counts against the zone quota (or a
-     smaller `ignition.quotas.*-dev` set). Watchtower's existing
-     `enable=true` label means a re-pushed `:main` digest rolls dev forward
-     with no second `/deploy`.
-   - **Invariant, restated**: *Release* (major/minor/fix) → `<name>.apps.<slug>`,
-     public per `visibility`. **Deploy from main** → `<name>.dev.<slug>`,
-     team-only, always. A plain `git push` to `main` deploys nothing.
+6. **`dev` channel — follow-ups.** The `dev` channel itself is **built** (see
+   the deploy decision above): `<name>.dev.<slug>.<BASE_DOMAIN>`, deployed only
+   by the app page's **Deploy from main** button, torn down with the app/zone,
+   `app_dev` table, `Channel` enum, `deploy.yml` `workflow_dispatch`. What's
+   left:
+   - **Existing apps need re-seeding.** `workflow_dispatch` only works once the
+     new `deploy.yml` is on the repo's `main`. Re-running **Create app** on an
+     existing app re-puts the workflow; a first-run **Deploy from main** on an
+     old app fails until then. A migration that re-seeds every repo's workflow
+     would close this.
+   - **No idle handling for `-dev`.** `IdleSweeper` is whole-zone only, so a
+     `-dev` container runs until the zone is reclaimed. Give `-dev` projects a
+     short independent TTL (~30 min, cold-start on next hit).
+   - **`noindex` / gate.** The `dev` host is public by design. If that changes,
+     the `dev` router is where the front-door `forward-auth` (task 4) and an
+     `X-Robots-Tag: noindex` would go — scoped to the team, unlike `.apps.`
+     which honours the app's `visibility`.
+   - **Quota.** `dev` currently counts against the zone quota like any app;
+     a smaller `ignition.quotas.*-dev` set would let it oversubscribe less.
