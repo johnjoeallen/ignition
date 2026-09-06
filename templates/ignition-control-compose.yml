@@ -105,6 +105,12 @@ services:
       - ignition-dynamic:/work/control/dynamic
       # keys / certs for ssh:// and tcp://+TLS nodes (optional; read-only)
       - ${IGN_SSH_DIR:-./ssh-empty}:/root/.ssh:ro
+    labels:
+      # The controller's own Watchtower (traefik-core-compose.yml, --label-enable)
+      # rolls this container forward when ghcr.io/.../ignition-control:${IGN_CONTROL_VERSION}
+      # gets a new digest — same mechanism as deployed app containers. Postgres,
+      # Traefik and the rest stay untouched (no label).
+      com.centurylinklabs.watchtower.enable: "true"
     networks:
       - traefik-public
       - ignition-internal
