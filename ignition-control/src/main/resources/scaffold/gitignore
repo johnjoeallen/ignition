@@ -1,0 +1,9 @@
+# local-only env overrides — Docker Compose loads this on top of .env automatically
+.env.local
+
+# build output
+node_modules/
+target/
+dist/
+.venv/
+__pycache__/

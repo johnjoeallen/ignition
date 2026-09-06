@@ -152,7 +152,15 @@ host `ports:` / `container_name` stripped (put them in `compose.override.yaml`,
 which the platform never reads); images are open with a small
 `ignition.services.blocked-images` blocklist. A repo with no `compose.yaml`
 falls back to a synthesised single-service deploy (what `app-compose.tmpl` used
-to render — now retired). `POST /undeploy` (or **Stop** in the console) runs
+to render — now retired).
+
+**Runtime config is the repo's `.env`.** `AppService` also fetches `.env` at the
+deploy's `ref` and `AppComposeBuilder` merges its `KEY=VALUE` lines into the web
+service's `environment:` (`.env` wins over a `compose.yaml` default; `PORT` stays
+platform-controlled). Read at the ref, so a PR preview gets that branch's `.env`
+— no environment matrix. It's committed plaintext (fine for hackathon keys, not
+real secrets); `.env.local` is gitignored and never read. `POST /undeploy` (or
+**Stop** in the console) runs
 `docker compose -p <project> down -v` with **no** `-f` — compose reconstructs
 the project from the running resources' labels, so a multi-service app's DB
 volume is never left behind.

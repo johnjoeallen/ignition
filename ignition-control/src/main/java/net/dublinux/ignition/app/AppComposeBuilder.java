@@ -57,12 +57,17 @@ public class AppComposeBuilder {
     /**
      * @param composeYaml the repo's compose file contents, or {@code null}/blank
      *                    for the synthesised single-service case
+     * @param envFile     the repo's {@code .env} contents at the deployed ref,
+     *                    or {@code null} — {@code KEY=VALUE} lines merged into
+     *                    the web service's {@code environment:} ({@code PORT}
+     *                    stays platform-controlled)
      * @param image       the web service's image (from {@code /deploy}) — always wins
      * @param port        the web container port to route to when the compose
      *                    doesn't declare one
      */
     public String build(String slug, String name, Channel channel,
-                        String image, int port, String composeYaml) {
+                        String image, int port, String composeYaml, String envFile) {
+        Map<String, String> env = parseEnv(envFile);
         Map<String, Object> root = (composeYaml == null || composeYaml.isBlank())
                 ? synthesised()
                 : parse(composeYaml);
@@ -103,6 +108,7 @@ public class AppComposeBuilder {
                 l.put("ignition.zone", slug);
                 l.put("ignition.app", name);
                 svc.put("labels", l);
+                mergeEnvFile(svc, env);
                 ensurePortEnv(svc, webPort);
                 limit(svc, props.getQuotas().getCpuApp(), props.getQuotas().getMemApp());
             } else {
@@ -406,30 +412,90 @@ public class AppComposeBuilder {
         return web.get(0);
     }
 
-    private void ensurePortEnv(Map<String, Object> svc, int webPort) {
+    /** Normalise {@code environment:} (list or map form) to a mutable map, stored back on the service. */
+    private Map<String, Object> environmentAsMap(Map<String, Object> svc) {
         Object env = svc.get("environment");
+        Map<String, Object> out = new LinkedHashMap<>();
         if (env instanceof Map<?, ?> m) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> mm = (Map<String, Object>) m;
-            mm.putIfAbsent("PORT", String.valueOf(webPort));
+            m.forEach((k, v) -> out.put(String.valueOf(k), v));
         } else if (env instanceof List<?> list) {
-            boolean has = list.stream().map(String::valueOf).anyMatch(s -> s.equals("PORT") || s.startsWith("PORT="));
-            if (!has) {
-                List<Object> l = new ArrayList<>(list);
-                l.add("PORT=" + webPort);
-                svc.put("environment", l);
+            for (Object o : list) {
+                String s = String.valueOf(o);
+                int eq = s.indexOf('=');
+                if (eq >= 0) {
+                    out.put(s.substring(0, eq), s.substring(eq + 1));
+                } else {
+                    out.put(s, null);
+                }
             }
-        } else {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("PORT", String.valueOf(webPort));
-            svc.put("environment", m);
         }
+        svc.put("environment", out);
+        return out;
+    }
+
+    /** Merge the repo's {@code .env} into the web service's environment — the file wins, except {@code PORT}. */
+    private void mergeEnvFile(Map<String, Object> svc, Map<String, String> fileEnv) {
+        if (fileEnv.isEmpty()) {
+            return;
+        }
+        Map<String, Object> env = environmentAsMap(svc);
+        fileEnv.forEach((k, v) -> {
+            if (!k.equals("PORT")) {
+                env.put(k, v);
+            }
+        });
+    }
+
+    private void ensurePortEnv(Map<String, Object> svc, int webPort) {
+        environmentAsMap(svc).putIfAbsent("PORT", String.valueOf(webPort));
         // fill the loadbalancer port now that we know it
         Map<String, Object> labels = labelsAsMap(svc);
         labels.entrySet().stream()
                 .filter(en -> en.getKey().endsWith(".loadbalancer.server.port"))
                 .forEach(en -> en.setValue(String.valueOf(webPort)));
         svc.put("labels", labels);
+    }
+
+    /**
+     * Parse {@code KEY=VALUE} lines. {@code #} comments and blank lines skipped;
+     * a leading {@code export} is stripped; matching surrounding quotes are
+     * removed; an unquoted trailing {@code  # comment} is trimmed. No
+     * {@code ${VAR}} expansion — values are literal.
+     */
+    static Map<String, String> parseEnv(String contents) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (contents == null || contents.isBlank()) {
+            return out;
+        }
+        for (String raw : contents.split("\r?\n")) {
+            String line = raw.strip();
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            if (line.startsWith("export ")) {
+                line = line.substring(7).strip();
+            }
+            int eq = line.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = line.substring(0, eq).strip();
+            if (!key.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                continue;
+            }
+            String val = line.substring(eq + 1).strip();
+            if (val.length() >= 2
+                    && ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'")))) {
+                val = val.substring(1, val.length() - 1);
+            } else {
+                int hash = val.indexOf(" #");
+                if (hash >= 0) {
+                    val = val.substring(0, hash).strip();
+                }
+            }
+            out.put(key, val);
+        }
+        return out;
     }
 
     // --- limits -------------------------------------------------------

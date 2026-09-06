@@ -586,6 +586,18 @@ public class ZoneService {
                 r.path("clone_url").asText(""), r.path("description").asText(""), version);
     }
 
+    /** One file from an app repo at {@code ref}, as raw text — via the Forgejo contents API. */
+    private java.util.Optional<String> repoFile(String slug, String repo, String path, String ref) {
+        String r = (ref == null || ref.isBlank()) ? "main" : ref;
+        var res = forgejo.get(slug, "/repos/%s/%s/contents/%s?ref=%s"
+                .formatted(slug, repo, path, java.net.URLEncoder.encode(r, StandardCharsets.UTF_8)));
+        if (res.ok() && res.body() != null && res.body().hasNonNull("content")) {
+            String b64 = res.body().get("content").asText().replaceAll("\\s", "");
+            return java.util.Optional.of(new String(Base64.getDecoder().decode(b64), StandardCharsets.UTF_8));
+        }
+        return java.util.Optional.empty();
+    }
+
     /**
      * The app repo's own {@code compose.yaml} (or {@code compose.yml} /
      * {@code docker-compose.y*ml}), at {@code ref}, as raw text — for
@@ -593,17 +605,23 @@ public class ZoneService {
      * is deliberately never read (it's local-dev only). Empty if the repo has none.
      */
     public java.util.Optional<String> appCompose(String slug, String repo, String ref) {
-        String r = (ref == null || ref.isBlank()) ? "main" : ref;
         for (String file : net.dublinux.ignition.app.AppComposeBuilder.COMPOSE_FILENAMES) {
-            var res = forgejo.get(slug, "/repos/%s/%s/contents/%s?ref=%s"
-                    .formatted(slug, repo, file, java.net.URLEncoder.encode(r, StandardCharsets.UTF_8)));
-            if (res.ok() && res.body() != null && res.body().hasNonNull("content")) {
-                String b64 = res.body().get("content").asText().replaceAll("\\s", "");
-                return java.util.Optional.of(
-                        new String(Base64.getDecoder().decode(b64), StandardCharsets.UTF_8));
+            var content = repoFile(slug, repo, file, ref);
+            if (content.isPresent()) {
+                return content;
             }
         }
         return java.util.Optional.empty();
+    }
+
+    /**
+     * The app repo's {@code .env} at {@code ref} — {@code KEY=VALUE} runtime
+     * config merged into the deployed web container. Read at the deploy ref, so
+     * a PR branch's {@code .env} is what its preview gets. {@code .env.local} is
+     * never read (local-dev only). Empty if the repo has none.
+     */
+    public java.util.Optional<String> appEnv(String slug, String repo, String ref) {
+        return repoFile(slug, repo, ".env", ref);
     }
 
     /** Repo description is a plain Forgejo repo setting — the bot's own token is enough, no PAT needed. */
@@ -898,6 +916,9 @@ public class ZoneService {
                 "ignition: add compose.yaml (what Ignition deploys)");
         putFile(slug, name, "compose.override.yaml", scaffold("compose.override.yaml"),
                 "ignition: add compose.override.yaml (local dev only)");
+        putFile(slug, name, ".env", scaffold("app.env"),
+                "ignition: add .env (runtime config, read at the deployed commit)");
+        putFile(slug, name, ".gitignore", scaffold("gitignore"), "ignition: add .gitignore");
 
         setVar(slug, name, "REGISTRY", zone.gitHost());
         setVar(slug, name, "CONTROL_URL", props.getPublicUrl().replaceAll("/+$", ""));

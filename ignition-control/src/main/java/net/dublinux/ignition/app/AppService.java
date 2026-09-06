@@ -94,10 +94,12 @@ public class AppService {
         String deployId = DEPLOY_ID.format(Instant.now());
 
         String repoYaml = zoneService.appCompose(slug, name, ref).orElse(null);
-        String rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml);
+        String repoEnv = zoneService.appEnv(slug, name, ref).orElse(null);
+        String rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml, repoEnv);
         Path composeFile = render.writeAppCompose(slug, name, channel, rendered);
-        log.info("deploy {}/{} [{}]: image={} port={} ref={} compose={} -> node {}",
-                slug, name, channel, image, port, ref, repoYaml == null ? "synthesised" : "from repo", z.node());
+        log.info("deploy {}/{} [{}]: image={} port={} ref={} compose={} env={} -> node {}",
+                slug, name, channel, image, port, ref, repoYaml == null ? "synthesised" : "from repo",
+                repoEnv == null ? "none" : "from repo", z.node());
 
         registryLogin(z);
 

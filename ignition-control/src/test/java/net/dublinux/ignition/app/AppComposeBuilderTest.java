@@ -21,10 +21,14 @@ class AppComposeBuilderTest {
         return p;
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> render(Channel channel, String composeYaml) {
+        return render(channel, composeYaml, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> render(Channel channel, String composeYaml, String envFile) {
         String out = builder.build("acme", "web", channel,
-                "git.acme.ignition.example/acme/web:v1.2.3", 8080, composeYaml);
+                "git.acme.ignition.example/acme/web:v1.2.3", 8080, composeYaml, envFile);
         return (Map<String, Object>) new Yaml().load(out);
     }
 
@@ -85,9 +89,9 @@ class AppComposeBuilderTest {
                   web: { labels: { ignition.web: "true" } }
                   db:  { image: postgres:16-alpine, volumes: [ "dbdata:/v" ] }
                 """;
-        var release = builder.build("acme", "shop", Channel.RELEASE, "r/i:v1", 8080, withDb);
-        var dev = builder.build("acme", "shop", Channel.DEV, "r/i:main", 8080, withDb);
-        var preview = builder.build("acme", "shop-pr-42", Channel.RELEASE, "r/i:pr-42", 8080, withDb);
+        var release = builder.build("acme", "shop", Channel.RELEASE, "r/i:v1", 8080, withDb, null);
+        var dev = builder.build("acme", "shop", Channel.DEV, "r/i:main", 8080, withDb, null);
+        var preview = builder.build("acme", "shop-pr-42", Channel.RELEASE, "r/i:pr-42", 8080, withDb, null);
 
         assertThat(projectName(release)).isEqualTo("app-acme-shop");
         assertThat(projectName(dev)).isEqualTo("app-acme-shop-dev");
@@ -258,5 +262,72 @@ class AppComposeBuilderTest {
         assertThat(AppComposeBuilder.globMatch("*evil*", "docker.io/evil/thing:1")).isTrue();
         assertThat(AppComposeBuilder.globMatch("docker.io/*", "docker.io/library/postgres")).isTrue();
         assertThat(AppComposeBuilder.globMatch("docker.io/*", "ghcr.io/x/y")).isFalse();
+    }
+
+    // --- .env merge -----------------------------------------------------
+
+    @Test
+    void mergesEnvFileIntoTheWebServiceOnly() {
+        var root = render(Channel.RELEASE, MULTI, """
+                # runtime config
+                AIRLABS_API_KEY=abc123
+                export FEATURE_X="on"
+                DB_HOST=db   # inline comment stripped
+                """);
+
+        var env = (Map<String, Object>) svc(root, "api").get("environment");
+        assertThat(env).containsEntry("AIRLABS_API_KEY", "abc123");
+        assertThat(env).containsEntry("FEATURE_X", "on");
+        assertThat(env).containsEntry("DB_HOST", "db");
+
+        assertThat(svc(root, "db")).doesNotContainKey("environment"); // sidecars untouched
+    }
+
+    @Test
+    void envFileCannotOverridePort() {
+        var root = render(Channel.RELEASE, """
+                services:
+                  web:
+                    labels: { ignition.web: "true" }
+                    ports: ["8080:8080"]
+                """, "PORT=9999\n");
+        var env = (Map<String, Object>) svc(root, "web").get("environment");
+        assertThat(env).containsEntry("PORT", "8080");
+        assertThat(labels(svc(root, "web")).get("traefik.http.services.app-acme-web.loadbalancer.server.port"))
+                .isEqualTo("8080");
+    }
+
+    @Test
+    void envFileWinsOverAComposeDefault() {
+        var root = render(Channel.RELEASE, """
+                services:
+                  web:
+                    labels: { ignition.web: "true" }
+                    environment: { LOG_LEVEL: info }
+                """, "LOG_LEVEL=debug\n");
+        assertThat((Map<String, Object>) svc(root, "web").get("environment"))
+                .containsEntry("LOG_LEVEL", "debug");
+    }
+
+    @Test
+    void parseEnv() {
+        var m = AppComposeBuilder.parseEnv("""
+                # a comment
+
+                PLAIN=value
+                QUOTED="a b c"
+                SINGLE='x y'
+                export EXPORTED=1
+                TRAILING=v  # note
+                bad line no equals
+                123KEY=skipped
+                """);
+        assertThat(m).containsEntry("PLAIN", "value");
+        assertThat(m).containsEntry("QUOTED", "a b c");
+        assertThat(m).containsEntry("SINGLE", "x y");
+        assertThat(m).containsEntry("EXPORTED", "1");
+        assertThat(m).containsEntry("TRAILING", "v");
+        assertThat(m).doesNotContainKey("123KEY");
+        assertThat(m).hasSize(5);
     }
 }
