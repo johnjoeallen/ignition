@@ -940,6 +940,8 @@ public class ZoneService {
         putFile(slug, name, ".gitignore", scaffold("gitignore"), "ignition: add .gitignore");
         putFile(slug, name, ".forgejo/workflows/pr-preview.yml", scaffold("pr-preview.yml"),
                 "ignition: add the PR-preview workflow (deploy-preview label)");
+        ensureLabel(slug, name, "deploy-preview", "3fb950",
+                "Deploy this PR to a throwaway preview environment");
 
         setVar(slug, name, "REGISTRY", zone.gitHost());
         setVar(slug, name, "CONTROL_URL", props.getPublicUrl().replaceAll("/+$", ""));
@@ -1012,6 +1014,24 @@ public class ZoneService {
             log.info("zone {}: main protected on {} (no direct push — PRs only)", slug, repo);
         } else {
             log.warn("zone {}: protecting main on {} failed ({}): {}", slug, repo, res.status(), res.message());
+        }
+    }
+
+    /** Create a repo label if it isn't there yet — labels aren't unique by name in Forgejo, so check first. */
+    private void ensureLabel(String slug, String repo, String labelName, String color, String description) {
+        var existing = forgejo.get(slug, "/repos/" + slug + "/" + repo + "/labels");
+        if (existing.ok() && existing.body() != null && existing.body().isArray()) {
+            for (JsonNode l : existing.body()) {
+                if (labelName.equals(l.path("name").asText())) {
+                    return;
+                }
+            }
+        }
+        var res = forgejo.post(slug, "/repos/" + slug + "/" + repo + "/labels",
+                Map.of("name", labelName, "color", color, "description", description));
+        if (!res.ok()) {
+            log.warn("zone {}: creating label {} on {} failed ({}): {}",
+                    slug, labelName, repo, res.status(), res.message());
         }
     }
 
