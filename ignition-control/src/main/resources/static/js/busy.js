@@ -13,7 +13,7 @@
       '<div class="ign-busy-card">'
       + '<div class="spinner-border" role="status" aria-hidden="true"></div>'
       + '<div class="ign-busy-msg"></div>'
-      + '<div class="ign-busy-sub">This can take a moment — don’t close the tab.</div>'
+      + '<div class="ign-busy-sub">This can take a moment.</div>'
       + '</div>';
     el.querySelector('.ign-busy-msg').textContent = msg;
     return el;
