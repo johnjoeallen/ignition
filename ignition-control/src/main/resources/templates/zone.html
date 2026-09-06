@@ -13,45 +13,6 @@
           <span class="text-body-secondary small">Forgejo</span>
           <a th:href="${zone.forgejoUrl + zoneSlug}" th:text="${zone.forgejoUrl + zoneSlug}">git…</a>
 
-          <span th:if="${myGitUsername != null}" class="text-body-secondary small">Your username</span>
-          <span th:if="${myGitUsername != null}" class="d-inline-flex align-items-center gap-1">
-            <code th:text="${myGitUsername}">alice</code>
-            <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
-                    th:attr="data-copy=${myGitUsername}" title="Copy username">
-              <i class="bi bi-clipboard"></i>
-            </button>
-          </span>
-
-          <span th:if="${myGitPassword != null}" class="text-body-secondary small">Your password</span>
-          <span th:if="${myGitPassword != null}" class="d-inline-flex align-items-center gap-1">
-            <code th:text="${myGitPassword}">••••••••</code>
-            <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
-                    th:attr="data-copy=${myGitPassword}" title="Copy password">
-              <i class="bi bi-clipboard"></i>
-            </button>
-            <form method="post" th:action="@{/teams/{slug}/members/reset-git-password(slug=${zoneSlug})}"
-                  class="d-inline"
-                  onsubmit="return confirm('Regenerate your git password? The old one stops working immediately.')">
-              <input type="hidden" name="userId" th:value="${currentUserId}">
-              <button class="btn btn-sm btn-link p-0" title="Regenerate password"><i class="bi bi-arrow-clockwise"></i></button>
-            </form>
-          </span>
-
-          <span th:if="${myGitPat != null}" class="text-body-secondary small">Your PAT</span>
-          <span th:if="${myGitPat != null}" class="d-inline-flex align-items-center gap-1">
-            <code th:text="${myGitPat}" style="word-break:break-all">••••••••</code>
-            <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
-                    th:attr="data-copy=${myGitPat}" title="Copy PAT">
-              <i class="bi bi-clipboard"></i>
-            </button>
-            <form method="post" th:action="@{/teams/{slug}/members/reset-pat(slug=${zoneSlug})}"
-                  class="d-inline"
-                  onsubmit="return confirm('Regenerate your PAT? The old one stops working immediately.')">
-              <input type="hidden" name="userId" th:value="${currentUserId}">
-              <button class="btn btn-sm btn-link p-0" title="Regenerate PAT"><i class="bi bi-arrow-clockwise"></i></button>
-            </form>
-          </span>
-
           <span class="text-body-secondary small">Node</span>
           <span th:text="${zone.node} ?: '?'">node-1</span>
 
@@ -121,8 +82,8 @@
         manages members below; <b>member</b> gets everything else here (apps, releases). Git access isn't a
         separate step: adding someone here also provisions their Forgejo login, as their sanitized email
         (shown below each address). Adding someone attaches their existing Ignition account — they sign up
-        (or a platform admin invites them) first. Your own git password and personal access token are shown
-        above, beside the Forgejo link — nobody else's, including other admins, are ever shown here.</p>
+        (or a platform admin invites them) first. Your own git username, password and personal access token
+        are shown on each app's page, beside its clone URL — nobody else's, including other admins, are ever shown.</p>
       <form th:if="${canManageMembers}" method="post" th:action="@{/teams/{slug}/members(slug=${zoneSlug})}"
             class="row g-2 align-items-end mb-3" autocomplete="off">
         <div class="col-auto">

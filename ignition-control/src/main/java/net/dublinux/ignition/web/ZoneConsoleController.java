@@ -90,14 +90,6 @@ public class ZoneConsoleController {
                         ZoneAccessService.MemberView::email, m -> zones.gitUsername(slug, m.email())));
 
         java.util.UUID currentUserId = currentUser.get().map(u -> u.id()).orElse(null);
-        // Credentials are only ever computed for the viewer's own row — never
-        // fetched (let alone decrypted) for anyone else's, so there's nothing
-        // to accidentally leak even if the template gating had a bug.
-        var me = members.stream().filter(m -> m.userId().equals(currentUserId)).findFirst();
-        String myGitUsername = me.map(m -> gitUsernames.get(m.email())).orElse(null);
-        ZoneService.GitCreds myCreds = me
-                .map(m -> zones.gitCredentials(slug, gitUsernames.get(m.email()), m.userId()))
-                .orElse(null);
 
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("zone", zone);
@@ -105,9 +97,6 @@ public class ZoneConsoleController {
         model.addAttribute("apps", rows);
         model.addAttribute("members", members);
         model.addAttribute("gitUsernames", gitUsernames);
-        model.addAttribute("myGitUsername", myGitUsername);
-        model.addAttribute("myGitPassword", myCreds == null ? null : myCreds.password());
-        model.addAttribute("myGitPat", myCreds == null ? null : myCreds.pat());
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
         model.addAttribute("currentUserId", currentUserId);
         return "zone";
@@ -123,7 +112,7 @@ public class ZoneConsoleController {
             String username = zones.ensureGitAccess(slug, email, memberId);
             mail.sendAddedToTeam(email, slug, role.name().toLowerCase());
             return redirect(slug, email + " added as " + role.name().toLowerCase()
-                    + " — git access as " + username + " (they can see their own password/PAT on this page)");
+                    + " — git access as " + username + " (they can see their own password/PAT on any app's page)");
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }
@@ -160,26 +149,33 @@ public class ZoneConsoleController {
     }
 
     @PostMapping("/teams/{slug}/members/reset-git-password")
-    public String resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId) {
+    public String resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId,
+                                   @RequestParam(required = false) String repo) {
         requireSelfOrZoneAdmin(slug, userId);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
         String newPassword = zones.resetGitPassword(slug, username, userId);
-        return redirect(slug, "git password for " + username + " reset to: " + newPassword
+        return backToCreds(slug, repo, "git password for " + username + " reset to: " + newPassword
                 + " — copy it now, it won't be shown again");
     }
 
     /** Anyone can regenerate their own PAT; a team admin can also regenerate someone else's. */
     @PostMapping("/teams/{slug}/members/reset-pat")
-    public String resetPat(@PathVariable String slug, @RequestParam java.util.UUID userId) {
+    public String resetPat(@PathVariable String slug, @RequestParam java.util.UUID userId,
+                           @RequestParam(required = false) String repo) {
         requireSelfOrZoneAdmin(slug, userId);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
         String newPat = zones.resetPat(slug, username, userId);
-        return redirect(slug, "personal access token for " + username + " regenerated: " + newPat
+        return backToCreds(slug, repo, "personal access token for " + username + " regenerated: " + newPat
                 + " — copy it now, it won't be shown again");
+    }
+
+    /** The credentials now live on each app's page — return there if a reset came from one. */
+    private static String backToCreds(String slug, String repo, String msg) {
+        return repo == null || repo.isBlank() ? redirect(slug, msg) : redirectRepo(slug, repo, msg);
     }
 
     /** Member-management actions need team-admin rights, not just team access. */
@@ -243,10 +239,26 @@ public class ZoneConsoleController {
 
         ZoneService.RepoView info = zones.repoInfo(slug, repo);
 
+        // The viewer's own git credentials — what you actually need to clone /
+        // push this repo — shown here beside the clone URL. Only ever computed
+        // for the viewer's own membership row (see the note in zone()); a
+        // platform admin who isn't a member of this team sees none.
+        java.util.UUID currentUserId = currentUser.get().map(u -> u.id()).orElse(null);
+        var me = access.membersOf(slug).stream()
+                .filter(m -> m.userId().equals(currentUserId)).findFirst();
+        String myGitUsername = me.map(m -> zones.gitUsername(slug, m.email())).orElse(null);
+        ZoneService.GitCreds myCreds = me
+                .map(m -> zones.gitCredentials(slug, zones.gitUsername(slug, m.email()), m.userId()))
+                .orElse(null);
+
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("repoInfo", info);
         model.addAttribute("issueRows", issueRows);
+        model.addAttribute("currentUserId", currentUserId);
+        model.addAttribute("myGitUsername", myGitUsername);
+        model.addAttribute("myGitPassword", myCreds == null ? null : myCreds.password());
+        model.addAttribute("myGitPat", myCreds == null ? null : myCreds.pat());
         return "repo";
     }
 
