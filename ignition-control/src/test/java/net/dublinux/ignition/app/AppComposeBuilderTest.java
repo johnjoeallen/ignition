@@ -61,7 +61,10 @@ class AppComposeBuilderTest {
         assertThat(l.get("traefik.http.services.app-acme-web.loadbalancer.server.port")).isEqualTo("8080");
         assertThat(l.get("com.centurylinklabs.watchtower.enable")).isEqualTo("true");
 
-        assertThat(((Map<String, Object>) root.get("networks"))).containsKey("traefik-public");
+        // traefik-public is external — `compose down -v` on one deployment must
+        // never remove the network other deployments share.
+        var nets = (Map<String, Object>) root.get("networks");
+        assertThat((Map<String, Object>) nets.get("traefik-public")).containsEntry("external", true);
     }
 
     @Test
@@ -70,6 +73,32 @@ class AppComposeBuilderTest {
         assertThat(root.get("name")).isEqualTo("app-acme-web-dev");
         assertThat(labels(svc(root, "web")).get("traefik.http.routers.app-acme-web-dev.rule"))
                 .isEqualTo("Host(`web.dev.acme.ignition.example`)");
+    }
+
+    @Test
+    void everyChannelAndPreviewIsAnIsolatedComposeProject() {
+        // Different project name per deployment -> `docker compose -p` scopes
+        // teardown by the exact com.docker.compose.project label, so wiping one
+        // (a preview, a dev host) can't touch another (the release).
+        String withDb = """
+                services:
+                  web: { labels: { ignition.web: "true" } }
+                  db:  { image: postgres:16-alpine, volumes: [ "dbdata:/v" ] }
+                """;
+        var release = builder.build("acme", "shop", Channel.RELEASE, "r/i:v1", 8080, withDb);
+        var dev = builder.build("acme", "shop", Channel.DEV, "r/i:main", 8080, withDb);
+        var preview = builder.build("acme", "shop-pr-42", Channel.RELEASE, "r/i:pr-42", 8080, withDb);
+
+        assertThat(projectName(release)).isEqualTo("app-acme-shop");
+        assertThat(projectName(dev)).isEqualTo("app-acme-shop-dev");
+        assertThat(projectName(preview)).isEqualTo("app-acme-shop-pr-42");
+        // compose prefixes every named volume with the project, so dbdata is
+        // app-acme-shop_dbdata vs app-acme-shop-dev_dbdata vs …-pr-42_dbdata
+    }
+
+    @SuppressWarnings("unchecked")
+    private String projectName(String yaml) {
+        return (String) ((Map<String, Object>) new Yaml().load(yaml)).get("name");
     }
 
     // --- multi-service transform -------------------------------------------
