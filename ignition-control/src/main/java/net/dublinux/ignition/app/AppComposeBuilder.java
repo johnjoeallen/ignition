@@ -41,7 +41,7 @@ public class AppComposeBuilder {
     /** Service keys that are never allowed — a hard deploy failure. */
     private static final List<String> REJECTED_SERVICE_KEYS = List.of(
             "privileged", "cap_add", "devices", "network_mode", "pid", "ipc",
-            "userns_mode", "security_opt", "sysctls", "extends", "env_file");
+            "userns_mode", "security_opt", "sysctls", "extends");
 
     /** The label that marks the one routed service. */
     static final String WEB_LABEL = "ignition.web";
@@ -94,6 +94,12 @@ public class AppComposeBuilder {
             handleBuild(svcName, svc, isWeb);
             Integer declared = stripPortsReturningContainerPort(svc);
             svc.remove("container_name");
+            if (svc.remove("env_file") != null) {
+                // Ignition injects the repo's .env itself (at the deploy ref) —
+                // an env_file: entry would point at a path we don't fetch, so
+                // drop it rather than fail. Non-.env vars: use compose.override.yaml.
+                log.info("compose transform: dropped env_file from '{}' (Ignition merges .env directly)", svcName);
+            }
             svc.put("restart", "unless-stopped");
             collectAndValidateVolumes(svcName, svc);
 

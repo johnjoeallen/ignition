@@ -194,6 +194,17 @@ class AppComposeBuilderTest {
     }
 
     @Test
+    void stripsEnvFileRatherThanRejecting() {
+        var root = render(Channel.RELEASE, """
+                services:
+                  web:
+                    labels: { ignition.web: "true" }
+                    env_file: .env
+                """);
+        assertThat(svc(root, "web")).doesNotContainKey("env_file");
+    }
+
+    @Test
     void rejectsBindMounts() {
         assertThatThrownBy(() -> render(Channel.RELEASE, """
                 services:

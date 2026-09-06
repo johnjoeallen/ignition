@@ -101,7 +101,7 @@ jobs:
         run: |
           # ref = the exact commit built, so ignition-control reads THIS commit's
           # compose.yaml (web + any DB/cache it declares).
-          curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
+          curl -sS --fail-with-body --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
             -H 'content-type: application/json' \
             -d "{\"app\": \"${{ vars.APP_NAME }}\", \"image\": \"$IMAGE\", \"port\": ${{ vars.APP_PORT || 8080 }}, \"channel\": \"$CHANNEL\", \"ref\": \"${{ github.sha }}\"}"

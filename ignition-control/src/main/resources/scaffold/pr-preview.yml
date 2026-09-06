@@ -53,7 +53,7 @@ jobs:
             | docker login "${{ vars.REGISTRY }}" -u "${{ vars.REGISTRY_USER || github.actor }}" --password-stdin
           docker build -t "$REPO:pr-$N" .
           docker push "$REPO:pr-$N"
-          curl -fsS --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
+          curl -sS --fail-with-body --retry 3 -X POST "${{ vars.CONTROL_URL }}/deploy" \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
             -H 'content-type: application/json' \
             -d "{\"app\": \"$APP\", \"repo\": \"${{ github.event.repository.name }}\", \"image\": \"$REPO:pr-$N\", \"port\": ${{ vars.APP_PORT || 8080 }}, \"ref\": \"$SHA\"}"

@@ -98,7 +98,13 @@ public class AppService {
 
         String repoYaml = zoneService.appCompose(slug, repo, ref).orElse(null);
         String repoEnv = zoneService.appEnv(slug, repo, ref).orElse(null);
-        String rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml, repoEnv);
+        String rendered;
+        try {
+            rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml, repoEnv);
+        } catch (ComposeSpecException e) {
+            log.warn("deploy {}/{} [{}]: compose.yaml rejected — {}", slug, name, channel, e.getMessage());
+            throw e;
+        }
         Path composeFile = render.writeAppCompose(slug, name, channel, rendered);
         log.info("deploy {}/{} [{}]: image={} port={} ref={} compose={} env={} -> node {}",
                 slug, name, channel, image, port, ref, repoYaml == null ? "synthesised" : "from repo",
