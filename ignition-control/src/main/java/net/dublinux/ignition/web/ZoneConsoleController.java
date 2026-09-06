@@ -55,7 +55,7 @@ public class ZoneConsoleController {
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
     public record AppRow(String name, String description, String version, boolean deployed,
-                         String image, String url, String deployId) {}
+                         boolean running, String image, String url, String deployId) {}
 
     @GetMapping("/teams/{slug}")
     public String zone(@PathVariable String slug, Model model) {
@@ -67,6 +67,7 @@ public class ZoneConsoleController {
                 .map(r -> {
                     DeployedApp d = deployed.get(r.name());
                     return new AppRow(r.name(), r.description(), r.version(), d != null,
+                            d != null && d.running(),
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
                             d == null ? null : d.deployId());
@@ -285,6 +286,7 @@ public class ZoneConsoleController {
                 .map(d -> DateTimeFormatter.ofPattern("d MMM HH:mm").withZone(java.time.ZoneOffset.UTC)
                         .format(d.deployedAt()) + " UTC")
                 .orElse(null));
+        model.addAttribute("devRunning", dev.map(d -> d.running()).orElse(false));
         String baseDomain = zones.get(slug).map(Zone::baseDomain).orElse("");
         model.addAttribute("previews", apps.previewsForApp(slug, repo).stream()
                 .map(p -> Map.of("name", p.name(), "url", p.url(baseDomain)))
@@ -385,12 +387,27 @@ public class ZoneConsoleController {
         return redirect(slug, ok ? "runner restarted" : "runner restart failed");
     }
 
-    /** Stop the running container but keep the repo — the app can be Released again later. */
+    /**
+     * Stop a running app's containers ({@code docker compose stop}) — the stack,
+     * its volumes and the app row all stay; Start brings it back with no new
+     * release. Idempotent, so clicking Stop on an already-stopped app is a no-op.
+     */
     @PostMapping("/teams/{slug}/apps/stop")
     public String stopApp(@PathVariable String slug, @RequestParam String name) {
         try {
-            apps.undeploy(slug, name);
+            apps.stop(slug, name);
             return redirect(slug, "app " + name + " stopped");
+        } catch (IllegalArgumentException e) {
+            return redirect(slug, e.getMessage());
+        }
+    }
+
+    /** Restart a stopped app ({@code docker compose start}). */
+    @PostMapping("/teams/{slug}/apps/start")
+    public String startApp(@PathVariable String slug, @RequestParam String name) {
+        try {
+            apps.start(slug, name);
+            return redirect(slug, "app " + name + " started");
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
         }
@@ -410,12 +427,34 @@ public class ZoneConsoleController {
                 : "couldn't start the build (%d): %s".formatted(res.status(), res.message()));
     }
 
-    /** Tear down the dev deployment (the release stays untouched). */
+    /** Stop the dev deployment's containers ({@code docker compose stop}) — stack and volumes kept. Idempotent. */
     @PostMapping("/teams/{slug}/repos/dev/stop")
     public String stopDev(@PathVariable String slug, @RequestParam("repo") String name) {
         try {
-            apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
+            apps.stopDev(slug, name);
             return redirectRepo(slug, name, "dev deployment stopped");
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, name, e.getMessage());
+        }
+    }
+
+    /** Restart a stopped dev deployment ({@code docker compose start}). */
+    @PostMapping("/teams/{slug}/repos/dev/start")
+    public String startDev(@PathVariable String slug, @RequestParam("repo") String name) {
+        try {
+            apps.startDev(slug, name);
+            return redirectRepo(slug, name, "dev deployment started");
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, name, e.getMessage());
+        }
+    }
+
+    /** Tear the dev deployment down entirely ({@code docker compose down -v} + row delete). The release stays untouched. */
+    @PostMapping("/teams/{slug}/repos/dev/delete")
+    public String deleteDev(@PathVariable String slug, @RequestParam("repo") String name) {
+        try {
+            apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
+            return redirectRepo(slug, name, "dev deployment deleted");
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, name, e.getMessage());
         }

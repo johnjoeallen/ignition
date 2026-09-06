@@ -40,6 +40,10 @@ public class DevDeployment {
     @Column(name = "deployed_at", nullable = false)
     private Instant deployedAt = Instant.now();
 
+    /** {@code false} after a {@code docker compose stop} from the repo page's Stop button. */
+    @Column(nullable = false)
+    private boolean running = true;
+
     protected DevDeployment() {
     }
 
@@ -59,6 +63,7 @@ public class DevDeployment {
     public int port() { return port; }
     public String deployId() { return deployId; }
     public Instant deployedAt() { return deployedAt; }
+    public boolean running() { return running; }
 
     public void update(String node, String image, int port, String deployId) {
         this.node = node;
@@ -66,7 +71,11 @@ public class DevDeployment {
         this.port = port;
         this.deployId = deployId;
         this.deployedAt = Instant.now();
+        this.running = true;
     }
+
+    public void markStopped() { this.running = false; }
+    public void markRunning() { this.running = true; }
 
     /** {@code https://<name>.dev.<zone>.<baseDomain>/} */
     public String url(String baseDomain) {

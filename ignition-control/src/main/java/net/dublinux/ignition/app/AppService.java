@@ -176,6 +176,71 @@ public class AppService {
         }
     }
 
+    /**
+     * Stop a release app's containers without tearing the stack down —
+     * {@code docker compose -p <project> stop}, no {@code -f} (compose acts on
+     * the project's existing containers by label). Networks and named volumes
+     * stay; the row stays, flipped to not-running. Idempotent: stopping an
+     * already-stopped app is a no-op. {@link #start} brings it back.
+     */
+    public void stop(String slug, String name) {
+        DeployedApp app = apps.findByZoneAndName(slug, name)
+                .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no app '" + name + "'"));
+        Zone z = zones.find(slug).orElse(null);
+        docker.compose(dockerHost(z), "app-" + slug + "-" + name, null, "stop");
+        app.markStopped();
+        apps.save(app);
+        if (z != null) {
+            touch(z);
+        }
+    }
+
+    /** Restart a stopped release app — {@code docker compose -p <project> start}. Idempotent. */
+    public void start(String slug, String name) {
+        DeployedApp app = apps.findByZoneAndName(slug, name)
+                .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no app '" + name + "'"));
+        Zone z = zones.find(slug).orElse(null);
+        DockerCli.Result r = docker.compose(dockerHost(z), "app-" + slug + "-" + name, null, "start");
+        if (!r.ok()) {
+            throw new DeployException("compose start failed: " + firstLine(r.stderr()));
+        }
+        app.markRunning();
+        apps.save(app);
+        if (z != null) {
+            touch(z);
+        }
+    }
+
+    /** Stop a dev deployment's containers — {@code compose -p app-<slug>-<name>-dev stop}. Idempotent. */
+    public void stopDev(String slug, String name) {
+        DevDeployment dev = devApps.findByZoneAndName(slug, name)
+                .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no dev deployment of '" + name + "'"));
+        Zone z = zones.find(slug).orElse(null);
+        docker.compose(dockerHost(z), "app-" + slug + "-" + name + Channel.DEV.projectSuffix(), null, "stop");
+        dev.markStopped();
+        devApps.save(dev);
+        if (z != null) {
+            touch(z);
+        }
+    }
+
+    /** Restart a stopped dev deployment — {@code compose start}. Idempotent. */
+    public void startDev(String slug, String name) {
+        DevDeployment dev = devApps.findByZoneAndName(slug, name)
+                .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no dev deployment of '" + name + "'"));
+        Zone z = zones.find(slug).orElse(null);
+        DockerCli.Result r = docker.compose(dockerHost(z),
+                "app-" + slug + "-" + name + Channel.DEV.projectSuffix(), null, "start");
+        if (!r.ok()) {
+            throw new DeployException("compose start failed: " + firstLine(r.stderr()));
+        }
+        dev.markRunning();
+        devApps.save(dev);
+        if (z != null) {
+            touch(z);
+        }
+    }
+
     public java.util.Optional<DevDeployment> devDeployment(String slug, String name) {
         return devApps.findByZoneAndName(slug, name);
     }

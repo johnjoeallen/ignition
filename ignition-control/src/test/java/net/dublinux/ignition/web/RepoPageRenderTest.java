@@ -53,6 +53,7 @@ class RepoPageRenderTest {
         ctx.setVariable("baseDomain", "ignition.example");
         ctx.setVariable("devUrl", null);
         ctx.setVariable("devDeployedAt", null);
+        ctx.setVariable("devRunning", false);
         ctx.setVariable("previews", List.of());
         ctx.setVariable("repoInfo", new ZoneService.RepoView("acme", "cards", "acme/cards",
                 "https://git.acme.example/acme/cards", "https://git.acme.example/acme/cards.git",
@@ -116,6 +117,7 @@ class RepoPageRenderTest {
         // with a live dev deployment
         ctx.setVariable("devUrl", "https://cards.dev.acme.ignition.example/");
         ctx.setVariable("devDeployedAt", "6 Sep 09:30 UTC");
+        ctx.setVariable("devRunning", true);
         html = engine().process("repo", ctx);
         assertThat(html).contains("https://cards.dev.acme.ignition.example/");
         assertThat(html).contains("6 Sep 09:30 UTC");

@@ -160,10 +160,14 @@ service's `environment:` (`.env` wins over a `compose.yaml` default; `PORT` stay
 platform-controlled). Read at the ref, so a PR preview gets that branch's `.env`
 — no environment matrix. It's committed plaintext (fine for hackathon keys, not
 real secrets); `.env.local` is gitignored and never read. `POST /undeploy` (or
-**Stop** in the console) runs
+the console's **Delete**, and zone destroy) runs
 `docker compose -p <project> down -v` with **no** `-f` — compose reconstructs
 the project from the running resources' labels, so a multi-service app's DB
-volume is never left behind.
+volume is never left behind. The console's **Stop** / **Start** buttons are
+lighter: `docker compose -p <project> stop` / `start` (also no `-f`), keeping
+the containers, networks and volumes and the `app` row (`app.running` tracks the
+state). A stopped app restarts with no new release; a redeploy (`app.update`)
+also clears the flag. Idempotent — Stop on a stopped app is a no-op, not a 500.
 
 **Deploys to the `.apps.` host come only from a release — never a plain push to
 `main`.** A second host per app, `<name>.dev.<slug>.<BASE_DOMAIN>`, runs the
@@ -172,7 +176,10 @@ app's page — a plain push still deploys nothing. The `dev` host is public (no
 gate); the button is the only trigger. It's compose project
 `app-<slug>-<name>-dev`, tracked in `app_dev`, built by `AppComposeBuilder` from
 the same `compose.yaml` (channel decides the `.apps.` vs `.dev.` host and the
-project suffix), torn down with the app and the zone. `deploy.yml` gained an
+project suffix), torn down with the app and the zone. The repo page's dev block
+carries the same **stop** / **start** / **delete** as the Apps table
+(`repos/dev/{stop,start,delete}`, `app_dev.running`): stop/start are
+`docker compose stop|start`, delete is `down -v` + row delete. `deploy.yml` gained an
 `on: workflow_dispatch`
 (`channel` input) that the button fires via the Forgejo API; CI builds
 `:main-<sha>` and `POST /deploy`s with `channel=dev`. The CI tag-push path is
@@ -254,8 +261,9 @@ command's stdout.
   daemon. `AppComposeBuilder`'s transform (no privileged/caps/host-ns/binds,
   forced limits, sidecars off `traefik-public`) is the only boundary; CVE
   scanning of those images is not done yet.
-- **Stop wipes a stateful app's data** — `undeploy` is `compose down -v`, so a
-  DB volume declared in `compose.yaml` goes with it. No "keep volumes on Stop"
+- **Delete wipes a stateful app's data** — `undeploy` is `compose down -v`, so a
+  DB volume declared in `compose.yaml` goes with it. (**Stop** no longer does —
+  it's `compose stop`.) No "keep volumes on Delete"
   yet.
 - **No `pr-preview.yml` seeding / preview reaper** — Phase 2 of the
   multi-service work (per-PR environments). See task 3-adjacent notes.

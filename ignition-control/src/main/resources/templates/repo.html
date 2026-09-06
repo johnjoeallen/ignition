@@ -102,12 +102,24 @@
                 <button class="btn btn-sm btn-outline-secondary" title="Build and deploy the latest main HEAD">
                   Deploy from main</button>
               </form>
-              <a th:if="${devUrl != null}" th:href="${devUrl}" class="small" target="_blank"
+              <a th:if="${devRunning}" th:href="${devUrl}" class="small" target="_blank"
                  th:text="${devDeployedAt != null} ? 'live · ' + ${devDeployedAt} : 'live'">live</a>
-              <form th:if="${devUrl != null}" method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
+              <span th:if="${devUrl != null and !devRunning}" class="small text-body-secondary"
+                    th:text="${devDeployedAt != null} ? 'stopped · ' + ${devDeployedAt} : 'stopped'">stopped</span>
+              <form th:if="${devRunning}" method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
                     class="d-inline" onsubmit="return confirm('Stop the dev deployment? The release stays up.')">
                 <input type="hidden" name="repo" th:value="${repoName}">
                 <button class="btn btn-sm btn-link p-0 text-body-secondary">stop</button>
+              </form>
+              <form th:if="${devUrl != null and !devRunning}" method="post"
+                    th:action="@{/teams/{slug}/repos/dev/start(slug=${zoneSlug})}" class="d-inline">
+                <input type="hidden" name="repo" th:value="${repoName}">
+                <button class="btn btn-sm btn-link p-0 text-body-secondary">start</button>
+              </form>
+              <form th:if="${devUrl != null}" method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}"
+                    class="d-inline" onsubmit="return confirm('Delete the dev deployment? Its containers and volumes go; the release stays up.')">
+                <input type="hidden" name="repo" th:value="${repoName}">
+                <button class="btn btn-sm btn-link p-0 text-danger">delete</button>
               </form>
             </div>
             <div class="text-body-secondary small mt-1" style="max-width:22rem;white-space:normal">
