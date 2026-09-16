@@ -57,6 +57,8 @@ public class ZoneConsoleController {
     public record AppRow(String name, String description, String version, boolean deployed,
                          boolean running, String image, String url, String deployId) {}
 
+    public record AppStatus(String name, boolean deployed, boolean running) {}
+
     @GetMapping("/teams/{slug}")
     public String zone(@PathVariable String slug, Model model) {
         Zone zone = zones.get(slug)
@@ -103,6 +105,14 @@ public class ZoneConsoleController {
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
         model.addAttribute("currentUserId", currentUserId);
         return "zone";
+    }
+
+    /** Small polling payload used to keep Start/Stop controls current. */
+    @GetMapping("/teams/{slug}/apps/status")
+    public List<AppStatus> appStatus(@PathVariable String slug) {
+        return apps.listForZone(slug).stream()
+                .map(a -> new AppStatus(a.name(), true, a.running()))
+                .toList();
     }
 
     @PostMapping("/teams/{slug}/members")

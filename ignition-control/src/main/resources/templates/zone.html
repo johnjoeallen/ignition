@@ -89,6 +89,7 @@
         </div>
       </form>
       <div class="table-card mb-4">
+        <div hidden th:attr="data-app-status-url=@{/teams/{slug}/apps/status(slug=${zoneSlug})}"></div>
         <table class="table table-hover mb-0">
           <thead><tr><th>app</th><th>description</th><th>version</th><th></th></tr></thead>
           <tbody>
@@ -98,19 +99,27 @@
               </td>
               <td class="text-body-secondary" th:text="${#strings.isEmpty(a.description)} ? '—' : ${a.description}">a nice app</td>
               <td>
-                <a th:if="${a.running}" th:href="${a.url}" th:text="${a.version}">v1.2.3</a>
-                <span th:if="${a.deployed and !a.running}" class="text-body-secondary"
-                      th:text="${a.version} + ' · stopped'">v1.2.3 · stopped</span>
+                <span th:if="${a.deployed}" class="d-inline-flex align-items-center gap-1"
+                      th:attr="data-app-status-row=${a.name}">
+                  <i data-app-status-icon
+                     th:class="${a.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
+                     th:title="${a.running} ? 'running' : 'dead'"
+                     th:attr="aria-label=${a.running} ? 'running' : 'dead'"></i>
+                  <a th:if="${a.running}" th:href="${a.url}" th:text="${a.version}">v1.2.3</a>
+                  <span th:unless="${a.running}" class="text-body-secondary" th:text="${a.version}">v1.2.3</span>
+                </span>
                 <span th:unless="${a.deployed}" th:text="${a.version}">no releases yet</span>
               </td>
               <td class="text-end text-nowrap">
-                <form th:if="${a.running}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}"
-                      class="d-inline" th:attr="data-busy=|Stopping ${a.name}…|">
+                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}"
+                      class="d-inline" th:classappend="${!a.running} ? ' d-none'"
+                      th:attr="data-app-action='stop',data-app-name=${a.name},data-busy=|Stopping ${a.name}…|">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-secondary">stop</button>
                 </form>
-                <form th:if="${a.deployed and !a.running}" method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}"
-                      class="d-inline" th:attr="data-busy=|Starting ${a.name}…|">
+                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}"
+                      class="d-inline" th:classappend="${a.running} ? ' d-none'"
+                      th:attr="data-app-action='start',data-app-name=${a.name},data-busy=|Starting ${a.name}…|">
                   <input type="hidden" name="name" th:value="${a.name}">
                   <button class="btn btn-sm btn-outline-secondary">start</button>
                 </form>
