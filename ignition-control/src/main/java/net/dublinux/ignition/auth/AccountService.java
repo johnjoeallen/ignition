@@ -211,6 +211,18 @@ public class AccountService {
         users.save(u);
     }
 
+    @Transactional
+    public void deleteUser(UUID userId, UUID actingUserId) {
+        if (userId.equals(actingUserId)) {
+            throw new IllegalStateException("you can't delete your own account");
+        }
+        AppUser u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("no such user"));
+        if (u.isPlatformAdmin()) {
+            guardLastPlatformAdmin(userId);
+        }
+        users.delete(u);
+    }
+
     /**
      * @param actingUserId who's making the change — {@code null} if the
      *                      caller doesn't know or care (e.g. a script).

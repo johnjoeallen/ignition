@@ -80,6 +80,12 @@ public class UsersController {
         return act(id, () -> accounts.setDisabled(id, value), value ? "disabled" : "re-enabled");
     }
 
+    @PostMapping("/users/{id}/delete")
+    public String delete(@PathVariable UUID id) {
+        UUID actingUserId = currentUser.get().map(AppUser::id).orElse(null);
+        return act(id, () -> accounts.deleteUser(id, actingUserId), "user deleted");
+    }
+
     private String act(UUID id, Runnable action, String okMsg) {
         try {
             action.run();

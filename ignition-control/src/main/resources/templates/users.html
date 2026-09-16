@@ -10,6 +10,7 @@
       <div class="alert alert-success" th:if="${param.m != null}" th:text="${#strings.replace(param.m[0],'+',' ')}">ok</div>
 
       <form method="post" th:action="@{/users/invite}" class="row g-2 align-items-end mb-3">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         <div class="col-auto">
           <label class="form-label small mb-1">email</label>
           <input class="form-control form-control-sm" name="email" type="email" required placeholder="name@example.com">
@@ -37,13 +38,16 @@
               <td class="text-nowrap">
                 <form th:if="${u.status.name() == 'PENDING_APPROVAL'}" method="post"
                       th:action="@{'/users/' + ${u.id} + '/approve'}" class="d-inline">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                   <button class="btn btn-sm btn-accent">approve</button>
                 </form>
                 <form th:if="${u.status.name() == 'PENDING_VERIFICATION'}" method="post"
                       th:action="@{'/users/' + ${u.id} + '/activation/resend'}" class="d-inline">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                   <button class="btn btn-sm btn-outline-primary">resend activation link</button>
                 </form>
                 <form method="post" th:action="@{'/users/' + ${u.id} + '/admin'}" class="d-inline">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                   <input type="hidden" name="value" th:value="${!u.platformAdmin}">
                   <button class="btn btn-sm btn-outline-secondary"
                           th:disabled="${u.platformAdmin and u.id == currentUserId}"
@@ -53,9 +57,15 @@
               </td>
               <td class="text-end">
                 <form method="post" th:action="@{'/users/' + ${u.id} + '/disable'}" class="d-inline">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                   <input type="hidden" name="value" th:value="${u.status.name() != 'DISABLED'}">
                   <button class="btn btn-sm btn-outline-danger"
                           th:text="${u.status.name() == 'DISABLED'} ? 're-enable' : 'disable'">disable</button>
+                </form>
+                <form method="post" th:action="@{'/users/' + ${u.id} + '/delete'}" class="d-inline"
+                      onsubmit="return confirm('Delete this user permanently? This cannot be undone.');">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <button class="btn btn-sm btn-outline-danger">delete</button>
                 </form>
               </td>
             </tr>

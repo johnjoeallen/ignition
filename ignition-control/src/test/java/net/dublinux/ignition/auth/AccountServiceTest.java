@@ -164,6 +164,19 @@ class AccountServiceTest {
     }
 
     @Test
+    void cannotDeleteYourselfOrTheLastPlatformAdmin() {
+        AppUser admin = new AppUser("admin@example.com", Status.ACTIVE, true, true);
+        userStore.put(admin.id(), admin);
+
+        assertThatThrownBy(() -> svc.deleteUser(admin.id(), admin.id()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("own account");
+        assertThatThrownBy(() -> svc.deleteUser(admin.id(), UUID.randomUUID()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("last platform admin");
+    }
+
+    @Test
     void rejectsShortPassword() {
         assertThatThrownBy(() -> svc.activate("whatever", "short"))
                 .isInstanceOf(IllegalArgumentException.class);
