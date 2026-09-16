@@ -48,6 +48,7 @@ public class AuthToken {
     }
 
     public UUID userId() { return userId; }
+    public String tokenHash() { return tokenHash; }
     public Purpose purpose() { return purpose; }
 
     public boolean isUsable(Instant now) {

@@ -88,7 +88,7 @@ public class AccountService {
         String e = requireEmail(email);
         return users.findByEmailIgnoreCase(e).orElseGet(() -> {
             AppUser u = users.save(new AppUser(e, Status.PENDING_VERIFICATION, false, true));
-            mail.sendActivation(e, issue(u.id(), Purpose.ACTIVATE, ACTIVATE_TTL));
+            resendActivation(u);
             return u;
         });
     }
@@ -130,10 +130,43 @@ public class AccountService {
     public void requestReset(String email) {
         String e = norm(email);
         users.findByEmailIgnoreCase(e).ifPresent(u -> {
-            if (u.passwordHash() != null && u.status() != Status.DISABLED) {
+            if (u.status() == Status.ACTIVE && u.passwordHash() != null) {
                 mail.sendReset(e, issue(u.id(), Purpose.RESET, RESET_TTL));
+            } else if (u.status() == Status.PENDING_VERIFICATION) {
+                resendActivation(u);
             }
         });
+    }
+
+    /**
+     * Replaces the pending activation token and sends the corresponding mail.
+     * The status check is deliberately made immediately before issuing the
+     * token so stale admin-list entries cannot activate an already-active user.
+     *
+     * @return {@code true} when an activation mail was sent
+     */
+    @Transactional
+    public boolean resendActivation(AppUser user) {
+        if (user.status() != Status.PENDING_VERIFICATION || user.activatedAt() != null) {
+            return false;
+        }
+        String rawToken = issue(user.id(), Purpose.ACTIVATE, ACTIVATE_TTL);
+        mail.sendActivation(user.email(), rawToken);
+        return true;
+    }
+
+    /** Enumeration-safe public/admin lookup wrapper. */
+    @Transactional
+    public boolean resendActivation(String email) {
+        return users.findByEmailIgnoreCase(norm(email))
+                .map(this::resendActivation)
+                .orElse(false);
+    }
+
+    /** Looks the user up at action time, so an old user-list page is harmless. */
+    @Transactional
+    public boolean resendActivation(UUID userId) {
+        return users.findById(userId).map(this::resendActivation).orElse(false);
     }
 
     @Transactional
@@ -164,7 +197,7 @@ public class AccountService {
         u.setPreapproved(true);
         u.setStatus(Status.PENDING_VERIFICATION);
         users.save(u);
-        mail.sendActivation(u.email(), issue(u.id(), Purpose.ACTIVATE, ACTIVATE_TTL));
+        resendActivation(u);
     }
 
     @Transactional

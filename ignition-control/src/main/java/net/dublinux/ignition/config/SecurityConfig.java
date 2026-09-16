@@ -30,7 +30,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/error",
                                 "/login", "/logout", "/setup", "/setup/**",
-                                "/signup", "/activate", "/forgot", "/reset",
+                                "/signup", "/activate", "/forgot", "/reset", "/api/activation/resend",
                                 "/css/**", "/js/**", "/vendor/**", "/img/**", "/favicon.ico").permitAll()
                         .requestMatchers(HttpMethod.POST, "/deploy", "/undeploy").hasRole("DEPLOY")
                         // The landing page every login redirects to — has to be reachable by
@@ -59,7 +59,7 @@ public class SecurityConfig {
                         .defaultSuccessUrl("/", true)
                         .failureUrl("/login?error"))
                 .logout(out -> out.logoutUrl("/logout").logoutSuccessUrl("/login?out"))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/deploy", "/undeploy"))
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/deploy", "/undeploy", "/api/activation/resend"))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .addFilterBefore(deployFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

@@ -21,6 +21,7 @@ import net.dublinux.ignition.auth.AppUser.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.mockito.ArgumentCaptor;
 
 class AccountServiceTest {
 
@@ -53,10 +54,14 @@ class AccountServiceTest {
 
         when(tokens.save(any(AuthToken.class))).thenAnswer(i -> {
             AuthToken t = i.getArgument(0);
-            tokenStore.put(t.userId() + ":" + t.purpose(), t);
+            tokenStore.put(t.tokenHash(), t);
             return t;
         });
-        doNothing().when(tokens).deleteByUserIdAndPurpose(any(), any());
+        org.mockito.Mockito.doAnswer(i -> {
+            tokenStore.values().removeIf(t -> t.userId().equals(i.getArgument(0)) && t.purpose() == i.getArgument(1));
+            return null;
+        }).when(tokens).deleteByUserIdAndPurpose(any(), any());
+        when(tokens.findById(anyString())).thenAnswer(i -> Optional.ofNullable(tokenStore.get(i.getArgument(0))));
 
         svc = new AccountService(users, tokens, mail, pw);
     }
@@ -109,6 +114,53 @@ class AccountServiceTest {
         AppUser u = new AppUser("s@example.com", Status.PENDING_VERIFICATION, false, false);
         u.activate("{enc}pw");
         assertThat(u.status()).isEqualTo(Status.PENDING_APPROVAL);
+    }
+
+    @Test
+    void resendActivationReplacesTheTokenAndInvalidatesTheOldOne() {
+        AppUser u = new AppUser("pending@example.com", Status.PENDING_VERIFICATION, false, true);
+        userStore.put(u.id(), u);
+
+        svc.resendActivation(u);
+        ArgumentCaptor<String> links = ArgumentCaptor.forClass(String.class);
+        verify(mail).sendActivation(eq(u.email()), links.capture());
+        String first = links.getValue();
+
+        svc.resendActivation(u);
+        verify(mail, org.mockito.Mockito.times(2)).sendActivation(eq(u.email()), links.capture());
+        String second = links.getAllValues().get(1);
+
+        assertThat(second).isNotEqualTo(first);
+        assertThatThrownBy(() -> svc.activate(first, "long-enough-password"))
+                .isInstanceOf(IllegalArgumentException.class);
+        svc.activate(second, "long-enough-password");
+        assertThat(u.status()).isEqualTo(Status.ACTIVE);
+    }
+
+    @Test
+    void resendActivationDoesNothingForActiveOrUnknownUsers() {
+        AppUser u = new AppUser("active@example.com", Status.ACTIVE, false, true);
+        u.setPasswordHash("hash");
+        userStore.put(u.id(), u);
+
+        assertThat(svc.resendActivation(u)).isFalse();
+        assertThat(svc.resendActivation("missing@example.com")).isFalse();
+        verify(mail, never()).sendActivation(anyString(), anyString());
+    }
+
+    @Test
+    void forgotPasswordUsesResetForActiveAndActivationForPendingUsers() {
+        AppUser active = new AppUser("active@example.com", Status.ACTIVE, false, true);
+        active.setPasswordHash("hash");
+        AppUser pending = new AppUser("pending@example.com", Status.PENDING_VERIFICATION, false, true);
+        userStore.put(active.id(), active);
+        userStore.put(pending.id(), pending);
+
+        svc.requestReset(active.email());
+        svc.requestReset(pending.email());
+
+        verify(mail).sendReset(eq(active.email()), anyString());
+        verify(mail).sendActivation(eq(pending.email()), anyString());
     }
 
     @Test

@@ -59,6 +59,15 @@ public class UsersController {
         return act(id, () -> accounts.approve(id), "approved — activation email sent");
     }
 
+    @PostMapping("/users/{id}/activation/resend")
+    public String resendActivation(@PathVariable UUID id) {
+        return act(id, () -> {
+            if (!accounts.resendActivation(id)) {
+                throw new IllegalStateException("user is already activated or not ready for activation");
+            }
+        }, "activation link resent");
+    }
+
     @PostMapping("/users/{id}/admin")
     public String setAdmin(@PathVariable UUID id, @RequestParam boolean value) {
         UUID actingUserId = currentUser.get().map(AppUser::id).orElse(null);

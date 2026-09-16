@@ -39,6 +39,10 @@
                       th:action="@{'/users/' + ${u.id} + '/approve'}" class="d-inline">
                   <button class="btn btn-sm btn-accent">approve</button>
                 </form>
+                <form th:if="${u.status.name() == 'PENDING_VERIFICATION'}" method="post"
+                      th:action="@{'/users/' + ${u.id} + '/activation/resend'}" class="d-inline">
+                  <button class="btn btn-sm btn-outline-primary">resend activation link</button>
+                </form>
                 <form method="post" th:action="@{'/users/' + ${u.id} + '/admin'}" class="d-inline">
                   <input type="hidden" name="value" th:value="${!u.platformAdmin}">
                   <button class="btn btn-sm btn-outline-secondary"
