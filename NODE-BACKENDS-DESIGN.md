@@ -351,15 +351,27 @@ generic ones already in "Open questions," below):
   — compromise it and every app cert issued under it is suspect. Needs the
   same seriousness as `IGN_SECRET_KEY` custody already gets, not an
   afterthought because certs feel like a smaller thing than tokens.
-- **Leaf rotation without a restart, per kind.** A K8s `Secret` update can
-  trigger a re-mount an app can watch for; a bind-mounted file on DinD needs
-  the app to re-read it (or the container to bounce) — not free, and
-  differs per kind even though issuance doesn't.
-- **Short-lived certs over real revocation.** No CRL/OCSP infrastructure is
-  proposed — lean on certs short-lived enough (hours-to-days, auto-rotated)
-  that revocation is rarely needed, the common pragmatic answer for this
-  class of internal PKI. Worth stating explicitly so it's a decision, not a
-  gap discovered later.
+- **Leaf lifetime: 1-7 days, decided.** Short enough that revocation is
+  rarely needed (the common pragmatic answer for this class of internal
+  PKI — no CRL/OCSP infrastructure proposed), long enough that a
+  restart-triggered pickup (below) isn't disruptively frequent. A platform
+  config knob in the same family as `ignition.quotas.*` —
+  `ignition.tls.leaf-cert-ttl`, default somewhere in the range, e.g. `3d` —
+  not a hardcoded constant.
+- **Rotation is a `@Scheduled` job**, the same shape as `IdleSweeper` /
+  `PreviewReaper`: re-mint and re-deliver before expiry. Trigger it as a
+  **fraction of the configured lifetime elapsed** (e.g. at 60%), not a fixed
+  absolute margin — a fixed "rotate 24h before expiry" breaks at the short
+  end of a 1-7 day range (negative margin on a 1-day cert); a fraction
+  scales correctly across whatever `leaf-cert-ttl` is actually set to.
+- **Leaf rotation without a restart, per kind — softened by the lifetime.**
+  A K8s `Secret` update can trigger a re-mount an app can watch for; a
+  bind-mounted file on DinD needs the app to re-read it. At day-scale
+  lifetimes rather than hours, **a restart-triggered pickup is an
+  acceptable v1 answer everywhere** — rotation already has to run
+  something like weekly-at-worst, and a rolling restart at that cadence is
+  a small ask. True hot-reload (no restart, any kind) is a nice-to-have to
+  revisit later, not a v1 requirement anymore given the chosen lifetime.
 
 This gap already exists for today's DinD-only deployment, not just the two
 proposed additions — CLAUDE.md's "Known gaps" already lists `traefik-public`
@@ -481,7 +493,9 @@ an explicit, single-swap seam.
   from the start regardless of what's decided for the CA-backed mode
   everywhere else.
 - **Ignition-as-CA is accepted in principle** (see "Ignition as its own
-  CA," above) — the specific open items are root key custody/rotation, per-
-  kind leaf-rotation-without-a-restart, and leaning on short-lived certs
-  instead of building real revocation. All three need answers before this
-  ships anywhere, not just for DinD.
+  CA," above), leaf lifetime decided (1-7 days, `ignition.tls.leaf-cert-ttl`,
+  rotation on a `@Scheduled` job at a fraction elapsed, restart-triggered
+  pickup acceptable for v1). What's still genuinely open is **root CA key
+  custody and rotation** — the one piece nothing above resolves, and the
+  one that matters most (compromise it and every leaf cert issued under it
+  is suspect).
