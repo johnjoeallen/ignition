@@ -274,30 +274,64 @@ everything is plain HTTP — the private link is the confidentiality
 boundary." That's a real decision, not an oversight, but it means anyone who
 can reach the private segment — a compromised node, lateral movement inside
 a shared cluster or swarm, a misrouted packet — sees plaintext between
-Traefik and every app. For real production use this is worth closing, and
-the path differs a lot per kind — worth designing deliberately rather than
-inheriting "plain HTTP" by default into two new backends:
+Traefik and every app. Worth closing for real production use, and worth
+treating as a **per-app, deploy-time choice** — same shape as `visibility`
+(`corp`/`public`/`private`, CLAUDE.md task 4) — not a node-wide or
+platform-wide setting, since different teams' apps will have different
+answers to "do we already have a cert to bring."
 
-- **DinD / plain Docker**: no built-in transport encryption between Traefik
-  and a container on the same Docker network. Closing it means either the
-  app serves HTTPS itself (its own cert; `AppComposeBuilder` would need a
-  way to tell Traefik to trust it — a `serversTransport`-equivalent) or a
-  sidecar proxy — a real addition to the deploy transform, not free, and not
-  proposed as part of this doc's v1.
-- **Swarm has a cheaper, different answer**: **encrypted overlay networks**
-  (`docker network create --opt encrypted ...`) IPsec-encrypt traffic
-  between hosts at the network layer, no per-app certs or code changes.
-  Doesn't give app-level identity or true mTLS, but closes "plaintext on the
-  wire between nodes" with one network flag set once, at node registration
-  — worth strongly preferring over chasing per-app certs for Swarm.
-- **K8s is the natural home for this**, with two tiers: (a) a per-app cert
-  via `cert-manager` + Traefik's backend-TLS trust config (`serversTransport`
-  referencing a CA) — a moderate addition; or (b) a service mesh (Linkerd is
-  the common low-friction choice — sidecar-injected mTLS with near-zero app
-  changes) for real mutual TLS everywhere. (b) is the *real* production
-  answer but a materially bigger dependency than anything else in this doc —
-  flag it as a deliberate, separate v2 decision, not something
-  `KubernetesNodeBackend`'s v1 scope should bundle in.
+Two modes, at deploy time:
+
+- **Certless** — the team supplies nothing; the backend hop gets encrypted
+  (or the equivalent guarantee) without the team provisioning or managing
+  any certificate. What actually delivers that varies a lot by kind — see
+  below, since for one kind it's a real cert the app never sees, and for
+  another there's no cert anywhere at all.
+- **App-provided cert** — the team supplies their own cert+key (their own
+  PKI, an internal CA, whatever they already run), their app serves HTTPS
+  with it directly, and Traefik's backend transport for *that specific app*
+  is configured to trust it (pin the cert, or trust the issuing CA) rather
+  than doing plaintext. The natural fit for a team that already has
+  certificate lifecycle management and wants it end-to-end, or is deploying
+  behind their own compliance requirement.
+
+Per kind, what "certless" actually is differs enough to be worth spelling
+out precisely rather than treating as one mechanism:
+
+- **Swarm**: genuinely certless in the fullest sense — **encrypted overlay
+  networks** (`docker network create --opt encrypted ...`) IPsec-encrypt
+  traffic between hosts at the network layer. The app keeps listening on
+  plain HTTP; there is no certificate anywhere in the path. Cheapest of the
+  three, set once per node at registration, no per-app work at all — this
+  is the one case where "certless" doesn't mean "a cert exists but you don't
+  see it," it means no cert exists.
+- **K8s**: certless here means a **service mesh** (Linkerd is the common
+  low-friction choice) auto-injecting a sidecar that transparently wraps
+  pod-to-pod traffic in mTLS, using certs the mesh's own internal CA issues
+  and rotates — the app still just listens on plain HTTP locally to its own
+  sidecar; the team never generates, stores, or renews anything. Real mTLS,
+  but a materially bigger dependency than anything else in this doc — flag
+  it as a deliberate, separate v2 decision, not something
+  `KubernetesNodeBackend`'s v1 scope should bundle in. **App-provided** on
+  K8s is the nearer-term option: `cert-manager` issuing/rotating a cert into
+  the app's own `Secret` (from a team-supplied CA/issuer, or the team's own
+  static cert) and Traefik's `serversTransport` trusting it — moderate
+  addition, no mesh required.
+- **DinD / plain Docker**: the weakest position of the three. There's no
+  built-in transport encryption between Traefik and a container on the same
+  Docker network, and no Swarm-style network-layer shortcut. **Certless**
+  here would mean Ignition itself generates a per-app cert+key at deploy
+  time (an internal CA `ignition-control` holds, similar precedent to it
+  already minting `zone-token`/`deploy-token`), mounts it into the
+  container, and configures Traefik's backend transport to trust it — the
+  team never provisions anything, but the app *does* need to actually load
+  and serve that cert (more app-side work than the Swarm or mesh cases,
+  even though the team-facing experience is still "certless"). **App-
+  provided** is simpler to build first: the team supplies cert+key (via
+  `.env`/a console field), `AppComposeBuilder` mounts it, Traefik's
+  transport for that app trusts it — no CA infrastructure inside Ignition
+  required for this path. Reasonable order: ship app-provided for DinD
+  before certless, since the latter means Ignition taking on being a CA.
 
 This gap already exists for today's DinD-only deployment, not just the two
 proposed additions — CLAUDE.md's "Known gaps" already lists `traefik-public`
@@ -313,7 +347,7 @@ independent of whether Swarm/K8s ever land.
 | CI build boundary | the DinD engine itself | same DinD engine, now Swarm-service-hosted (v1) | same DinD engine, now pod-hosted (v1) |
 | App-to-app-in-same-zone | compose project's private network (`pinToDefaultNetwork`) | stack's own overlay network (same shape, cluster-wide instead of host-local) | `NetworkPolicy` scoped to the namespace |
 | Blast radius of a compromised app container | node's real Docker daemon minus `AppComposeBuilder`'s transform | the whole swarm's real Docker daemons minus the transform — **wider than DinD/K8s by default**, since a Swarm service can in principle be scheduled onto *any* manager/worker in the cluster, not just "this node" | node's real cluster minus PSA + RBAC + the K8s equivalent transform |
-| Traefik → app traffic confidentiality | plain HTTP (see "Backend TLS," above) | plain HTTP by default; `--opt encrypted` overlay closes the wire-level gap cheaply | plain HTTP by default; `cert-manager` or a mesh closes it, at real added cost |
+| Traefik → app traffic confidentiality (see "Backend TLS," above) | plain HTTP by default; certless = Ignition-issued app cert (Ignition becomes a CA); app-provided = team's own cert, no CA infra needed | plain HTTP by default; certless = `--opt encrypted` overlay, no cert at all, cheapest of the three | plain HTTP by default; certless = a mesh (real v2 lift); app-provided = `cert-manager` + team's cert, no mesh needed |
 
 That last row is the one genuinely new risk Swarm introduces relative to the
 other two: a single-node swarm (`docker swarm init` with no additional
@@ -410,10 +444,21 @@ an explicit, single-swap seam.
   it's trusted the way the DinD path is.
 - **Backend TLS scope for v1** — is plain HTTP behind Traefik (today's
   status quo, "the private link is the confidentiality boundary")
-  acceptable to ship for a first Swarm/K8s backend, with encrypted overlays
-  / `cert-manager` / a mesh as explicit fast-follow work? Or is one of those
-  a hard requirement before any production use, in which case it needs to
-  move from "Open questions" into the actual v1 scope for that kind. Worth
-  deciding per kind, not as one blanket answer — Swarm's `--opt encrypted`
-  is cheap enough it may as well be in from the start; K8s's real answer
-  (a mesh) is not.
+  acceptable to ship for a first Swarm/K8s backend, with certless/
+  app-provided as explicit fast-follow work? Or is one mode a hard
+  requirement before any production use, in which case it needs to move
+  from "Open questions" into the actual v1 scope for that kind. Worth
+  deciding per kind and per mode, not as one blanket answer — Swarm's
+  certless mode (`--opt encrypted`) is cheap enough it may as well be in
+  from the start; DinD/K8s's app-provided modes are a moderate lift each;
+  DinD's certless mode (Ignition as a CA) and K8s's certless mode (a mesh)
+  are the two genuinely bigger asks, worth deferring independently of
+  whether their kind's app-provided mode ships in v1.
+- **Does Ignition want to be a certificate authority?** DinD's certless mode
+  is the only one of the six (three kinds × two modes) that requires
+  `ignition-control` to mint and rotate certs itself, rather than leaning on
+  an existing mechanism (Swarm's network encryption, K8s's `cert-manager`/
+  mesh, or a team's own cert in app-provided mode). That's a real new
+  responsibility — key storage, rotation, revocation — worth an explicit
+  yes/no before it's assumed as DinD's answer, not folded in by default
+  because it's the only way to offer DinD teams a certless option at all.
