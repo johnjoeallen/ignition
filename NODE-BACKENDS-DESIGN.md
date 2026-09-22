@@ -295,43 +295,71 @@ Two modes, at deploy time:
   certificate lifecycle management and wants it end-to-end, or is deploying
   behind their own compliance requirement.
 
-Per kind, what "certless" actually is differs enough to be worth spelling
-out precisely rather than treating as one mechanism:
+### Ignition as its own CA — one issuance mechanism, three delivery paths
 
-- **Swarm**: genuinely certless in the fullest sense — **encrypted overlay
-  networks** (`docker network create --opt encrypted ...`) IPsec-encrypt
-  traffic between hosts at the network layer. The app keeps listening on
-  plain HTTP; there is no certificate anywhere in the path. Cheapest of the
-  three, set once per node at registration, no per-app work at all — this
-  is the one case where "certless" doesn't mean "a cert exists but you don't
-  see it," it means no cert exists.
-- **K8s**: certless here means a **service mesh** (Linkerd is the common
-  low-friction choice) auto-injecting a sidecar that transparently wraps
-  pod-to-pod traffic in mTLS, using certs the mesh's own internal CA issues
-  and rotates — the app still just listens on plain HTTP locally to its own
-  sidecar; the team never generates, stores, or renews anything. Real mTLS,
-  but a materially bigger dependency than anything else in this doc — flag
-  it as a deliberate, separate v2 decision, not something
-  `KubernetesNodeBackend`'s v1 scope should bundle in. **App-provided** on
-  K8s is the nearer-term option: `cert-manager` issuing/rotating a cert into
-  the app's own `Secret` (from a team-supplied CA/issuer, or the team's own
-  static cert) and Traefik's `serversTransport` trusting it — moderate
-  addition, no mesh required.
-- **DinD / plain Docker**: the weakest position of the three. There's no
-  built-in transport encryption between Traefik and a container on the same
-  Docker network, and no Swarm-style network-layer shortcut. **Certless**
-  here would mean Ignition itself generates a per-app cert+key at deploy
-  time (an internal CA `ignition-control` holds, similar precedent to it
-  already minting `zone-token`/`deploy-token`), mounts it into the
-  container, and configures Traefik's backend transport to trust it — the
-  team never provisions anything, but the app *does* need to actually load
-  and serve that cert (more app-side work than the Swarm or mesh cases,
-  even though the team-facing experience is still "certless"). **App-
-  provided** is simpler to build first: the team supplies cert+key (via
-  `.env`/a console field), `AppComposeBuilder` mounts it, Traefik's
-  transport for that app trusts it — no CA infrastructure inside Ignition
-  required for this path. Reasonable order: ship app-provided for DinD
-  before certless, since the latter means Ignition taking on being a CA.
+Rather than three unrelated certless mechanisms, one design covers all
+three kinds: **`ignition-control` holds an internal CA** — same custody
+model as `IGN_SECRET_KEY` and the `zone-token`/`deploy-token` it already
+mints and holds — and, for any app in certless mode, mints a short-lived
+leaf cert at deploy time. SAN = the app's real hostname
+(`<app>.apps.<slug>.<BASE_DOMAIN>`), so it validates exactly like a normal
+cert would; no app-visible difference from a "real" one.
+
+**Issuance and trust are kind-agnostic; only delivery differs**, and
+delivery was already going to differ per kind for other things in this doc
+(runner config, `.env`):
+
+- **DinD**: leaf cert+key written as sibling files next to the rendered
+  compose file (same pattern `ComposeTemplate` already uses for files on
+  disk), bind-mounted in by `AppComposeBuilder`'s transform.
+- **Swarm**: a `docker secret` — Swarm's native encrypted-at-rest secret
+  distribution, alongside the `configCreate`-style additions already
+  proposed for runner config.
+- **K8s**: a `Secret`, created by `KubernetesNodeBackend` the same way it'd
+  already create one for `runner-config.yml`.
+
+Traefik's side is identical everywhere: trust the Ignition CA's public root
+**once, per node, at registration** — not per app. That's what makes this
+unify cleanly where the three separate answers didn't.
+
+**What this replaces**: K8s no longer needs a service mesh for real
+per-app TLS — that was the heaviest ask in the earlier draft of this
+section, and it turns out to be unnecessary once Ignition is willing to be
+a CA. A mesh becomes a genuine *upgrade* later (automatic pod-to-pod mTLS
+beyond just the Traefik hop, rotation Ignition doesn't have to drive
+itself), not the only path to "real." Swarm keeps its network-encryption
+option (`--opt encrypted` — cheapest, no cert anywhere) *and* gains this as
+a second option when a team wants actual app-level identity, not just wire
+encryption. DinD goes from "the weakest of the three" to symmetric with the
+other two — same mechanism, just a bind-mounted file instead of a secret
+object.
+
+**Clean upgrade to mutual TLS**, once this exists: issue Traefik itself a
+client cert from the same CA, configure the app side to require+verify it.
+That's "mint one more cert" on infrastructure that already exists, not a
+new architecture — a natural v2 increment, not v1 scope.
+
+**App-provided** stays available everywhere as the alternative for a team
+that already has its own PKI/cert lifecycle and wants end-to-end control —
+Traefik's per-app transport trusts whatever they bring instead of the
+Ignition CA.
+
+**New, real questions this specific design introduces** (beyond the
+generic ones already in "Open questions," below):
+
+- **Root CA key custody and rotation.** Everything else chains to this key
+  — compromise it and every app cert issued under it is suspect. Needs the
+  same seriousness as `IGN_SECRET_KEY` custody already gets, not an
+  afterthought because certs feel like a smaller thing than tokens.
+- **Leaf rotation without a restart, per kind.** A K8s `Secret` update can
+  trigger a re-mount an app can watch for; a bind-mounted file on DinD needs
+  the app to re-read it (or the container to bounce) — not free, and
+  differs per kind even though issuance doesn't.
+- **Short-lived certs over real revocation.** No CRL/OCSP infrastructure is
+  proposed — lean on certs short-lived enough (hours-to-days, auto-rotated)
+  that revocation is rarely needed, the common pragmatic answer for this
+  class of internal PKI. Worth stating explicitly so it's a decision, not a
+  gap discovered later.
 
 This gap already exists for today's DinD-only deployment, not just the two
 proposed additions — CLAUDE.md's "Known gaps" already lists `traefik-public`
@@ -347,7 +375,7 @@ independent of whether Swarm/K8s ever land.
 | CI build boundary | the DinD engine itself | same DinD engine, now Swarm-service-hosted (v1) | same DinD engine, now pod-hosted (v1) |
 | App-to-app-in-same-zone | compose project's private network (`pinToDefaultNetwork`) | stack's own overlay network (same shape, cluster-wide instead of host-local) | `NetworkPolicy` scoped to the namespace |
 | Blast radius of a compromised app container | node's real Docker daemon minus `AppComposeBuilder`'s transform | the whole swarm's real Docker daemons minus the transform — **wider than DinD/K8s by default**, since a Swarm service can in principle be scheduled onto *any* manager/worker in the cluster, not just "this node" | node's real cluster minus PSA + RBAC + the K8s equivalent transform |
-| Traefik → app traffic confidentiality (see "Backend TLS," above) | plain HTTP by default; certless = Ignition-issued app cert (Ignition becomes a CA); app-provided = team's own cert, no CA infra needed | plain HTTP by default; certless = `--opt encrypted` overlay, no cert at all, cheapest of the three | plain HTTP by default; certless = a mesh (real v2 lift); app-provided = `cert-manager` + team's cert, no mesh needed |
+| Traefik → app traffic confidentiality (see "Backend TLS," above) | plain HTTP by default; certless = Ignition-CA leaf cert, delivered as a bind-mounted file | plain HTTP by default; certless = `--opt encrypted` overlay (no cert, cheapest) **or** an Ignition-CA leaf cert via `docker secret` for real app identity | plain HTTP by default; certless = Ignition-CA leaf cert via a `Secret` — no mesh required; a mesh is an optional later upgrade, not a v1 requirement |
 
 That last row is the one genuinely new risk Swarm introduces relative to the
 other two: a single-node swarm (`docker swarm init` with no additional
@@ -444,21 +472,16 @@ an explicit, single-swap seam.
   it's trusted the way the DinD path is.
 - **Backend TLS scope for v1** — is plain HTTP behind Traefik (today's
   status quo, "the private link is the confidentiality boundary")
-  acceptable to ship for a first Swarm/K8s backend, with certless/
-  app-provided as explicit fast-follow work? Or is one mode a hard
-  requirement before any production use, in which case it needs to move
-  from "Open questions" into the actual v1 scope for that kind. Worth
-  deciding per kind and per mode, not as one blanket answer — Swarm's
-  certless mode (`--opt encrypted`) is cheap enough it may as well be in
-  from the start; DinD/K8s's app-provided modes are a moderate lift each;
-  DinD's certless mode (Ignition as a CA) and K8s's certless mode (a mesh)
-  are the two genuinely bigger asks, worth deferring independently of
-  whether their kind's app-provided mode ships in v1.
-- **Does Ignition want to be a certificate authority?** DinD's certless mode
-  is the only one of the six (three kinds × two modes) that requires
-  `ignition-control` to mint and rotate certs itself, rather than leaning on
-  an existing mechanism (Swarm's network encryption, K8s's `cert-manager`/
-  mesh, or a team's own cert in app-provided mode). That's a real new
-  responsibility — key storage, rotation, revocation — worth an explicit
-  yes/no before it's assumed as DinD's answer, not folded in by default
-  because it's the only way to offer DinD teams a certless option at all.
+  acceptable to ship for a first Swarm/K8s backend, with the Ignition-CA
+  certless mode and app-provided as explicit fast-follow work? Or is one
+  mode a hard requirement before any production use, in which case it needs
+  to move from "Open questions" into the actual v1 scope for that kind.
+  Worth deciding per kind and per mode, not as one blanket answer — Swarm's
+  network-encryption certless mode is cheap enough it may as well be in
+  from the start regardless of what's decided for the CA-backed mode
+  everywhere else.
+- **Ignition-as-CA is accepted in principle** (see "Ignition as its own
+  CA," above) — the specific open items are root key custody/rotation, per-
+  kind leaf-rotation-without-a-restart, and leaning on short-lived certs
+  instead of building real revocation. All three need answers before this
+  ships anywhere, not just for DinD.
