@@ -267,6 +267,44 @@ class of risk — the same power the DinD sidecar already has today, just
 inside a different cluster boundary. State that explicitly wherever this
 gets reviewed — it'll look alarming out of context.
 
+## Backend TLS (Traefik → app) — not just the edge
+
+Today's explicit choice (CLAUDE.md, `docs/exposure.md`): "behind the edge
+everything is plain HTTP — the private link is the confidentiality
+boundary." That's a real decision, not an oversight, but it means anyone who
+can reach the private segment — a compromised node, lateral movement inside
+a shared cluster or swarm, a misrouted packet — sees plaintext between
+Traefik and every app. For real production use this is worth closing, and
+the path differs a lot per kind — worth designing deliberately rather than
+inheriting "plain HTTP" by default into two new backends:
+
+- **DinD / plain Docker**: no built-in transport encryption between Traefik
+  and a container on the same Docker network. Closing it means either the
+  app serves HTTPS itself (its own cert; `AppComposeBuilder` would need a
+  way to tell Traefik to trust it — a `serversTransport`-equivalent) or a
+  sidecar proxy — a real addition to the deploy transform, not free, and not
+  proposed as part of this doc's v1.
+- **Swarm has a cheaper, different answer**: **encrypted overlay networks**
+  (`docker network create --opt encrypted ...`) IPsec-encrypt traffic
+  between hosts at the network layer, no per-app certs or code changes.
+  Doesn't give app-level identity or true mTLS, but closes "plaintext on the
+  wire between nodes" with one network flag set once, at node registration
+  — worth strongly preferring over chasing per-app certs for Swarm.
+- **K8s is the natural home for this**, with two tiers: (a) a per-app cert
+  via `cert-manager` + Traefik's backend-TLS trust config (`serversTransport`
+  referencing a CA) — a moderate addition; or (b) a service mesh (Linkerd is
+  the common low-friction choice — sidecar-injected mTLS with near-zero app
+  changes) for real mutual TLS everywhere. (b) is the *real* production
+  answer but a materially bigger dependency than anything else in this doc —
+  flag it as a deliberate, separate v2 decision, not something
+  `KubernetesNodeBackend`'s v1 scope should bundle in.
+
+This gap already exists for today's DinD-only deployment, not just the two
+proposed additions — CLAUDE.md's "Known gaps" already lists `traefik-public`
+being one flat network as an open risk; backend TLS is the same category of
+gap (confidentiality, not just segmentation) and belongs on that same list,
+independent of whether Swarm/K8s ever land.
+
 ## Isolation model, compared
 
 | | DinD node | Swarm node | K8s node |
@@ -275,6 +313,7 @@ gets reviewed — it'll look alarming out of context.
 | CI build boundary | the DinD engine itself | same DinD engine, now Swarm-service-hosted (v1) | same DinD engine, now pod-hosted (v1) |
 | App-to-app-in-same-zone | compose project's private network (`pinToDefaultNetwork`) | stack's own overlay network (same shape, cluster-wide instead of host-local) | `NetworkPolicy` scoped to the namespace |
 | Blast radius of a compromised app container | node's real Docker daemon minus `AppComposeBuilder`'s transform | the whole swarm's real Docker daemons minus the transform — **wider than DinD/K8s by default**, since a Swarm service can in principle be scheduled onto *any* manager/worker in the cluster, not just "this node" | node's real cluster minus PSA + RBAC + the K8s equivalent transform |
+| Traefik → app traffic confidentiality | plain HTTP (see "Backend TLS," above) | plain HTTP by default; `--opt encrypted` overlay closes the wire-level gap cheaply | plain HTTP by default; `cert-manager` or a mesh closes it, at real added cost |
 
 That last row is the one genuinely new risk Swarm introduces relative to the
 other two: a single-node swarm (`docker swarm init` with no additional
@@ -369,3 +408,12 @@ an explicit, single-swap seam.
   CI/dev testing of each new path. DESIGN.md's bar for "done" was a real
   end-to-end run against a live node; every new kind needs the same before
   it's trusted the way the DinD path is.
+- **Backend TLS scope for v1** — is plain HTTP behind Traefik (today's
+  status quo, "the private link is the confidentiality boundary")
+  acceptable to ship for a first Swarm/K8s backend, with encrypted overlays
+  / `cert-manager` / a mesh as explicit fast-follow work? Or is one of those
+  a hard requirement before any production use, in which case it needs to
+  move from "Open questions" into the actual v1 scope for that kind. Worth
+  deciding per kind, not as one blanket answer — Swarm's `--opt encrypted`
+  is cheap enough it may as well be in from the start; K8s's real answer
+  (a mesh) is not.
