@@ -386,10 +386,13 @@ command's stdout.
    (front-door `forward-auth` unbuilt); no max-open cap; existing apps need
    **Create app** re-run to get `pr-preview.yml`; `<repo>-pr-<n>` must fit the
    40-char app-name limit.
-8. **Pluggable compute nodes — DinD (today) or Kubernetes, proposal only.**
-   See [K8S-NODES-DESIGN.md](K8S-NODES-DESIGN.md): a `NodeBackend` seam
+8. **Pluggable compute nodes — DinD (today), Docker Swarm, or Kubernetes,
+   proposal only.** See
+   [NODE-BACKENDS-DESIGN.md](NODE-BACKENDS-DESIGN.md): a `NodeBackend` seam
    behind which today's `DockerCli`/`ComposeTemplate`/`AppComposeBuilder`
-   path becomes `DindNodeBackend` (unchanged behavior) alongside a new
-   `KubernetesNodeBackend`, selected by a `kind` field on `Node`. Not
-   started — no `NodeBackend` interface, no `kind` column, nothing in
-   `KubernetesNodeBackend` exists yet.
+   path becomes `DindNodeBackend` (unchanged behavior) alongside new
+   `SwarmNodeBackend` (reuses the existing compose renderer, no new tooling
+   — the cheaper of the two to actually build) and `KubernetesNodeBackend`
+   (needs a new manifest builder + `kubectl`) implementations, selected by a
+   `kind` field on `Node`. Not started — no `NodeBackend` interface, no
+   `kind` column, neither new backend exists yet.
