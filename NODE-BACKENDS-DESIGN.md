@@ -56,7 +56,11 @@ kind-shaped instead of always meaning "a plain Docker Engine":
   this is the cheapest of the three to actually build.
 - `K8S`: a cluster/context reference — kubeconfig context name (mounted
   kubeconfig, same pattern as today's mounted SSH key / TLS certs) or an API
-  server URL + a bound service-account token.
+  server URL + a bound service-account token. Deliberately doesn't assume
+  *how* the controller reaches that API server or the cluster's Traefik — a
+  private/routed path (VPN, WireGuard, a corp subnet) and a directly
+  publicly-reachable cluster are both valid; see "Routing," below, for what
+  differs between the two.
 
 `cpus`/`memGb` stay as the node's *declared* capacity for `Scheduler` across
 all three kinds — v1 does **not** try to read live capacity from
@@ -183,10 +187,31 @@ actually implement, not just to design.
 
 ### 5. Routing
 
-- **DinD** (unchanged): per-node Traefik, Docker-label routing, the
-  controller edge reverse-proxies by `Host` over WireGuard to whichever node
-  is running the zone (`docs/exposure.md`; CLAUDE.md task 4, still unwired
-  generally — this proposal doesn't change that gap either way).
+Traefik is the thing that actually terminates HTTPS and routes `Host` traffic
+to a running app deployment, for every kind. What varies is **where in the
+chain it does that**, and that's a per-node network-reachability fact, not a
+fixed architecture:
+
+- **Node only reachable via a private/routed path** (a VPN, a corp-routed
+  subnet, cloud VPC peering, WireGuard — `docs/exposure.md`'s controller
+  edge model is one instance of this, itself marked "one proposed model,
+  draft," not a requirement): that node's own Traefik stays internal,
+  plain HTTP, and something in front of it — the controller edge, in the
+  `exposure.md` model — is the thing that actually holds the cert and
+  terminates HTTPS, reverse-proxying by `Host` over whatever the private
+  path is.
+- **Node/cluster is itself publicly reachable**: its own Traefik can
+  terminate TLS directly, on its own DNS name, with no requirement to
+  route everything through one shared edge first. Equally valid — which
+  topology applies is recorded per node at registration (CLAUDE.md task 4
+  covers making the *edge* model real; it isn't the only model this design
+  needs to support).
+
+The label/CRD vocabulary a given kind's Traefik reads is unaffected by
+either topology — only whether that Traefik has a cert and a public
+listener, or sits behind something else that does:
+
+- **DinD** (unchanged): per-node Traefik, Docker-label routing.
 - **Swarm**: Traefik's **Swarm provider** (`providers.swarm`, sometimes
   called Swarm mode) reads service labels cluster-wide via the Docker API in
   swarm mode, rather than per-container labels on one host — same label
@@ -195,11 +220,8 @@ actually implement, not just to design.
   doesn't need to change; only the per-node Traefik's *own* static config
   does, once, at node registration.
 - **K8s**: Traefik's Kubernetes CRD provider (`IngressRoute`) reading the
-  `Ingress`/`IngressRoute` objects `AppK8sManifestBuilder` writes.
-
-The controller edge doesn't care in any case — it's still routing to
-"whatever's running `<app>.apps.<slug>.<BASE_DOMAIN>` on this node's private
-address."
+  `Ingress`/`IngressRoute` objects `AppK8sManifestBuilder` writes — k3s ships
+  this by default.
 
 ### 6. Teardown, quotas, idle sweep
 
