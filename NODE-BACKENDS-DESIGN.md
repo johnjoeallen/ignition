@@ -364,14 +364,43 @@ generic ones already in "Open questions," below):
   absolute margin — a fixed "rotate 24h before expiry" breaks at the short
   end of a 1-7 day range (negative margin on a 1-day cert); a fraction
   scales correctly across whatever `leaf-cert-ttl` is actually set to.
-- **Leaf rotation without a restart, per kind — softened by the lifetime.**
-  A K8s `Secret` update can trigger a re-mount an app can watch for; a
-  bind-mounted file on DinD needs the app to re-read it. At day-scale
-  lifetimes rather than hours, **a restart-triggered pickup is an
-  acceptable v1 answer everywhere** — rotation already has to run
-  something like weekly-at-worst, and a rolling restart at that cadence is
-  a small ask. True hot-reload (no restart, any kind) is a nice-to-have to
-  revisit later, not a v1 requirement anymore given the chosen lifetime.
+- **Rolling rotation with no downtime, per kind — the mechanism differs a
+  lot, and one kind doesn't have it for free.**
+
+  - **K8s**: not automatic just from editing the `Secret` in place — kubelet
+    eventually syncs a volume-mounted secret's file content into running
+    pods (roughly a minute, via the sync loop), but that alone doesn't
+    create new pods or drain old ones. Genuine zero-downtime needs the
+    rotation job to also bump something in the `Deployment`'s pod template
+    (a timestamp annotation is the standard trick) so Kubernetes computes a
+    new pod-template hash and runs an actual `RollingUpdate`: new pod comes
+    up with the new cert, must pass its readiness probe, *then* the old pod
+    drains. Standard, well-trodden mechanism — just not "free" from a bare
+    Secret content update the way it might look at first.
+  - **Swarm is the cleanest of the three here, natively.** Swarm secrets
+    are **immutable and versioned** — rotating one is never an in-place
+    edit, it's create-a-new-secret-object +
+    `docker service update --secret-rm <old> --secret-add <new>` (or a
+    fresh `stack deploy` referencing the new secret name). Swarm treats
+    that as an ordinary service spec change and runs it through the same
+    `update_config` machinery an image bump would: `order: start-first` +
+    a health check gives a new task started and verified healthy *before*
+    the old one stops — genuinely zero-downtime, and arguably simpler to
+    reason about than K8s's version here, since "can I update a secret in
+    place" isn't even a question that exists.
+  - **DinD has no native answer.** A single-replica compose service has no
+    built-in rolling-update primitive — `docker compose up -d` / `stop` +
+    `start` replaces the one container directly, a real (if brief) gap.
+    Genuine zero-downtime needs an explicit maneuver: scale the service to
+    2 replicas with the new cert mounted (`docker compose up -d --scale
+    <service>=2`), wait for the new one healthy — Traefik's Docker provider
+    already load-balances across multiple containers sharing one
+    router/service label, no new Traefik config needed — then scale back to
+    1, draining the old one. Real to build, more orchestration than K8s or
+    Swarm get for free; the honest alternative is accepting a brief restart
+    gap on DinD specifically as a deliberate, documented v1 tradeoff, given
+    DinD is already the weakest of the three kinds everywhere else in this
+    section.
 
 This gap already exists for today's DinD-only deployment, not just the two
 proposed additions — CLAUDE.md's "Known gaps" already lists `traefik-public`
@@ -493,9 +522,15 @@ an explicit, single-swap seam.
   from the start regardless of what's decided for the CA-backed mode
   everywhere else.
 - **Ignition-as-CA is accepted in principle** (see "Ignition as its own
-  CA," above), leaf lifetime decided (1-7 days, `ignition.tls.leaf-cert-ttl`,
-  rotation on a `@Scheduled` job at a fraction elapsed, restart-triggered
-  pickup acceptable for v1). What's still genuinely open is **root CA key
-  custody and rotation** — the one piece nothing above resolves, and the
-  one that matters most (compromise it and every leaf cert issued under it
-  is suspect).
+  CA," above), leaf lifetime decided (1-7 days,
+  `ignition.tls.leaf-cert-ttl`, rotation on a `@Scheduled` job at a fraction
+  elapsed), and rolling, zero-downtime rotation has a real mechanism for
+  K8s (bump a pod-template annotation to force a `RollingUpdate`) and Swarm
+  (native — secrets are immutable/versioned, rotation is an ordinary
+  `update_config`-driven service update). **DinD still doesn't have a
+  built-in answer** — either build the scale-to-2-and-drain maneuver, or
+  accept a brief restart gap there as a deliberate, documented v1 tradeoff.
+  What's still genuinely open beyond that is **root CA key custody and
+  rotation** — the one piece nothing above resolves, and the one that
+  matters most (compromise it and every leaf cert issued under it is
+  suspect).
