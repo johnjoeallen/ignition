@@ -367,16 +367,18 @@ generic ones already in "Open questions," below):
 - **Rolling rotation with no downtime, per kind — the mechanism differs a
   lot, and one kind doesn't have it for free.**
 
-  - **K8s**: not automatic just from editing the `Secret` in place — kubelet
-    eventually syncs a volume-mounted secret's file content into running
-    pods (roughly a minute, via the sync loop), but that alone doesn't
-    create new pods or drain old ones. Genuine zero-downtime needs the
-    rotation job to also bump something in the `Deployment`'s pod template
-    (a timestamp annotation is the standard trick) so Kubernetes computes a
-    new pod-template hash and runs an actual `RollingUpdate`: new pod comes
-    up with the new cert, must pass its readiness probe, *then* the old pod
-    drains. Standard, well-trodden mechanism — just not "free" from a bare
-    Secret content update the way it might look at first.
+  - **K8s achieves genuine zero-downtime rotation — the rotation job just
+    has to explicitly trigger it.** Editing the `Secret` alone isn't enough:
+    kubelet eventually syncs the new file into running pods (roughly a
+    minute, via the sync loop), but that alone doesn't create new pods or
+    drain old ones. So the rotation job also bumps something in the
+    `Deployment`'s pod template (a timestamp annotation is the standard
+    trick), which makes Kubernetes compute a new pod-template hash and run
+    a real `RollingUpdate`: new pod comes up with the new cert, must pass
+    its readiness probe, *then* the old pod drains. That bump is the
+    mechanism that gets zero downtime, not a workaround for a shortfall —
+    standard, well-trodden pattern, same shape any other rolling deploy
+    already uses.
   - **Swarm is the cleanest of the three here, natively.** Swarm secrets
     are **immutable and versioned** — rotating one is never an in-place
     edit, it's create-a-new-secret-object +
