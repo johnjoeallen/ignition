@@ -396,3 +396,11 @@ command's stdout.
    (needs a new manifest builder + `kubectl`) implementations, selected by a
    `kind` field on `Node`. Not started — no `NodeBackend` interface, no
    `kind` column, neither new backend exists yet.
+9. **Environment ladders — gated promotion beyond dev/apps, proposal
+   only.** See [ENVIRONMENTS-DESIGN.md](ENVIRONMENTS-DESIGN.md): generalize
+   the two-value `Channel` (`DEV`/`RELEASE`) into an ordered list of named
+   environments (`dev`/`stg`/`apps`), each with an entry gate and a
+   promotion gate, plus a real role-based check on who can promote —
+   confirmed today's `release()`/deploy-from-main endpoints have **no**
+   `requireZoneAdmin()` call at all, so any team member can already ship to
+   `.apps.` production. Not started.
