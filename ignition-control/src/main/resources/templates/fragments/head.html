@@ -7,16 +7,23 @@
   <link rel="icon" type="image/svg+xml" href="/img/mark.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="/vendor/icons/bootstrap-icons.css">
   <link rel="stylesheet" href="/css/ignition.css">
   <script>
     // Set before first paint so there's no flash of the wrong theme.
+    // Lamp states: cool (dark), warm (dark, amber flare), day (light).
     (function () {
       try {
-        var t = localStorage.getItem('ign-theme')
-            || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-bs-theme', t);
+        var t = localStorage.getItem('ign-theme');
+        if (t === 'dark') t = 'cool'; else if (t === 'light') t = 'day';
+        if (t !== 'cool' && t !== 'warm' && t !== 'day')
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'cool' : 'day';
+        document.documentElement.setAttribute('data-bs-theme', t === 'day' ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-ign-lamp', t);
       } catch (e) {}
     })();
   </script>
