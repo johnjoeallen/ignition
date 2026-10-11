@@ -37,6 +37,12 @@ volumes:
   ignition-dynamic:
     name: ignition-dynamic
     external: true
+  # registry logins: `docker login` runs in THIS container's CLI, so it writes
+  # /root/.docker/config.json here. Watchtower mounts the same volume
+  # read-only so it can pull the private app images.
+  ignition-docker-config:
+    name: ignition-docker-config
+    external: true
 
 services:
   postgres:
@@ -103,6 +109,8 @@ services:
       - ignition-work:/work
       # Traefik file-provider snippets (also mounted by traefik-core, read-only)
       - ignition-dynamic:/work/control/dynamic
+      # registry credentials written by `docker login`; shared with Watchtower
+      - ignition-docker-config:/root/.docker
       # keys / certs for ssh:// and tcp://+TLS nodes (optional; read-only)
       - ${IGN_SSH_DIR:-./ssh-empty}:/root/.ssh:ro
     labels:

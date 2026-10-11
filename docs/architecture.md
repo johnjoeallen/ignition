@@ -311,10 +311,12 @@ rolls any container labelled `com.centurylinklabs.watchtower.enable=true`
 forward when its image tag gets a new digest. `ignition-control` stamps that label on
 every app it deploys (teams don't opt in) and nothing else carries it, so
 Traefik, Forgejo, DinD and runners are never restarted. It reads
-`${DOCKER_CONFIG_DIR:-/root/.docker}/config.json` for registry auth —
+`config.json` from the shared `ignition-docker-config` volume for registry auth —
 `ignition-control` populates that by running `docker login git.<slug>.<domain>`
-(zone bot token) on the node before each deploy, so private app packages pull
-without any manual step.
+(zone bot token) before each deploy, and for every zone at startup, so private
+app packages pull without any manual step. The login happens in the controller's
+own CLI, so this credentials only the Watchtower on the controller's Docker
+host; a remote `ssh://` node's Watchtower has its own, unpopulated config.
 
 **Traefik** (per node) watches `traefik-public` on `:80` only, reachable solely
 over WireGuard from the controller. All TLS, all ACME, and all SSO live at the

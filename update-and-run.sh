@@ -36,6 +36,7 @@ done
 log "prerequisites (idempotent)"
 docker network create traefik-public 2>/dev/null || true
 docker volume create ignition-dynamic 2>/dev/null || true
+docker volume create ignition-docker-config 2>/dev/null || true
 mkdir -p ssh-empty
 
 if [ "$do_pull" = 1 ]; then
@@ -49,7 +50,7 @@ fi
 # (e.g. Traefik's static entrypoint flags) depending on what actually changed
 # upstream. down+up guarantees every container matches the compose file
 # exactly. Safe for data: down never touches a volume without -v/--volumes,
-# and we never pass that — ignition-pgdata, ignition-work, ignition-dynamic,
+# and we never pass that — ignition-pgdata, ignition-work, ignition-dynamic, ignition-docker-config,
 # and traefik's acme (cert storage) all survive untouched.
 log "traefik-core down/up"
 "${TRAEFIK[@]}" down

@@ -624,9 +624,13 @@ registry on the node**. This was a documented manual step
    `DockerCli.docker(host, args, stdin)` overload keeps the token off the
    process's argv and out of any command log). Best-effort: a warning, not a
    hard failure, so a public package or an already-logged-in node still deploys.
-2. That `docker login` writes `/root/.docker/config.json` on the node — which is
-   exactly the file the per-node **Watchtower** mounts (`DOCKER_CONFIG`), so the
-   digest-watch roll-forward is credentialed by the same act.
+2. That `docker login` runs in the controller's own CLI, so it writes
+   `/root/.docker/config.json` *inside the `ignition-control` container*, not on
+   the node. That path is the shared `ignition-docker-config` volume, which the
+   per-node **Watchtower** mounts read-only (`DOCKER_CONFIG`), so the
+   digest-watch roll-forward is credentialed by the same act. (This only covers
+   the node the controller shares a Docker host with; see the note in
+   `architecture.md`.)
 3. The whole `/deploy` path now logs: the request, success with the deploy id,
    and the compose `stderr` on failure — so a future failure here says *which*
    part broke instead of a blank 502.

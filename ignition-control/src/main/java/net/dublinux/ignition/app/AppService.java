@@ -16,6 +16,8 @@ import net.dublinux.ignition.zone.ZoneRepository;
 import net.dublinux.ignition.zone.ZoneService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 /**
@@ -326,6 +328,26 @@ public class AppService {
             log.warn("deploy {}: docker login {} on node failed: {}",
                     z.slug(), registry, firstLine(r.stderr()));
         }
+    }
+
+    /**
+     * Log every zone's registry in on startup. The credentials live in the
+     * shared {@code ignition-docker-config} volume, so a fresh volume (or a node
+     * that hasn't seen a deploy since) would leave Watchtower unable to pull
+     * until each zone's next deploy. Off the main thread: a registry that is
+     * down shouldn't hold anything up, and each login is best-effort anyway.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void loginAllZones() {
+        Thread.ofVirtual().name("registry-login").start(() -> {
+            for (Zone z : zones.findAll()) {
+                try {
+                    registryLogin(z);
+                } catch (RuntimeException e) {
+                    log.warn("startup registry login for {} failed: {}", z.slug(), e.getMessage());
+                }
+            }
+        });
     }
 
     private void touch(Zone z) {
