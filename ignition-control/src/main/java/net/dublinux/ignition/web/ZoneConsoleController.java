@@ -58,7 +58,11 @@ public class ZoneConsoleController {
     public record AppRow(String name, String description, String version, boolean deployed,
                          boolean running, String image, String url, String deployId) {}
 
-    public record AppStatus(String name, boolean deployed, boolean running) {}
+    /** One row in the Dev table — an app's deploy-from-main deployment. */
+    public record DevRow(String name, String url, String image, String deployedAt, boolean running) {}
+
+    /** {@code channel} is {@code release} or {@code dev}; the page keys rows on both. */
+    public record AppStatus(String name, boolean deployed, boolean running, String channel) {}
 
     @GetMapping("/teams/{slug}")
     public String zone(@PathVariable String slug, Model model) {
@@ -102,6 +106,13 @@ public class ZoneConsoleController {
         model.addAttribute("zone", zone);
         model.addAttribute("stack", zones.stack(slug));
         model.addAttribute("apps", rows);
+        Map<String, Boolean> devLive = apps.devLiveStates(slug);
+        java.time.format.DateTimeFormatter at = DateTimeFormatter.ofPattern("d MMM HH:mm")
+                .withZone(java.time.ZoneOffset.UTC);
+        model.addAttribute("devs", apps.devDeploymentsForZone(slug).stream()
+                .map(d -> new DevRow(d.name(), d.url(zone.baseDomain()), d.image(),
+                        at.format(d.deployedAt()) + " UTC", devLive.getOrDefault(d.name(), d.running())))
+                .toList());
         model.addAttribute("members", members);
         model.addAttribute("gitUsernames", gitUsernames);
         model.addAttribute("canManageMembers", currentUser.isZoneAdmin(slug));
@@ -114,9 +125,13 @@ public class ZoneConsoleController {
     @ResponseBody
     public List<AppStatus> appStatus(@PathVariable String slug) {
         Map<String, Boolean> live = apps.liveStates(slug);
-        return apps.listForZone(slug).stream()
-                .map(a -> new AppStatus(a.name(), true, live.getOrDefault(a.name(), a.running())))
-                .toList();
+        Map<String, Boolean> devLive = apps.devLiveStates(slug);
+        List<AppStatus> out = new java.util.ArrayList<>(apps.listForZone(slug).stream()
+                .map(a -> new AppStatus(a.name(), true, live.getOrDefault(a.name(), a.running()), "release"))
+                .toList());
+        apps.devDeploymentsForZone(slug).forEach(d ->
+                out.add(new AppStatus(d.name(), true, devLive.getOrDefault(d.name(), d.running()), "dev")));
+        return out;
     }
 
     @PostMapping("/teams/{slug}/members")
@@ -391,6 +406,11 @@ public class ZoneConsoleController {
         return currentUser.get().map(u -> u.id()).orElse(null);
     }
 
+    /** Dev actions fired from the team page's Dev table go back there; the repo page's go back to the repo. */
+    private static String devBack(String slug, String repo, String from, String msg) {
+        return "team".equals(from) ? redirect(slug, repo + ": " + msg) : redirectRepo(slug, repo, msg);
+    }
+
     private static String redirectRepo(String slug, String repo, String msg) {
         return "redirect:/teams/" + enc(slug) + "/repos/" + enc(repo) + "?m=" + enc(msg);
     }
@@ -443,34 +463,37 @@ public class ZoneConsoleController {
 
     /** Stop the dev deployment's containers ({@code docker compose stop}) — stack and volumes kept. Idempotent. */
     @PostMapping("/teams/{slug}/repos/dev/stop")
-    public String stopDev(@PathVariable String slug, @RequestParam("repo") String name) {
+    public String stopDev(@PathVariable String slug, @RequestParam("repo") String name,
+                          @RequestParam(value = "from", required = false) String from) {
         try {
             apps.stopDev(slug, name);
-            return redirectRepo(slug, name, "dev deployment stopped");
+            return devBack(slug, name, from, "dev deployment stopped");
         } catch (RuntimeException e) {
-            return redirectRepo(slug, name, e.getMessage());
+            return devBack(slug, name, from, e.getMessage());
         }
     }
 
     /** Restart a stopped dev deployment ({@code docker compose start}). */
     @PostMapping("/teams/{slug}/repos/dev/start")
-    public String startDev(@PathVariable String slug, @RequestParam("repo") String name) {
+    public String startDev(@PathVariable String slug, @RequestParam("repo") String name,
+                           @RequestParam(value = "from", required = false) String from) {
         try {
             apps.startDev(slug, name);
-            return redirectRepo(slug, name, "dev deployment started");
+            return devBack(slug, name, from, "dev deployment started");
         } catch (RuntimeException e) {
-            return redirectRepo(slug, name, e.getMessage());
+            return devBack(slug, name, from, e.getMessage());
         }
     }
 
     /** Tear the dev deployment down entirely ({@code docker compose down -v} + row delete). The release stays untouched. */
     @PostMapping("/teams/{slug}/repos/dev/delete")
-    public String deleteDev(@PathVariable String slug, @RequestParam("repo") String name) {
+    public String deleteDev(@PathVariable String slug, @RequestParam("repo") String name,
+                            @RequestParam(value = "from", required = false) String from) {
         try {
             apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
-            return redirectRepo(slug, name, "dev deployment deleted");
+            return devBack(slug, name, from, "dev deployment deleted");
         } catch (IllegalArgumentException e) {
-            return redirectRepo(slug, name, e.getMessage());
+            return devBack(slug, name, from, e.getMessage());
         }
     }
 

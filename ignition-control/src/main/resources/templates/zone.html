@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/head :: head(|Ignition · team ${zone.slug}|)}"></head>
+<head th:replace="~{fragments/head :: head(|Ignition · team ${zoneSlug}|)}"></head>
 <body>
   <div th:replace="~{fragments/shell :: shell('teams', ~{::main})}">
     <main>
       <p class="mb-3"><a href="/"><i class="bi bi-arrow-left"></i> Teams</a></p>
-      <h1 class="h4 page-title"><i class="bi bi-people"></i> <span th:text="${zone.slug}">team</span></h1>
+      <h1 class="h4 page-title"><i class="bi bi-people"></i> <span th:text="${zoneSlug}">team</span></h1>
       <div class="alert alert-success" th:if="${param.m != null}" th:text="${param.m[0]}">ok</div>
 
       <div class="card mb-4">
@@ -132,6 +132,58 @@
               </td>
             </tr>
             <tr th:if="${apps.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">no apps yet — create one above</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2" th:if="${!devs.isEmpty()}">
+        Dev <span class="fw-normal text-lowercase" th:text="|· &lt;name&gt;.dev.${zoneSlug}.${zone.baseDomain}|">·</span>
+      </h2>
+      <p class="text-body-secondary small" th:if="${!devs.isEmpty()}">Latest <code>main</code>, deployed by an
+        app page's <b>Deploy from main</b> button. Independent of the release above.</p>
+      <div class="table-card mb-4" th:if="${!devs.isEmpty()}">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>app</th><th>image</th><th>deployed</th><th>status</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="d : ${devs}">
+              <td><a th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${d.name})}" th:text="${d.name}">flora</a></td>
+              <td><code class="small" th:text="${d.image}">image</code></td>
+              <td class="text-body-secondary" th:text="${d.deployedAt}">1 Jan 10:00 UTC</td>
+              <td>
+                <span class="d-inline-flex align-items-center gap-1"
+                      th:attr="data-app-status-row=${d.name},data-app-channel='dev'">
+                  <i data-app-status-icon
+                     th:class="${d.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
+                     th:title="${d.running} ? 'running' : 'dead'"
+                     th:attr="aria-label=${d.running} ? 'running' : 'dead'"></i>
+                  <a th:if="${d.running}" th:href="${d.url}" target="_blank" rel="noopener">open</a>
+                  <span th:unless="${d.running}" class="text-body-secondary">down</span>
+                </span>
+              </td>
+              <td class="text-end text-nowrap">
+                <form method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
+                      class="d-inline" th:classappend="${!d.running} ? ' d-none'"
+                      th:attr="data-app-action='stop',data-app-name=${d.name},data-app-channel='dev',data-busy=|Stopping ${d.name} dev…|">
+                  <input type="hidden" name="repo" th:value="${d.name}">
+                  <input type="hidden" name="from" value="team">
+                  <button class="btn btn-sm btn-outline-secondary">stop</button>
+                </form>
+                <form method="post" th:action="@{/teams/{slug}/repos/dev/start(slug=${zoneSlug})}"
+                      class="d-inline" th:classappend="${d.running} ? ' d-none'"
+                      th:attr="data-app-action='start',data-app-name=${d.name},data-app-channel='dev',data-busy=|Starting ${d.name} dev…|">
+                  <input type="hidden" name="repo" th:value="${d.name}">
+                  <input type="hidden" name="from" value="team">
+                  <button class="btn btn-sm btn-outline-secondary">start</button>
+                </form>
+                <form method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}" class="d-inline"
+                      th:attr="data-busy=|Deleting ${d.name} dev…|"
+                      onsubmit="return confirm('Delete the dev deployment? Its containers and volumes go; the release stays up.')">
+                  <input type="hidden" name="repo" th:value="${d.name}">
+                  <input type="hidden" name="from" value="team">
+                  <button class="btn btn-sm btn-outline-danger">delete</button>
+                </form>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>

@@ -336,6 +336,37 @@ public class AppService {
         return out;
     }
 
+    /** {@link #liveStates} for every dev deployment in the zone, keyed by app name. */
+    public Map<String, Boolean> devLiveStates(String slug) {
+        Zone z = zones.find(slug).orElse(null);
+        List<DevDeployment> list = devApps.findByZoneOrderByName(slug);
+        Map<String, Boolean> out = new HashMap<>();
+        if (list.isEmpty()) {
+            return out;
+        }
+        Map<String, Proj> snap = projectHealth(dockerHost(z));
+        if (snap == null) {
+            list.forEach(d -> out.put(d.name(), d.running()));
+            return out;
+        }
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            Map<String, CompletableFuture<Boolean>> probes = new HashMap<>();
+            for (DevDeployment d : list) {
+                Proj p = snap.get("app-" + slug + "-" + d.name() + "-dev");
+                if (p == null || !p.up()) {
+                    out.put(d.name(), false);
+                } else if (z == null) {
+                    out.put(d.name(), true);
+                } else {
+                    probes.put(d.name(), CompletableFuture.supplyAsync(
+                            () -> health.up(d.url(z.baseDomain()), p.healthPath()), pool));
+                }
+            }
+            probes.forEach((name, f) -> out.put(name, f.join()));
+        }
+        return out;
+    }
+
     /** {@link #liveStates} for a dev deployment; falls back to its flag. */
     public boolean devLive(String slug, String name, boolean flag) {
         Zone z = zones.find(slug).orElse(null);

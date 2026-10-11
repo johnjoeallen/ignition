@@ -9,7 +9,10 @@
   var url = statusElement.getAttribute('data-app-status-url');
 
   function setState(app) {
-    var row = document.querySelector('[data-app-status-row="' + CSS.escape(app.name) + '"]');
+    var channel = app.channel || 'release';
+    var row = Array.prototype.find.call(
+        document.querySelectorAll('[data-app-status-row="' + CSS.escape(app.name) + '"]'),
+        function (el) { return (el.getAttribute('data-app-channel') || 'release') === channel; });
     if (!row) return;
 
     var icon = row.querySelector('[data-app-status-icon]');
@@ -23,6 +26,7 @@
 
     document.querySelectorAll('[data-app-action][data-app-name="' + CSS.escape(app.name) + '"]')
       .forEach(function (form) {
+        if ((form.getAttribute('data-app-channel') || 'release') !== channel) return;
         var visible = (app.running && form.getAttribute('data-app-action') === 'stop')
             || (!app.running && form.getAttribute('data-app-action') === 'start');
         form.classList.toggle('d-none', !visible);
