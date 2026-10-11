@@ -4,9 +4,13 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -44,14 +48,22 @@ public class AppService {
     private final DockerCli docker;
     private final RenderService render;
     private final AppComposeBuilder composeBuilder;
+    private final AppHealthProbe health;
 
     /** Zones whose registry login has succeeded since this process started. */
     private final Set<String> loggedIn = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean loginRunning = new AtomicBoolean();
 
+    /** How long one node's container snapshot is reused — the console polls every 5s per open page. */
+    private static final long SNAPSHOT_TTL_MS = 4_000;
+    /** One compose project's containers: all running and none unhealthy, plus its health-path label. */
+    private record Proj(boolean up, String healthPath) {}
+    private record Snapshot(long at, Map<String, Proj> byProject) {}
+    private final Map<String, Snapshot> snapshots = new ConcurrentHashMap<>();
+
     public AppService(AppRepository apps, DevDeploymentRepository devApps, ZoneRepository zones,
                       ZoneService zoneService, NodeRepository nodes, DockerCli docker,
-                      RenderService render, AppComposeBuilder composeBuilder) {
+                      RenderService render, AppComposeBuilder composeBuilder, AppHealthProbe health) {
         this.apps = apps;
         this.devApps = devApps;
         this.zones = zones;
@@ -60,6 +72,7 @@ public class AppService {
         this.docker = docker;
         this.render = render;
         this.composeBuilder = composeBuilder;
+        this.health = health;
     }
 
     public List<DeployedApp> list() {
@@ -254,6 +267,14 @@ public class AppService {
                     registryLogin(z);
                 }
                 r = docker.composeUp(host, project, cf);
+            } else if (start && !containerIds(host, project, false).isEmpty()) {
+                // something is still running, so the console is offering Start because
+                // it is unhealthy or not answering its health check: `start` alone would
+                // be a no-op on running containers. Revive any stopped ones, then bounce.
+                r = docker.compose(host, project, cf, "start");
+                if (r.ok()) {
+                    r = docker.compose(host, project, cf, "restart");
+                }
             } else {
                 r = docker.compose(host, project, cf, verb);
             }
@@ -277,6 +298,93 @@ public class AppService {
         if (z != null) {
             touch(z);
         }
+    }
+
+    /**
+     * Whether each of the zone's release apps is actually serving, as opposed to
+     * what the {@code running} flag says: that flag only moves on Start/Stop, so
+     * a container that was removed (prune, a down, a crash) or is failing still
+     * read "running", and the console offered Stop for an app whose URL was
+     * returning 404. An app is live when its containers are up and none is
+     * unhealthy, <em>and</em> its URL answers its health check
+     * ({@link AppHealthProbe}). Falls back to the flag if the node can't be asked.
+     */
+    public Map<String, Boolean> liveStates(String slug) {
+        Zone z = zones.find(slug).orElse(null);
+        Map<String, Proj> snap = projectHealth(dockerHost(z));
+        List<DeployedApp> list = apps.findByZone(slug);
+        Map<String, Boolean> out = new HashMap<>();
+        if (snap == null) {
+            list.forEach(a -> out.put(a.name(), a.running()));
+            return out;
+        }
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            Map<String, CompletableFuture<Boolean>> probes = new HashMap<>();
+            for (DeployedApp a : list) {
+                Proj p = snap.get("app-" + slug + "-" + a.name());
+                if (p == null || !p.up()) {
+                    out.put(a.name(), false);
+                } else if (z == null) {
+                    out.put(a.name(), true);
+                } else {
+                    probes.put(a.name(), CompletableFuture.supplyAsync(
+                            () -> health.up(a.url(z.baseDomain()), p.healthPath()), pool));
+                }
+            }
+            probes.forEach((name, f) -> out.put(name, f.join()));
+        }
+        return out;
+    }
+
+    /** {@link #liveStates} for a dev deployment; falls back to its flag. */
+    public boolean devLive(String slug, String name, boolean flag) {
+        Zone z = zones.find(slug).orElse(null);
+        Map<String, Proj> snap = projectHealth(dockerHost(z));
+        if (snap == null) {
+            return flag;
+        }
+        Proj p = snap.get("app-" + slug + "-" + name + "-dev");
+        if (p == null || !p.up()) {
+            return false;
+        }
+        return z == null || devApps.findByZoneAndName(slug, name)
+                .map(d -> health.up(d.url(z.baseDomain()), p.healthPath())).orElse(true);
+    }
+
+    /**
+     * One {@code docker ps -a} per node, grouped by compose project: a project
+     * is up when it has containers, every one is {@code running}, and none
+     * reports {@code (unhealthy)}; it also carries the web service's
+     * {@code ignition.health.path} label. A project with no containers is simply
+     * absent (gone). {@code null} if the node can't be queried.
+     */
+    private Map<String, Proj> projectHealth(String host) {
+        Snapshot cached = snapshots.get(host);
+        long now = System.currentTimeMillis();
+        if (cached != null && now - cached.at() < SNAPSHOT_TTL_MS) {
+            return cached.byProject();
+        }
+        DockerCli.Result ps = docker.docker(host, List.of("ps", "-a",
+                "--filter", "label=com.docker.compose.project",
+                "--format", "{{.Label \"com.docker.compose.project\"}}\t{{.State}}\t{{.Status}}"
+                        + "\t{{.Label \"" + AppHealthProbe.LABEL + "\"}}"));
+        if (!ps.ok()) {
+            log.warn("container snapshot on {} failed: {}", host, firstLine(ps.stderr()));
+            return cached == null ? null : cached.byProject();
+        }
+        Map<String, Proj> byProject = new HashMap<>();
+        for (String line : ps.stdout().split("\n")) {
+            String[] f = line.split("\t", 4);
+            if (f.length < 3 || !f[0].startsWith("app-")) {
+                continue;
+            }
+            boolean up = f[1].strip().equals("running") && !f[2].contains("unhealthy");
+            String path = f.length > 3 ? f[3].strip() : "";
+            byProject.merge(f[0].strip(), new Proj(up, path),
+                    (x, y) -> new Proj(x.up() && y.up(), x.healthPath().isBlank() ? y.healthPath() : x.healthPath()));
+        }
+        snapshots.put(host, new Snapshot(now, byProject));
+        return byProject;
     }
 
     private List<String> containerIds(String host, String project, boolean includeStopped) {

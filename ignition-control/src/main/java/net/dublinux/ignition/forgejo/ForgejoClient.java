@@ -214,7 +214,7 @@ public class ForgejoClient {
         return json.createObjectNode().put("error", msg);
     }
 
-    private static HttpClient buildClient(boolean insecure) {
+    public static HttpClient buildClient(boolean insecure) {
         HttpClient.Builder b = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10));
         if (insecure) {
             try {

@@ -66,11 +66,12 @@ public class ZoneConsoleController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such zone"));
         Map<String, DeployedApp> deployed = apps.listForZone(slug).stream()
                 .collect(java.util.stream.Collectors.toMap(DeployedApp::name, a -> a));
+        Map<String, Boolean> live = apps.liveStates(slug);
         List<AppRow> rows = zones.repos(slug).stream()
                 .map(r -> {
                     DeployedApp d = deployed.get(r.name());
                     return new AppRow(r.name(), r.description(), r.version(), d != null,
-                            d != null && d.running(),
+                            d != null && live.getOrDefault(d.name(), d.running()),
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
                             d == null ? null : d.deployId());
@@ -112,8 +113,9 @@ public class ZoneConsoleController {
     @GetMapping("/teams/{slug}/apps/status")
     @ResponseBody
     public List<AppStatus> appStatus(@PathVariable String slug) {
+        Map<String, Boolean> live = apps.liveStates(slug);
         return apps.listForZone(slug).stream()
-                .map(a -> new AppStatus(a.name(), true, a.running()))
+                .map(a -> new AppStatus(a.name(), true, live.getOrDefault(a.name(), a.running())))
                 .toList();
     }
 
@@ -298,7 +300,7 @@ public class ZoneConsoleController {
                 .map(d -> DateTimeFormatter.ofPattern("d MMM HH:mm").withZone(java.time.ZoneOffset.UTC)
                         .format(d.deployedAt()) + " UTC")
                 .orElse(null));
-        model.addAttribute("devRunning", dev.map(d -> d.running()).orElse(false));
+        model.addAttribute("devRunning", dev.map(d -> apps.devLive(slug, repo, d.running())).orElse(false));
         String baseDomain = zones.get(slug).map(Zone::baseDomain).orElse("");
         model.addAttribute("previews", apps.previewsForApp(slug, repo).stream()
                 .map(p -> Map.of("name", p.name(), "url", p.url(baseDomain)))

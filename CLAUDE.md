@@ -154,6 +154,17 @@ which the platform never reads); images are open with a small
 falls back to a synthesised single-service deploy (what `app-compose.tmpl` used
 to render — now retired).
 
+**The console's Stop/Start follows the app, not a flag.** `AppService.liveStates`
+asks the node (`docker ps -a`, one call per node, cached ~4s) and then probes the
+app's public URL (`AppHealthProbe`): an app is "live" only if its containers are
+all running, none is `(unhealthy)`, **and** the URL answers. A web service can set
+`ignition.health.path: /actuator/health` (a label in its `compose.yaml`) — that path
+must answer 2xx/3xx; with no label it probes `/` and fails only on connect/TLS
+errors, 5xx, or 404 (the edge's "no such route"). Not live → the console shows
+**Start**, which revives stopped containers, `up -d`s if they're gone, and
+`restart`s any that are running but failing. `app.running` is only the fallback if
+the node can't be reached.
+
 **Runtime config is the repo's `.env`.** `AppService` also fetches `.env` at the
 deploy's `ref` and `AppComposeBuilder` merges its `KEY=VALUE` lines into the web
 service's `environment:` (`.env` wins over a `compose.yaml` default; `PORT` stays
