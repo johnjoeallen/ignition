@@ -189,13 +189,16 @@
       </div>
 
       <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Members</h2>
-      <p class="text-body-secondary small">Who can open this team's console, and at what role — <b>admin</b>
-        manages members below; <b>member</b> gets everything else here (apps, releases). Git access isn't a
-        separate step: adding someone here also provisions their Forgejo login, as their sanitized email
-        (shown below each address). Adding someone attaches their existing Ignition account — they sign up
-        (or a platform admin invites them) first. Your own git username, password and personal access token
-        are shown above and on each app's page beside its clone URL — nobody else's, including other admins,
-        are ever shown.</p>
+      <p class="text-body-secondary small">These are the people who can open this team's console. An
+        <b>admin</b> can also manage the members listed below. A <b>member</b> can do everything else here,
+        including creating apps and cutting releases.</p>
+      <p class="text-body-secondary small">To add someone, they must already have an Ignition account. Ask them
+        to sign up first, or have a platform admin invite them. Adding them here also creates their Forgejo
+        login, so there is no separate git step. Their git username is their email address in a form Forgejo
+        accepts, shown in the username column.</p>
+      <p class="text-body-secondary small">Your own git username, password and personal access token are shown
+        above, and on each app's page next to its clone URL. Nobody else's credentials are ever shown, not even
+        to other admins.</p>
       <form th:if="${canManageMembers}" method="post" th:action="@{/teams/{slug}/members(slug=${zoneSlug})}"
             class="row g-2 align-items-end mb-3" autocomplete="off">
         <div class="col-auto">
