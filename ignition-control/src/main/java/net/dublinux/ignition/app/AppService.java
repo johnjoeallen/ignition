@@ -5,6 +5,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import net.dublinux.ignition.docker.DockerCli;
@@ -16,8 +19,7 @@ import net.dublinux.ignition.zone.ZoneRepository;
 import net.dublinux.ignition.zone.ZoneService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
@@ -42,6 +44,10 @@ public class AppService {
     private final DockerCli docker;
     private final RenderService render;
     private final AppComposeBuilder composeBuilder;
+
+    /** Zones whose registry login has succeeded since this process started. */
+    private final Set<String> loggedIn = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean loginRunning = new AtomicBoolean();
 
     public AppService(AppRepository apps, DevDeploymentRepository devApps, ZoneRepository zones,
                       ZoneService zoneService, NodeRepository nodes, DockerCli docker,
@@ -311,41 +317,58 @@ public class AppService {
      * an already-logged-in node still deploys, and the compose error is
      * clearer than a login error if it really is missing.
      */
-    private void registryLogin(Zone z) {
+    private boolean registryLogin(Zone z) {
         String registry = z.gitHost();
         String token = zones.secret(z.slug(), "forgejo_token");
         if (token.isBlank()) {
             log.warn("deploy {}: no forgejo_token secret — not logging the node in to {}; "
                     + "a private image pull will fail", z.slug(), registry);
-            return;
+            return false;
         }
         DockerCli.Result r = docker.docker(dockerHost(z),
                 List.of("login", registry, "-u", ProvisioningService.BOT_USER, "--password-stdin"),
                 token);
         if (r.ok()) {
             log.info("deploy {}: node logged in to registry {}", z.slug(), registry);
-        } else {
-            log.warn("deploy {}: docker login {} on node failed: {}",
-                    z.slug(), registry, firstLine(r.stderr()));
+            loggedIn.add(z.slug());
+            return true;
         }
+        log.warn("deploy {}: docker login {} on node failed: {}",
+                z.slug(), registry, firstLine(r.stderr()));
+        return false;
     }
 
     /**
-     * Log every zone's registry in on startup. The credentials live in the
-     * shared {@code ignition-docker-config} volume, so a fresh volume (or a node
-     * that hasn't seen a deploy since) would leave Watchtower unable to pull
-     * until each zone's next deploy. Off the main thread: a registry that is
-     * down shouldn't hold anything up, and each login is best-effort anyway.
+     * Log in every zone whose registry login hasn't succeeded yet — a few
+     * seconds after startup, then every {@code ignition.registry-login.interval}
+     * (default 5m) until it has. The credentials live in the shared
+     * {@code ignition-docker-config} volume that Watchtower reads, so a fresh
+     * volume, or a registry/edge that wasn't up yet at startup (a 502 right
+     * after Traefik restarts), would otherwise leave Watchtower unable to pull
+     * until each zone's next deploy. Once every zone is logged in this does
+     * nothing. Off the scheduler thread so a registry that hangs can't hold up
+     * the idle sweeper.
      */
-    @EventListener(ApplicationReadyEvent.class)
-    public void loginAllZones() {
+    @Scheduled(initialDelayString = "${ignition.registry-login.initial-delay:15s}",
+            fixedDelayString = "${ignition.registry-login.interval:5m}")
+    public void loginPendingZones() {
+        if (!loginRunning.compareAndSet(false, true)) {
+            return;
+        }
         Thread.ofVirtual().name("registry-login").start(() -> {
-            for (Zone z : zones.findAll()) {
-                try {
-                    registryLogin(z);
-                } catch (RuntimeException e) {
-                    log.warn("startup registry login for {} failed: {}", z.slug(), e.getMessage());
+            try {
+                for (Zone z : zones.findAll()) {
+                    if (loggedIn.contains(z.slug())) {
+                        continue;
+                    }
+                    try {
+                        registryLogin(z);
+                    } catch (RuntimeException e) {
+                        log.warn("registry login for {} failed: {}", z.slug(), e.getMessage());
+                    }
                 }
+            } finally {
+                loginRunning.set(false);
             }
         });
     }
