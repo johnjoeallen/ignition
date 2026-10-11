@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -109,6 +110,7 @@ public class ZoneConsoleController {
 
     /** Small polling payload used to keep Start/Stop controls current. */
     @GetMapping("/teams/{slug}/apps/status")
+    @ResponseBody
     public List<AppStatus> appStatus(@PathVariable String slug) {
         return apps.listForZone(slug).stream()
                 .map(a -> new AppStatus(a.name(), true, a.running()))
