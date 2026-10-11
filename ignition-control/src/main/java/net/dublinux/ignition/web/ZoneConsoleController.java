@@ -492,7 +492,7 @@ public class ZoneConsoleController {
         try {
             apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
             return devBack(slug, name, from, "dev deployment deleted");
-        } catch (IllegalArgumentException e) {
+        } catch (RuntimeException e) {
             return devBack(slug, name, from, e.getMessage());
         }
     }

@@ -13,6 +13,7 @@ public interface AppRepository extends JpaRepository<DeployedApp, DeployedApp.Ke
 
     Optional<DeployedApp> findByZoneAndName(String zone, String name);
 
+    @org.springframework.transaction.annotation.Transactional
     void deleteByZoneAndName(String zone, String name);
 
     default List<DeployedApp> findByZone(String zone) {

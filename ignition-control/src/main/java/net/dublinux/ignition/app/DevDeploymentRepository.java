@@ -12,5 +12,6 @@ public interface DevDeploymentRepository extends JpaRepository<DevDeployment, De
 
     Optional<DevDeployment> findByZoneAndName(String zone, String name);
 
+    @org.springframework.transaction.annotation.Transactional
     void deleteByZoneAndName(String zone, String name);
 }
