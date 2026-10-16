@@ -108,7 +108,10 @@
                   <a th:if="${a.running}" th:href="${a.url}" th:text="${a.version}">v1.2.3</a>
                   <span th:unless="${a.running}" class="text-body-secondary" th:text="${a.version}">v1.2.3</span>
                 </span>
-                <span th:unless="${a.deployed}" th:text="${a.version}">no releases yet</span>
+                <span th:unless="${a.deployed}" class="text-body-secondary" th:text="${a.version}">no releases yet</span>
+                <span th:if="${a.pending != null}" class="badge text-bg-secondary ms-1"
+                      th:title="|${a.pending} is tagged but not deployed yet — CI is building it, or it failed|"
+                      th:text="|${a.pending} building…|">v1.2.4 building…</span>
               </td>
               <td class="text-nowrap">
                 <form method="post" th:action="@{/teams/{slug}/apps/idle-ttl(slug=${zoneSlug})}" class="d-inline" th:if="${canManageMembers}">

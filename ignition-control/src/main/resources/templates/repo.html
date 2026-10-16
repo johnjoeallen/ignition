@@ -73,7 +73,12 @@
 
           <div class="text-nowrap">
             <div class="text-body-secondary small">Version</div>
-            <div class="mb-3" th:text="${repoInfo.version}">v1.2.3</div>
+            <div class="mb-3">
+              <span th:text="${versionShown}">v1.2.3</span>
+              <span th:if="${versionPending != null}" class="badge text-bg-secondary ms-1"
+                    th:title="|${versionPending} is tagged but not deployed yet — CI is building it, or it failed|"
+                    th:text="|${versionPending} building…|">v1.2.4 building…</span>
+            </div>
             <div class="text-body-secondary small mb-1">Release</div>
             <!-- suggested bump (from commit messages) is highlighted; if nothing is
                  pending, releasing just redeploys the current commit, so confirm first -->

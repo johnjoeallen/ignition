@@ -61,7 +61,8 @@ public class ZoneConsoleController {
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
     public record AppRow(String name, String description, String version, boolean deployed,
-                         boolean running, String image, String url, String deployId, String idleTtl) {}
+                         boolean running, String image, String url, String deployId, String idleTtl,
+                         String pending) {}
 
     /** One row in the Dev table — an app's deploy-from-main deployment. */
     public record DevRow(String name, String url, String image, String deployedAt, boolean running) {}
@@ -81,12 +82,19 @@ public class ZoneConsoleController {
         List<AppRow> rows = zones.repos(slug).stream()
                 .map(r -> {
                     DeployedApp d = deployed.get(r.name());
-                    return new AppRow(r.name(), r.description(), r.version(), d != null,
+                    // r.version() is the latest git tag — it exists before CI has built and deployed
+                    // anything. Show what is actually deployed; the tag only as "pending" until it is.
+                    boolean tagged = r.version().startsWith("v");
+                    String deployedVersion = d == null ? null : imageVersion(d.image());
+                    String shown = d == null ? (tagged ? "not deployed" : r.version())
+                            : deployedVersion != null ? deployedVersion : "deployed";
+                    String pending = tagged && !r.version().equals(deployedVersion) ? r.version() : null;
+                    return new AppRow(r.name(), r.description(), shown, d != null,
                             d != null && live.getOrDefault(d.name(), d.running()),
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
                             d == null ? null : d.deployId(),
-                            ttlValue(ttls.get(r.name())));
+                            ttlValue(ttls.get(r.name())), pending);
                 })
                 .toList();
 
@@ -140,6 +148,13 @@ public class ZoneConsoleController {
         apps.devDeploymentsForZone(slug).forEach(d ->
                 out.add(new AppStatus(d.name(), true, devLive.getOrDefault(d.name(), d.running()), "dev")));
         return out;
+    }
+
+    /** {@code vX.Y.Z} from an image ref like {@code git.x/slug/app:v1.2.3}, else null (e.g. a sha tag). */
+    private static String imageVersion(String image) {
+        int i = image == null ? -1 : image.lastIndexOf(':');
+        String tag = i < 0 ? "" : image.substring(i + 1);
+        return tag.matches("v\\d+\\.\\d+\\.\\d+") ? tag : null;
     }
 
     /** Form value for the idle-TTL select: blank = platform default, else minutes ({@code 0} = never). */
@@ -343,6 +358,14 @@ public class ZoneConsoleController {
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("repoInfo", info);
+        // info.version() is the latest git tag, which exists before CI has built anything — show what is deployed
+        boolean tagged = info.version().startsWith("v");
+        String deployedVersion = apps.listForZone(slug).stream()
+                .filter(a -> a.name().equals(repo)).findFirst()
+                .map(a -> imageVersion(a.image())).orElse(null);
+        model.addAttribute("versionShown", deployedVersion != null ? deployedVersion
+                : tagged ? "not deployed" : info.version());
+        model.addAttribute("versionPending", tagged && !info.version().equals(deployedVersion) ? info.version() : null);
         model.addAttribute("issueRows", issueRows);
         model.addAttribute("pending", pending);
         model.addAttribute("unreleasedIssues", unreleasedIssues);
