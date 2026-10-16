@@ -96,8 +96,17 @@ public class DockerCli {
             } else {
                 p.getOutputStream().close();
             }
+            // drain stderr alongside stdout — read one after the other, a command
+            // that fills the stderr pipe (e.g. `docker logs` of a chatty container) blocks forever
+            var errF = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                try {
+                    return new String(p.getErrorStream().readAllBytes());
+                } catch (IOException e) {
+                    return "";
+                }
+            });
             String out = new String(p.getInputStream().readAllBytes());
-            String err = new String(p.getErrorStream().readAllBytes());
+            String err = errF.join();
             boolean done = p.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!done) {
                 p.destroyForcibly();

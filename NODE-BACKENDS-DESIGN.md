@@ -240,7 +240,7 @@ listener, or sits behind something else that does:
   service (enforced by the engine same as compose limits) or a namespace
   `ResourceQuota` + per-container `resources.limits` on K8s — same config
   keys, same admin-facing knobs, different enforcement mechanism per kind.
-- **Idle sweep**: `IdleSweeper` reclaims a whole zone past its TTL. Backend
+- **Idle sweep**: `IdleSweeper` stops (`compose stop`, never `down`) each app with no traffic and no log output for its TTL. Backend
   call is `NodeBackend.teardownZoneInfra` regardless of kind — no change to
   the scheduling/TTL logic itself.
 

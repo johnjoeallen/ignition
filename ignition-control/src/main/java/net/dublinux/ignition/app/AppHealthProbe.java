@@ -39,6 +39,9 @@ public class AppHealthProbe {
     /** Starts with {@code /}; path/query characters only — never a host, userinfo or whitespace. */
     private static final Pattern PATH = Pattern.compile("^/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*$");
 
+    /** Sent on every probe, so the idle sweep can tell the console's checks from real traffic. */
+    public static final String USER_AGENT = "ignition-health-probe";
+
     private static final Duration TIMEOUT = Duration.ofSeconds(3);
     private static final long TTL_MS = 5_000;
 
@@ -68,7 +71,8 @@ public class AppHealthProbe {
         boolean up;
         try {
             HttpResponse<Void> r = http.send(
-                    HttpRequest.newBuilder(URI.create(url)).timeout(TIMEOUT).GET().build(),
+                    HttpRequest.newBuilder(URI.create(url)).timeout(TIMEOUT)
+                            .header("User-Agent", USER_AGENT).GET().build(),
                     HttpResponse.BodyHandlers.discarding());
             int code = r.statusCode();
             up = explicit ? code >= 200 && code < 400 : code < 500 && code != 404;

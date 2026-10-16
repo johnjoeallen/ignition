@@ -129,7 +129,7 @@ to create the platform admin. Then from the console:
   yet); from the team's console, add them as a team admin — they take it from
   there.
 - **Roster** — paste a slug list to bulk-provision or bulk-destroy an event.
-- Per team: **move**, **destroy**; per app: **stop**; **sweep idle teams now**.
+- Per team: **move**, **destroy**; per app: **stop**; **stop idle teams' apps now** (the idle sweep `compose stop`s an app with no traffic and no log output for `IGN_SWEEP_TTL` — it never destroys anything).
 
 **Create app** in the team console seeds the repo with a starter `Dockerfile`
 and `.forgejo/workflows/deploy.yml` ([`examples/deploy.yml`](examples/deploy.yml))

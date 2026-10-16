@@ -147,7 +147,7 @@ team.
 
 **4. Deterministic teardown.**
 Every resource is namespaced per team; teardown is a single, complete
-operation, and an idle sweeper reclaims teams that go quiet. The event leaves
+operation, and an idle sweeper stops apps nobody is using. The event leaves
 **no residue** — no leaked containers, no creeping spend, no "what is this
 from?" six months later.
 

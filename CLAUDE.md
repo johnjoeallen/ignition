@@ -374,8 +374,8 @@ command's stdout.
      existing app re-puts the workflow; a first-run **Deploy from main** on an
      old app fails until then. A migration that re-seeds every repo's workflow
      would close this.
-   - **No idle handling for `-dev`.** `IdleSweeper` is whole-zone only, so a
-     `-dev` container runs until the zone is reclaimed. Give `-dev` projects a
+   - **No idle handling for `-dev`.** `IdleSweeper` uses one TTL for every app, so a
+     `-dev` container runs until it has had no traffic or logs for `IGN_SWEEP_TTL` (then `compose stop`). Give `-dev` projects a
      short independent TTL (~30 min, cold-start on next hit).
    - **`noindex` / gate.** The `dev` host is public by design. If that changes,
      the `dev` router is where the front-door `forward-auth` (task 4) and an
