@@ -122,6 +122,8 @@ services:
       # guessing from what's absent. CLF to stdout; picked up by `docker logs`
       # same as everything else here.
       - --accesslog=true
+      - --accesslog.fields.headers.defaultmode=drop
+      - --accesslog.fields.headers.names.User-Agent=keep
     # The idle sweep reads this log with `docker logs --since`, once per tick:
     # keep enough that a busy node can't rotate a tick's worth away.
     logging:

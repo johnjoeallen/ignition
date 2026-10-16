@@ -42,6 +42,13 @@ public class AppHealthProbe {
     /** Sent on every probe, so the idle sweep can tell the console's checks from real traffic. */
     public static final String USER_AGENT = "ignition-health-probe";
 
+    /**
+     * Also added to every probe URL's query. Traefik's access log leaves the
+     * user agent as {@code "-"} unless headers are configured, but it always
+     * logs the request line — so this is what the idle sweep can rely on.
+     */
+    public static final String PROBE_PARAM = "ign_probe=1";
+
     private static final Duration TIMEOUT = Duration.ofSeconds(3);
     private static final long TTL_MS = 5_000;
 
@@ -61,7 +68,7 @@ public class AppHealthProbe {
     public boolean up(String appUrl, String healthPath) {
         boolean explicit = healthPath != null && PATH.matcher(healthPath.strip()).matches();
         String path = explicit ? healthPath.strip() : "/";
-        String url = appUrl.replaceAll("/+$", "") + path;
+        String url = appUrl.replaceAll("/+$", "") + path + (path.contains("?") ? "&" : "?") + PROBE_PARAM;
 
         Cached c = cache.get(url);
         long now = System.currentTimeMillis();

@@ -76,7 +76,7 @@ public class AppActivity {
     static Set<String> routersWithTraffic(String accessLog) {
         Set<String> seen = new HashSet<>();
         for (String line : accessLog.split("\n")) {
-            if (line.contains("\"" + AppHealthProbe.USER_AGENT + "\"")) {
+            if (line.contains(AppHealthProbe.PROBE_PARAM) || line.contains("\"" + AppHealthProbe.USER_AGENT + "\"")) {
                 continue;
             }
             Matcher m = ROUTER.matcher(line);
