@@ -5,8 +5,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import net.dublinux.ignition.app.AppConfig;
+import net.dublinux.ignition.app.AppConfigRepository;
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.app.DeployedApp;
 import net.dublinux.ignition.app.DevDeployment;
@@ -24,7 +27,7 @@ import org.springframework.stereotype.Component;
  * Stops apps nobody is using. An app — each release and each dev deployment,
  * judged on its own — is idle when, for its idle time, Traefik has seen no
  * request for it ({@link AppActivity}). The idle time is per app (set by a team
- * admin on the Apps table): unset = {@code ignition.sweep.ttl}, {@code 0} =
+ * admin on the Apps table, deployed or not): unset = {@code ignition.sweep.ttl}, {@code 0} =
  * never stop. An idle app gets {@code docker compose stop}; nothing is removed —
  * no {@code down}, no {@code -v}, the zone, its Forgejo and every row stay. The
  * console's <b>Start</b> brings it back. Destroying a zone is only ever a manual
@@ -41,17 +44,19 @@ public class IdleSweeper {
     private final NodeRepository nodes;
     private final AppService apps;
     private final AppActivity activity;
+    private final AppConfigRepository configs;
 
     @Value("${ignition.sweep.dry-run:false}")
     private boolean dryRun;
 
     public IdleSweeper(IgnitionProperties props, ZoneRepository zones, NodeRepository nodes,
-                       AppService apps, AppActivity activity) {
+                       AppService apps, AppActivity activity, AppConfigRepository configs) {
         this.props = props;
         this.zones = zones;
         this.nodes = nodes;
         this.apps = apps;
         this.activity = activity;
+        this.configs = configs;
     }
 
     @Scheduled(fixedDelayString = "${ignition.sweep.interval}", initialDelay = 60_000)
@@ -72,6 +77,10 @@ public class IdleSweeper {
             if (releases.isEmpty() && devs.isEmpty()) {
                 continue;
             }
+            Map<String, Integer> ttls = new java.util.HashMap<>();
+            for (AppConfig c : configs.findByZone(z.slug())) {
+                ttls.put(c.name(), c.idleTtlMinutes());
+            }
             String host = nodes.findById(z.node()).map(n -> n.dockerHost()).orElse("local");
             if (scanned.add(host)) {
                 try {
@@ -83,10 +92,10 @@ public class IdleSweeper {
                 }
             }
             for (DeployedApp a : releases) {
-                sweepOne(z.slug(), a.name(), false, a.idleTtlMinutes(), a.activeSince(), dflt, actions);
+                sweepOne(z.slug(), a.name(), false, ttls.get(a.name()), a.activeSince(), dflt, actions);
             }
             for (DevDeployment d : devs) {
-                sweepOne(z.slug(), d.name(), true, d.idleTtlMinutes(), d.activeSince(), dflt, actions);
+                sweepOne(z.slug(), d.name(), true, ttls.get(d.name()), d.activeSince(), dflt, actions);
             }
         }
         return actions;

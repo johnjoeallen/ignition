@@ -6,6 +6,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+import net.dublinux.ignition.app.AppConfig;
+import net.dublinux.ignition.app.AppConfigRepository;
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.app.DeployedApp;
 import net.dublinux.ignition.auth.CurrentUser;
@@ -41,14 +43,17 @@ public class ZoneConsoleController {
 
     private final ZoneService zones;
     private final AppService apps;
+    private final AppConfigRepository appConfigs;
     private final ZoneAccessService access;
     private final CurrentUser currentUser;
     private final MailService mail;
 
-    public ZoneConsoleController(ZoneService zones, AppService apps, ZoneAccessService access,
+    public ZoneConsoleController(ZoneService zones, AppService apps, AppConfigRepository appConfigs,
+                                 ZoneAccessService access,
                                  CurrentUser currentUser, MailService mail) {
         this.zones = zones;
         this.apps = apps;
+        this.appConfigs = appConfigs;
         this.access = access;
         this.currentUser = currentUser;
         this.mail = mail;
@@ -59,7 +64,7 @@ public class ZoneConsoleController {
                          boolean running, String image, String url, String deployId, String idleTtl) {}
 
     /** One row in the Dev table — an app's deploy-from-main deployment. */
-    public record DevRow(String name, String url, String image, String deployedAt, boolean running, String idleTtl) {}
+    public record DevRow(String name, String url, String image, String deployedAt, boolean running) {}
 
     /** {@code channel} is {@code release} or {@code dev}; the page keys rows on both. */
     public record AppStatus(String name, boolean deployed, boolean running, String channel) {}
@@ -71,6 +76,8 @@ public class ZoneConsoleController {
         Map<String, DeployedApp> deployed = apps.listForZone(slug).stream()
                 .collect(java.util.stream.Collectors.toMap(DeployedApp::name, a -> a));
         Map<String, Boolean> live = apps.liveStates(slug);
+        Map<String, Integer> ttls = new java.util.HashMap<>();
+        appConfigs.findByZone(slug).forEach(c -> ttls.put(c.name(), c.idleTtlMinutes()));
         List<AppRow> rows = zones.repos(slug).stream()
                 .map(r -> {
                     DeployedApp d = deployed.get(r.name());
@@ -79,7 +86,7 @@ public class ZoneConsoleController {
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
                             d == null ? null : d.deployId(),
-                            d == null ? "" : ttlValue(d.idleTtlMinutes()));
+                            ttlValue(ttls.get(r.name())));
                 })
                 .toList();
 
@@ -112,7 +119,7 @@ public class ZoneConsoleController {
                 .withZone(java.time.ZoneOffset.UTC);
         model.addAttribute("devs", apps.devDeploymentsForZone(slug).stream()
                 .map(d -> new DevRow(d.name(), d.url(zone.baseDomain()), d.image(),
-                        at.format(d.deployedAt()) + " UTC", devLive.getOrDefault(d.name(), d.running()), ttlValue(d.idleTtlMinutes())))
+                        at.format(d.deployedAt()) + " UTC", devLive.getOrDefault(d.name(), d.running())))
                 .toList());
         model.addAttribute("members", members);
         model.addAttribute("gitUsernames", gitUsernames);
@@ -140,18 +147,26 @@ public class ZoneConsoleController {
         return minutes == null ? "" : minutes.toString();
     }
 
-    /** Team admin: how long this app may go without traffic before the idle sweep stops it. */
+    /**
+     * Team admin: how long this app may go without traffic before the idle sweep
+     * stops it. Stored by app name, so it can be set before the first release;
+     * blank = platform default, 0 = never.
+     */
     @PostMapping("/teams/{slug}/apps/idle-ttl")
     public String setIdleTtl(@PathVariable String slug, @RequestParam String name,
-                             @RequestParam(defaultValue = "release") String channel,
                              @RequestParam(defaultValue = "") String minutes) {
         if (!currentUser.isZoneAdmin(slug)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can change an app's idle time");
         }
         try {
-            apps.setIdleTtl(slug, name,
-                    "dev".equals(channel) ? net.dublinux.ignition.app.Channel.DEV : net.dublinux.ignition.app.Channel.RELEASE,
-                    minutes.isBlank() ? null : Integer.valueOf(minutes.strip()));
+            Integer m = minutes.isBlank() ? null : Integer.valueOf(minutes.strip());
+            if (m != null && m < 0) {
+                throw new IllegalArgumentException("idle time can't be negative");
+            }
+            AppConfig c = appConfigs.findById(new net.dublinux.ignition.app.DeployedApp.Key(slug, name))
+                    .orElseGet(() -> new AppConfig(slug, name, null));
+            c.setIdleTtlMinutes(m);
+            appConfigs.save(c);
             return redirect(slug, "idle time for " + name + " saved");
         } catch (IllegalArgumentException e) {
             return redirect(slug, e.getMessage());
@@ -538,6 +553,7 @@ public class ZoneConsoleController {
         } catch (IllegalArgumentException noDev) {
             // no dev deployment — fine
         }
+        appConfigs.deleteByZoneAndName(slug, name);
         var res = zones.deleteApp(slug, name);
         return redirect(slug, res.ok() || res.status() == 404
                 ? "app " + name + " deleted"

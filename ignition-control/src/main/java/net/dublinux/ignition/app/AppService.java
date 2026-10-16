@@ -220,27 +220,6 @@ public class AppService {
         apps.save(app);
     }
 
-    /**
-     * Set how long an app may sit with no traffic before the idle sweep stops
-     * it: {@code null} = platform default, {@code 0} = never, else minutes.
-     */
-    public void setIdleTtl(String slug, String name, Channel channel, Integer minutes) {
-        if (minutes != null && minutes < 0) {
-            throw new IllegalArgumentException("idle time can't be negative");
-        }
-        if (channel == Channel.DEV) {
-            DevDeployment dev = devApps.findByZoneAndName(slug, name)
-                    .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no dev deployment of '" + name + "'"));
-            dev.setIdleTtlMinutes(minutes);
-            devApps.save(dev);
-        } else {
-            DeployedApp app = apps.findByZoneAndName(slug, name)
-                    .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no app '" + name + "'"));
-            app.setIdleTtlMinutes(minutes);
-            apps.save(app);
-        }
-    }
-
     /** Stop a dev deployment's containers. Idempotent. */
     public void stopDev(String slug, String name) {
         DevDeployment dev = devApps.findByZoneAndName(slug, name)
