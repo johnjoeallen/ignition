@@ -46,6 +46,14 @@ public class DeployedApp {
     @Column(nullable = false)
     private boolean running = true;
 
+    /** Minutes of no traffic before the idle sweep stops this; null = platform default, 0 = never. */
+    @Column(name = "idle_ttl_minutes")
+    private Integer idleTtlMinutes;
+
+    /** When this was last (re)started — a deploy or Start. */
+    @Column(name = "active_since", nullable = false)
+    private Instant activeSince = Instant.now();
+
     protected DeployedApp() {
     }
 
@@ -72,11 +80,19 @@ public class DeployedApp {
         this.port = port;
         this.deployId = deployId;
         this.deployedAt = Instant.now();
+        this.activeSince = this.deployedAt;
         this.running = true;
     }
 
     public void markStopped() { this.running = false; }
-    public void markRunning() { this.running = true; }
+    public void markRunning() {
+        this.running = true;
+        this.activeSince = Instant.now();
+    }
+
+    public Integer idleTtlMinutes() { return idleTtlMinutes; }
+    public void setIdleTtlMinutes(Integer minutes) { this.idleTtlMinutes = minutes; }
+    public Instant activeSince() { return activeSince; }
 
     /** {@code <name>.apps.<zone>.<baseDomain>} */
     public String url(String baseDomain) {

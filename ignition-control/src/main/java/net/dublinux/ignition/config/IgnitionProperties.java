@@ -73,10 +73,10 @@ public class IgnitionProperties {
     private final Services services = new Services();
 
     public static class Sweep {
-        /** Reclaim a zone idle longer than this. */
+        /** Default idle time before an app with no traffic is stopped (per-app override on the app). */
         private Duration ttl = Duration.ofHours(24);
         /** How often the sweeper runs. */
-        private Duration interval = Duration.ofMinutes(15);
+        private Duration interval = Duration.ofMinutes(5);
 
         public Duration getTtl() { return ttl; }
         public void setTtl(Duration ttl) { this.ttl = ttl; }

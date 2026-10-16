@@ -1,6 +1,5 @@
 package net.dublinux.ignition.sweep;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -17,17 +16,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Has an app been used lately? Two signals, either one is enough:
- * <ul>
- *   <li><b>traffic</b> — a line in the node Traefik's access log for the app's
- *       router (router name = compose project, {@code app-<slug>-<name>[-dev]}),
- *       not counting the console's own health probes ({@link AppHealthProbe#USER_AGENT});</li>
- *   <li><b>log output</b> — anything the app's web container wrote to
- *       stdout/stderr. A deploy or a Start always logs, so a fresh app is never idle.</li>
- * </ul>
- * Traffic is remembered per project in memory: each scan of a node reads its
- * Traefik log only since the previous scan (the first one after a restart reads
- * the whole window).
+ * Has an app been used lately? One signal: a request in the node Traefik's
+ * access log for the app's router (router name = compose project,
+ * {@code app-<slug>-<name>[-dev]}), not counting the console's own health probes
+ * ({@link AppHealthProbe#USER_AGENT}). Each scan reads a node's log only since
+ * the previous scan (one sweep tick), so Docker's log rotation can't matter
+ * unless a node writes more than the retained size in a single tick. The last
+ * request time per project is persisted ({@link AppTraffic}); this controller's
+ * start time acts as a floor, so a restart — which can miss traffic from just
+ * before it — never makes an app look idle sooner.
  */
 @Component
 public class AppActivity {
@@ -38,24 +35,21 @@ public class AppActivity {
     private static final Pattern ROUTER = Pattern.compile("\"([^\"@]+)@[a-z]+\"");
 
     private final DockerCli docker;
+    private final AppTrafficRepository traffic;
+    private final Instant started = Instant.now();
 
-    /** project -> last time a scan saw traffic for it */
-    private final Map<String, Instant> lastTraffic = new ConcurrentHashMap<>();
     /** docker host -> when its Traefik log was last read up to */
     private final Map<String, Instant> lastScan = new ConcurrentHashMap<>();
 
-    public AppActivity(DockerCli docker) {
+    public AppActivity(DockerCli docker, AppTrafficRepository traffic) {
         this.docker = docker;
+        this.traffic = traffic;
     }
 
-    /** Read the node's Traefik access log since the last scan (at most {@code window}) and record traffic. */
-    public void scanTraffic(String host, Duration window) {
+    /** Read the node's Traefik access log since the last scan (or since this controller started) and record traffic. */
+    public void scanTraffic(String host) {
         Instant now = Instant.now();
-        Instant floor = now.minus(window);
-        Instant since = lastScan.getOrDefault(host, floor);
-        if (since.isBefore(floor)) {
-            since = floor;
-        }
+        Instant since = lastScan.getOrDefault(host, started);
         DockerCli.Result ps = docker.docker(host, List.of("ps", "-q",
                 "--filter", "label=com.docker.compose.project=ignition-core",
                 "--filter", "label=com.docker.compose.service=traefik"));
@@ -71,7 +65,9 @@ public class AppActivity {
             return;
         }
         for (String project : routersWithTraffic(logs.stdout() + "\n" + logs.stderr())) {
-            lastTraffic.put(project, now);
+            if (project.startsWith("app-")) {
+                traffic.save(new AppTraffic(project, now));
+            }
         }
         lastScan.put(host, now);
     }
@@ -95,27 +91,13 @@ public class AppActivity {
         return seen;
     }
 
-    /** Traffic for {@code project} seen at or after {@code cutoff} (needs a prior {@link #scanTraffic}). */
-    public boolean hadTraffic(String project, Instant cutoff) {
-        Instant t = lastTraffic.get(project);
-        return t != null && !t.isBefore(cutoff);
-    }
-
-    /** Did the project's web container write any log line at or after {@code cutoff}? Unknown counts as yes. */
-    public boolean loggedSince(String host, String project, Instant cutoff) {
-        DockerCli.Result ps = docker.docker(host, List.of("ps", "-q",
-                "--filter", "label=com.docker.compose.project=" + project,
-                "--filter", "label=ignition.web=true"));
-        if (!ps.ok()) {
-            return true;
-        }
-        for (String id : ps.stdout().lines().map(String::strip).filter(s -> !s.isEmpty()).toList()) {
-            DockerCli.Result r = docker.docker(host, List.of("logs", "--since",
-                    Long.toString(cutoff.getEpochSecond()), "--tail", "1", id));
-            if (!r.ok() || !r.stdout().isBlank() || !r.stderr().isBlank()) {
-                return true;
-            }
-        }
-        return false;
+    /**
+     * The last moment {@code project} is known to have been in use: its last
+     * request, or this controller's start if later. Callers also fold in when
+     * the app was last started.
+     */
+    public Instant lastActive(String project) {
+        Instant t = traffic.findById(project).map(AppTraffic::lastTrafficAt).orElse(started);
+        return t.isBefore(started) ? started : t;
     }
 }

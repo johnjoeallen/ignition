@@ -91,7 +91,7 @@
       <div class="table-card mb-4">
         <div hidden th:attr="data-app-status-url=@{/teams/{slug}/apps/status(slug=${zoneSlug})}"></div>
         <table class="table table-hover mb-0">
-          <thead><tr><th>app</th><th>description</th><th>version</th><th></th></tr></thead>
+          <thead><tr><th>app</th><th>description</th><th>version</th><th>stop when idle</th><th></th></tr></thead>
           <tbody>
             <tr th:each="a : ${apps}">
               <td>
@@ -110,6 +110,26 @@
                 </span>
                 <span th:unless="${a.deployed}" th:text="${a.version}">no releases yet</span>
               </td>
+              <td class="text-nowrap" th:if="${a.deployed}">
+                <form method="post" th:action="@{/teams/{slug}/apps/idle-ttl(slug=${zoneSlug})}" class="d-inline" th:if="${canManageMembers}">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <input type="hidden" name="name" th:value="${a.name}">
+                  <input type="hidden" name="channel" value="release">
+                  <select name="minutes" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()"
+                          title="Stop after this long with no traffic">
+                    <option value="" th:selected="${a.idleTtl == ''}">default</option>
+                    <option value="60" th:selected="${a.idleTtl == '60'}">1 hour</option>
+                    <option value="360" th:selected="${a.idleTtl == '360'}">6 hours</option>
+                    <option value="1440" th:selected="${a.idleTtl == '1440'}">1 day</option>
+                    <option value="4320" th:selected="${a.idleTtl == '4320'}">3 days</option>
+                    <option value="10080" th:selected="${a.idleTtl == '10080'}">7 days</option>
+                    <option value="0" th:selected="${a.idleTtl == '0'}">never</option>
+                  </select>
+                </form>
+                <span th:unless="${canManageMembers}" class="text-body-secondary small"
+                      th:text="${a.idleTtl == ''} ? 'default' : (${a.idleTtl == '0'} ? 'never' : ${a.idleTtl} + ' min')">default</span>
+              </td>
+              <td th:unless="${a.deployed}"></td>
               <td class="text-end text-nowrap">
                 <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}"
                       class="d-inline" th:classappend="${!a.running} ? ' d-none'"
@@ -131,7 +151,7 @@
                 </form>
               </td>
             </tr>
-            <tr th:if="${apps.isEmpty()}"><td colspan="4" class="text-body-secondary text-center py-4">no apps yet — create one above</td></tr>
+            <tr th:if="${apps.isEmpty()}"><td colspan="5" class="text-body-secondary text-center py-4">no apps yet — create one above</td></tr>
           </tbody>
         </table>
       </div>
@@ -143,7 +163,7 @@
         app page's <b>Deploy from main</b> button. Independent of the release above.</p>
       <div class="table-card mb-4" th:if="${!devs.isEmpty()}">
         <table class="table table-hover mb-0">
-          <thead><tr><th>app</th><th>image</th><th>deployed</th><th>status</th><th></th></tr></thead>
+          <thead><tr><th>app</th><th>image</th><th>deployed</th><th>status</th><th>stop when idle</th><th></th></tr></thead>
           <tbody>
             <tr th:each="d : ${devs}">
               <td><a th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${d.name})}" th:text="${d.name}">flora</a></td>
@@ -159,6 +179,25 @@
                   <a th:if="${d.running}" th:href="${d.url}" target="_blank" rel="noopener">open</a>
                   <span th:unless="${d.running}" class="text-body-secondary">down</span>
                 </span>
+              </td>
+              <td class="text-nowrap">
+                <form method="post" th:action="@{/teams/{slug}/apps/idle-ttl(slug=${zoneSlug})}" class="d-inline" th:if="${canManageMembers}">
+                  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                  <input type="hidden" name="name" th:value="${d.name}">
+                  <input type="hidden" name="channel" value="dev">
+                  <select name="minutes" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()"
+                          title="Stop after this long with no traffic">
+                    <option value="" th:selected="${d.idleTtl == ''}">default</option>
+                    <option value="60" th:selected="${d.idleTtl == '60'}">1 hour</option>
+                    <option value="360" th:selected="${d.idleTtl == '360'}">6 hours</option>
+                    <option value="1440" th:selected="${d.idleTtl == '1440'}">1 day</option>
+                    <option value="4320" th:selected="${d.idleTtl == '4320'}">3 days</option>
+                    <option value="10080" th:selected="${d.idleTtl == '10080'}">7 days</option>
+                    <option value="0" th:selected="${d.idleTtl == '0'}">never</option>
+                  </select>
+                </form>
+                <span th:unless="${canManageMembers}" class="text-body-secondary small"
+                      th:text="${d.idleTtl == ''} ? 'default' : (${d.idleTtl == '0'} ? 'never' : ${d.idleTtl} + ' min')">default</span>
               </td>
               <td class="text-end text-nowrap">
                 <form method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"

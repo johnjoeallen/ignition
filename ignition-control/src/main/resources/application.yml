@@ -46,7 +46,7 @@ ignition:
     starttls: ${IGN_SMTP_STARTTLS:true}
   sweep:
     ttl: ${IGN_SWEEP_TTL:24h}
-    interval: ${IGN_SWEEP_INTERVAL:15m}
+    interval: ${IGN_SWEEP_INTERVAL:5m}
   preview:
     # how often the PR-preview reaper checks for previews whose PR has closed
     reap-interval: ${IGN_PREVIEW_REAP_INTERVAL:1h}

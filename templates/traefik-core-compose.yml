@@ -122,6 +122,13 @@ services:
       # guessing from what's absent. CLF to stdout; picked up by `docker logs`
       # same as everything else here.
       - --accesslog=true
+    # The idle sweep reads this log with `docker logs --since`, once per tick:
+    # keep enough that a busy node can't rotate a tick's worth away.
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
     ports:
       # Bind to a specific host interface on a multi-homed box (the corp-DMZ IP,
       # or the public IP) — see docs/exposure.md "Topologies". Default: all.

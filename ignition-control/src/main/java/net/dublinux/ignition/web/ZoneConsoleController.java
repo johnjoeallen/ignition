@@ -56,10 +56,10 @@ public class ZoneConsoleController {
 
     /** One row in the Apps table — a repo, plus its live deployment if any. */
     public record AppRow(String name, String description, String version, boolean deployed,
-                         boolean running, String image, String url, String deployId) {}
+                         boolean running, String image, String url, String deployId, String idleTtl) {}
 
     /** One row in the Dev table — an app's deploy-from-main deployment. */
-    public record DevRow(String name, String url, String image, String deployedAt, boolean running) {}
+    public record DevRow(String name, String url, String image, String deployedAt, boolean running, String idleTtl) {}
 
     /** {@code channel} is {@code release} or {@code dev}; the page keys rows on both. */
     public record AppStatus(String name, boolean deployed, boolean running, String channel) {}
@@ -78,7 +78,8 @@ public class ZoneConsoleController {
                             d != null && live.getOrDefault(d.name(), d.running()),
                             d == null ? null : d.image(),
                             d == null ? null : d.url(zone.baseDomain()),
-                            d == null ? null : d.deployId());
+                            d == null ? null : d.deployId(),
+                            d == null ? "" : ttlValue(d.idleTtlMinutes()));
                 })
                 .toList();
 
@@ -111,7 +112,7 @@ public class ZoneConsoleController {
                 .withZone(java.time.ZoneOffset.UTC);
         model.addAttribute("devs", apps.devDeploymentsForZone(slug).stream()
                 .map(d -> new DevRow(d.name(), d.url(zone.baseDomain()), d.image(),
-                        at.format(d.deployedAt()) + " UTC", devLive.getOrDefault(d.name(), d.running())))
+                        at.format(d.deployedAt()) + " UTC", devLive.getOrDefault(d.name(), d.running()), ttlValue(d.idleTtlMinutes())))
                 .toList());
         model.addAttribute("members", members);
         model.addAttribute("gitUsernames", gitUsernames);
@@ -132,6 +133,29 @@ public class ZoneConsoleController {
         apps.devDeploymentsForZone(slug).forEach(d ->
                 out.add(new AppStatus(d.name(), true, devLive.getOrDefault(d.name(), d.running()), "dev")));
         return out;
+    }
+
+    /** Form value for the idle-TTL select: blank = platform default, else minutes ({@code 0} = never). */
+    private static String ttlValue(Integer minutes) {
+        return minutes == null ? "" : minutes.toString();
+    }
+
+    /** Team admin: how long this app may go without traffic before the idle sweep stops it. */
+    @PostMapping("/teams/{slug}/apps/idle-ttl")
+    public String setIdleTtl(@PathVariable String slug, @RequestParam String name,
+                             @RequestParam(defaultValue = "release") String channel,
+                             @RequestParam(defaultValue = "") String minutes) {
+        if (!currentUser.isZoneAdmin(slug)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can change an app's idle time");
+        }
+        try {
+            apps.setIdleTtl(slug, name,
+                    "dev".equals(channel) ? net.dublinux.ignition.app.Channel.DEV : net.dublinux.ignition.app.Channel.RELEASE,
+                    minutes.isBlank() ? null : Integer.valueOf(minutes.strip()));
+            return redirect(slug, "idle time for " + name + " saved");
+        } catch (IllegalArgumentException e) {
+            return redirect(slug, e.getMessage());
+        }
     }
 
     @PostMapping("/teams/{slug}/members")

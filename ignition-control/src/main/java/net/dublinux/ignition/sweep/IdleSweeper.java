@@ -22,13 +22,14 @@ import org.springframework.stereotype.Component;
 
 /**
  * Stops apps nobody is using. An app — each release and each dev deployment,
- * judged on its own — is idle when, for the whole of {@code ignition.sweep.ttl},
- * it has had no traffic through its router and its web container has written
- * no log output ({@link AppActivity}). An idle app gets {@code docker compose
- * stop}; nothing is removed — no {@code down}, no {@code -v}, the zone, its
- * Forgejo and every row stay. The console's <b>Start</b> brings it back.
- * Destroying a zone is only ever a manual platform-admin action. Set
- * {@code ignition.sweep.dry-run=true} to only report.
+ * judged on its own — is idle when, for its idle time, Traefik has seen no
+ * request for it ({@link AppActivity}). The idle time is per app (set by a team
+ * admin on the Apps table): unset = {@code ignition.sweep.ttl}, {@code 0} =
+ * never stop. An idle app gets {@code docker compose stop}; nothing is removed —
+ * no {@code down}, no {@code -v}, the zone, its Forgejo and every row stay. The
+ * console's <b>Start</b> brings it back. Destroying a zone is only ever a manual
+ * platform-admin action. Set {@code ignition.sweep.dry-run=true} to only report.
+ * Covers every app on every node: each tick walks all zones.
  */
 @Component
 public class IdleSweeper {
@@ -60,8 +61,7 @@ public class IdleSweeper {
 
     /** Run one sweep now and return a line per app acted on. */
     public List<String> sweepNow() {
-        Duration ttl = props.getSweep().getTtl();
-        Instant cutoff = Instant.now().minus(ttl);
+        Duration dflt = props.getSweep().getTtl();
         List<String> actions = new ArrayList<>();
         Set<String> scanned = new HashSet<>();
         for (Zone z : zones.findAll()) {
@@ -74,38 +74,52 @@ public class IdleSweeper {
             }
             String host = nodes.findById(z.node()).map(n -> n.dockerHost()).orElse("local");
             if (scanned.add(host)) {
-                activity.scanTraffic(host, ttl);
+                try {
+                    activity.scanTraffic(host);
+                } catch (RuntimeException e) {
+                    log.warn("traffic scan of {} failed — leaving its apps alone this tick", host, e);
+                    scanned.remove(host);
+                    continue;
+                }
             }
             for (DeployedApp a : releases) {
-                sweepOne(host, z.slug(), a.name(), false, cutoff, ttl, actions);
+                sweepOne(z.slug(), a.name(), false, a.idleTtlMinutes(), a.activeSince(), dflt, actions);
             }
             for (DevDeployment d : devs) {
-                sweepOne(host, z.slug(), d.name(), true, cutoff, ttl, actions);
+                sweepOne(z.slug(), d.name(), true, d.idleTtlMinutes(), d.activeSince(), dflt, actions);
             }
         }
         return actions;
     }
 
-    private void sweepOne(String host, String slug, String name, boolean dev,
-                          Instant cutoff, Duration ttl, List<String> actions) {
+    private void sweepOne(String slug, String name, boolean dev, Integer ttlMinutes,
+                          Instant activeSince, Duration dflt, List<String> actions) {
+        if (ttlMinutes != null && ttlMinutes == 0) {
+            return; // never stop
+        }
+        Duration ttl = ttlMinutes == null ? dflt : Duration.ofMinutes(ttlMinutes);
         String project = "app-" + slug + "-" + name + (dev ? "-dev" : "");
         String what = slug + "/" + name + (dev ? " (dev)" : "");
-        if (activity.hadTraffic(project, cutoff) || activity.loggedSince(host, project, cutoff)) {
+        Instant last = activity.lastActive(project);
+        if (activeSince != null && activeSince.isAfter(last)) {
+            last = activeSince;
+        }
+        if (last.isAfter(Instant.now().minus(ttl))) {
             return;
         }
         if (dryRun) {
-            actions.add(what + ": no traffic or logs for " + ttl + " — would stop (dry-run)");
-            log.info("app {} idle (no traffic or logs for {}) — would stop (dry-run)", what, ttl);
+            actions.add(what + ": no traffic for " + ttl + " — would stop (dry-run)");
+            log.info("app {} idle (no traffic for {}) — would stop (dry-run)", what, ttl);
             return;
         }
-        log.info("app {} idle (no traffic or logs for {}) — stopping", what, ttl);
+        log.info("app {} idle (no traffic for {}) — stopping", what, ttl);
         try {
             if (dev) {
                 apps.stopDev(slug, name);
             } else {
                 apps.stop(slug, name);
             }
-            actions.add(what + ": stopped (no traffic or logs for " + ttl + ")");
+            actions.add(what + ": stopped (no traffic for " + ttl + ")");
         } catch (RuntimeException e) {
             log.warn("failed to stop idle app {}", what, e);
             actions.add(what + ": stop FAILED — " + e.getMessage());
