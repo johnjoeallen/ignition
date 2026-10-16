@@ -50,6 +50,10 @@ public class DeployedApp {
     @Column(name = "active_since", nullable = false)
     private Instant activeSince = Instant.now();
 
+    /** Stopped by the idle sweep (so a browser visit may wake it), not by a person pressing Stop. */
+    @Column(name = "idle_stopped", nullable = false)
+    private boolean idleStopped;
+
     protected DeployedApp() {
     }
 
@@ -80,9 +84,20 @@ public class DeployedApp {
         this.running = true;
     }
 
-    public void markStopped() { this.running = false; }
+    public void markStopped() {
+        this.running = false;
+        this.idleStopped = false;
+    }
+
+    public void markIdleStopped() {
+        this.running = false;
+        this.idleStopped = true;
+    }
+
+    public boolean idleStopped() { return idleStopped; }
     public void markRunning() {
         this.running = true;
+        this.idleStopped = false;
         this.activeSince = Instant.now();
     }
 

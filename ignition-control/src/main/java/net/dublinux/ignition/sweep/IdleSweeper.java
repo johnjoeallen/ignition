@@ -124,9 +124,9 @@ public class IdleSweeper {
         log.info("app {} idle (no traffic for {}) — stopping", what, ttl);
         try {
             if (dev) {
-                apps.stopDev(slug, name);
+                apps.stopDevIdle(slug, name);
             } else {
-                apps.stop(slug, name);
+                apps.stopIdle(slug, name);
             }
             actions.add(what + ": stopped (no traffic for " + ttl + ")");
         } catch (RuntimeException e) {

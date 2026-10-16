@@ -220,6 +220,24 @@ public class AppService {
         apps.save(app);
     }
 
+    /** Like {@link #stop}, but recorded as the idle sweep's doing, so a browser visit may wake it. */
+    public void stopIdle(String slug, String name) {
+        DeployedApp app = apps.findByZoneAndName(slug, name)
+                .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no app '" + name + "'"));
+        lifecycle(slug, name, Channel.RELEASE, "stop");
+        app.markIdleStopped();
+        apps.save(app);
+    }
+
+    /** Dev counterpart of {@link #stopIdle}. */
+    public void stopDevIdle(String slug, String name) {
+        DevDeployment dev = devApps.findByZoneAndName(slug, name)
+                .orElseThrow(() -> new IllegalArgumentException("zone " + slug + " has no dev deployment of '" + name + "'"));
+        lifecycle(slug, name, Channel.DEV, "stop");
+        dev.markIdleStopped();
+        devApps.save(dev);
+    }
+
     /** Stop a dev deployment's containers. Idempotent. */
     public void stopDev(String slug, String name) {
         DevDeployment dev = devApps.findByZoneAndName(slug, name)
