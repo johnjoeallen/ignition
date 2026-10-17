@@ -167,14 +167,18 @@ class RepoPageRenderTest {
         var ctx = baseContext();
         ctx.setVariable("pending", new ReleaseService.Pending(true, "v1.1.0", Instant.now(), 0, List.of(), "patch"));
         ctx.setVariable("previews", List.of(
-                Map.of("name", "cards-pr-3", "url", "https://cards-pr-3.apps.acme.ignition.example/"),
-                Map.of("name", "cards-pr-7", "url", "https://cards-pr-7.apps.acme.ignition.example/")));
+                Map.of("name", "cards-pr-3", "url", "https://cards-pr-3.apps.acme.ignition.example/",
+                        "number", "3", "running", true),
+                Map.of("name", "cards-pr-7", "url", "https://cards-pr-7.apps.acme.ignition.example/",
+                        "number", "7", "running", false)));
 
         String html = engine().process("repo", ctx);
-        assertThat(html).contains("PR previews");
+        assertThat(html).contains("Deployments").contains("PR #3").contains("PR #7");
         assertThat(html).contains("cards-pr-3");
         assertThat(html).contains("https://cards-pr-7.apps.acme.ignition.example/");
-        assertThat(html).contains("deploy-preview");
+        // no previews -> the hint about the label instead
+        ctx.setVariable("previews", List.of());
+        assertThat(engine().process("repo", ctx)).contains("deploy-preview");
     }
 
     @Test
@@ -186,7 +190,7 @@ class RepoPageRenderTest {
         ctx.setVariable("devUrl", "https://cards.dev.acme.ignition.example/");
         ctx.setVariable("devRunning", false);
         ctx.setVariable("previews", List.of(Map.of("name", "cards-pr-7",
-                "url", "https://cards-pr-7.apps.acme.ignition.example/")));
+                "url", "https://cards-pr-7.apps.acme.ignition.example/", "number", "7", "running", false)));
         String html = engine().process("repo", ctx);
         assertThat(html).contains("href=\"https://cards.apps.acme.ignition.example/\"")
                 .contains("href=\"https://cards.dev.acme.ignition.example/\"")

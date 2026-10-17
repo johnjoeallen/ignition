@@ -72,47 +72,6 @@
           </div>
 
           <div class="text-nowrap">
-            <div class="text-body-secondary small">Version</div>
-            <div class="mb-3">
-              <span th:text="${versionShown}">v1.2.3</span>
-              <a th:if="${releaseDeployed}" th:href="${releaseUrl}" target="_blank" rel="noopener"
-                 class="small ms-2" th:classappend="${!releaseRunning} ? ' text-body-secondary'"
-                 th:title="${releaseRunning} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
-              <span th:if="${versionPending != null}" class="badge text-bg-secondary ms-1"
-                    th:title="|${versionPending} is tagged but not deployed yet — CI is building it, or it failed|"
-                    th:text="|${versionPending} building…|">v1.2.4 building…</span>
-            </div>
-            <div hidden th:attr="data-app-status-url=${statusUrl}"></div>
-            <div th:if="${releaseDeployed}" class="mb-3 d-flex align-items-center gap-2 flex-wrap">
-              <span class="d-inline-flex align-items-center gap-1" th:attr="data-app-status-row=${repoName}">
-                <i data-app-status-icon
-                   th:class="${releaseRunning} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                   th:title="${releaseRunning} ? 'running' : 'dead'"></i>
-                <span th:if="${releaseRunning}">running</span>
-                <span th:unless="${releaseRunning}" class="text-body-secondary">down</span>
-              </span>
-              <form method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline"
-                    th:classappend="${!releaseRunning} ? ' d-none'"
-                    th:attr="data-app-action='stop',data-app-name=${repoName},data-busy=|Stopping ${repoName}…|"
-                    onsubmit="return confirm('Stop the release? It stays stopped until you start it.')">
-                <input type="hidden" name="name" th:value="${repoName}">
-                <input type="hidden" name="from" value="repo">
-                <button class="btn btn-sm btn-outline-secondary">stop</button>
-              </form>
-              <form method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}" class="d-inline"
-                    th:classappend="${releaseRunning} ? ' d-none'"
-                    th:attr="data-app-action='start',data-app-name=${repoName},data-busy=|Starting ${repoName}…|">
-                <input type="hidden" name="name" th:value="${repoName}">
-                <input type="hidden" name="from" value="repo">
-                <button class="btn btn-sm btn-outline-secondary">start</button>
-              </form>
-              <form method="post" th:action="@{/teams/{slug}/repos/{repo}/redeploy(slug=${zoneSlug},repo=${repoName})}"
-                    class="d-inline" data-busy="Redeploying the release…"
-                    onsubmit="return confirm('Redeploy the release? It re-reads compose.yaml, .env and secrets and restarts the app.')">
-                <input type="hidden" name="scope" value="release">
-                <button class="btn btn-sm btn-outline-secondary" title="Re-read compose.yaml, .env and secrets and recreate the containers">redeploy</button>
-              </form>
-            </div>
             <div class="text-body-secondary small mb-1">Release</div>
             <!-- suggested bump (from commit messages) is highlighted; if nothing is
                  pending, releasing just redeploys the current commit, so confirm first -->
@@ -141,49 +100,9 @@
                 <button class="btn btn-sm btn-outline-secondary" title="Build and deploy the latest main HEAD">
                   Deploy from main</button>
               </form>
-              <span th:if="${devUrl != null}" class="d-inline-flex align-items-center gap-1 small"
-                    th:attr="data-app-status-row=${repoName},data-app-channel='dev'">
-                <i data-app-status-icon
-                   th:class="${devRunning} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                   th:title="${devRunning} ? 'running' : 'dead'"></i>
-                <span th:if="${devRunning}"
-                      th:text="${devDeployedAt != null} ? 'live · ' + ${devDeployedAt} : 'live'">live</span>
-                <span th:unless="${devRunning}" class="text-body-secondary"
-                      th:text="${devDeployedAt != null} ? 'stopped · ' + ${devDeployedAt} : 'stopped'">stopped</span>
-                <a th:if="${devUrl != null}" th:href="${devUrl}" target="_blank" rel="noopener"
-                   class="ms-1" th:classappend="${!devRunning} ? ' text-body-secondary'"
-                   th:title="${devRunning} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
-              </span>
-              <form th:if="${devUrl != null}" method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
-                    class="d-inline" th:classappend="${!devRunning} ? ' d-none'"
-                    th:attr="data-app-action='stop',data-app-name=${repoName},data-app-channel='dev',data-busy='Stopping the dev deployment…'"
-                    onsubmit="return confirm('Stop the dev deployment? The release stays up.')">
-                <input type="hidden" name="repo" th:value="${repoName}">
-                <button class="btn btn-sm btn-link p-0 text-body-secondary">stop</button>
-              </form>
-              <form th:if="${devUrl != null}" method="post"
-                    th:action="@{/teams/{slug}/repos/dev/start(slug=${zoneSlug})}" class="d-inline"
-                    th:classappend="${devRunning} ? ' d-none'"
-                    th:attr="data-app-action='start',data-app-name=${repoName},data-app-channel='dev',data-busy='Starting the dev deployment…'">
-                <input type="hidden" name="repo" th:value="${repoName}">
-                <button class="btn btn-sm btn-link p-0 text-body-secondary">start</button>
-              </form>
-              <form th:if="${devUrl != null}" method="post"
-                    th:action="@{/teams/{slug}/repos/{repo}/redeploy(slug=${zoneSlug},repo=${repoName})}"
-                    class="d-inline" data-busy="Redeploying the dev deployment…"
-                    onsubmit="return confirm('Redeploy dev? It re-reads compose.yaml, .env and secrets at main and restarts the app.')">
-                <input type="hidden" name="scope" value="dev">
-                <button class="btn btn-sm btn-link p-0 text-body-secondary">redeploy</button>
-              </form>
-              <form th:if="${devUrl != null}" method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}"
-                    class="d-inline" data-busy="Deleting the dev deployment…"
-                    onsubmit="return confirm('Delete the dev deployment? Its containers and volumes go; the release stays up.')">
-                <input type="hidden" name="repo" th:value="${repoName}">
-                <button class="btn btn-sm btn-link p-0 text-danger">delete</button>
-              </form>
             </div>
             <div class="text-body-secondary small mt-1" style="max-width:22rem;white-space:normal">
-              Latest <code>main</code>, public. Only this button deploys it — a plain push doesn't.
+              Latest <code>main</code>, public. Only this button deploys it — a plain push doesn't. Its status and controls are in Deployments below.
             </div>
           </div>
         </div>
@@ -220,19 +139,167 @@
         </div>
       </div>
 
-      <div th:if="${previews != null and !previews.isEmpty()}" class="mb-4">
-        <div class="text-body-secondary small mb-1">PR previews
-          <span class="badge text-bg-secondary" th:text="${previews.size()}">2</span>
+      <div class="card mb-4">
+        <div class="card-body">
+          <h2 class="h6 text-uppercase text-body-secondary mb-3"><i class="bi bi-rocket-takeoff"></i> Deployments</h2>
+          <div hidden th:attr="data-app-status-url=${statusUrl}"></div>
+          <div class="table-card">
+            <table class="table mb-0 align-middle">
+              <thead><tr><th>environment</th><th>version</th><th>status</th><th></th></tr></thead>
+              <tbody>
+                <!-- release -->
+                <tr th:if="${releaseDeployed}">
+                  <td class="fw-semibold">Release</td>
+                  <td>
+                    <span th:text="${versionShown}">v1.2.3</span>
+                    <span th:if="${versionPending != null}" class="badge text-bg-secondary ms-1"
+                          th:title="|${versionPending} is tagged but not deployed yet — CI is building it, or it failed|"
+                          th:text="|${versionPending} building…|">v1.2.4 building…</span>
+                  </td>
+                  <td class="text-nowrap">
+                    <span class="d-inline-flex align-items-center gap-1" th:attr="data-app-status-row=${repoName}">
+                      <i data-app-status-icon
+                         th:class="${releaseRunning} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
+                         th:title="${releaseRunning} ? 'running' : 'dead'"></i>
+                      <span th:if="${releaseRunning}">running</span>
+                      <span th:unless="${releaseRunning}" class="text-body-secondary">down</span>
+                    </span>
+                    <a th:href="${releaseUrl}" target="_blank" rel="noopener" class="small ms-2"
+                       th:classappend="${!releaseRunning} ? ' text-body-secondary'"
+                       th:title="${releaseRunning} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                  </td>
+                  <td class="text-end text-nowrap">
+                    <form method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline"
+                          th:classappend="${!releaseRunning} ? ' d-none'"
+                          th:attr="data-app-action='stop',data-app-name=${repoName},data-busy=|Stopping ${repoName}…|"
+                          onsubmit="return confirm('Stop the release? It stays stopped until you start it.')">
+                      <input type="hidden" name="name" th:value="${repoName}">
+                      <input type="hidden" name="from" value="repo">
+                      <button class="btn btn-sm btn-outline-secondary">stop</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}" class="d-inline"
+                          th:classappend="${releaseRunning} ? ' d-none'"
+                          th:attr="data-app-action='start',data-app-name=${repoName},data-busy=|Starting ${repoName}…|">
+                      <input type="hidden" name="name" th:value="${repoName}">
+                      <input type="hidden" name="from" value="repo">
+                      <button class="btn btn-sm btn-outline-secondary">start</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/repos/{repo}/redeploy(slug=${zoneSlug},repo=${repoName})}"
+                          class="d-inline" data-busy="Redeploying the release…"
+                          onsubmit="return confirm('Redeploy the release? It re-reads compose.yaml, .env and secrets and restarts the app.')">
+                      <input type="hidden" name="scope" value="release">
+                      <button class="btn btn-sm btn-outline-secondary" title="Re-read compose.yaml, .env and secrets and recreate the containers">redeploy</button>
+                    </form>
+                  </td>
+                </tr>
+                <tr th:unless="${releaseDeployed}">
+                  <td class="fw-semibold">Release</td>
+                  <td colspan="3" class="text-body-secondary">
+                    not deployed
+                    <span th:if="${versionPending != null}" class="badge text-bg-secondary ms-1"
+                          th:text="|${versionPending} building…|">v1.2.4 building…</span>
+                    <span th:if="${versionPending == null}">— cut a release above</span>
+                  </td>
+                </tr>
+                <!-- main (dev) -->
+                <tr th:if="${devUrl != null}">
+                  <td class="fw-semibold">Main <span class="text-body-secondary fw-normal">(dev)</span></td>
+                  <td><code>main</code> <span class="text-body-secondary small" th:if="${devDeployedAt != null}" th:text="|· ${devDeployedAt}|">· 6 Sep 09:30 UTC</span></td>
+                  <td class="text-nowrap">
+                    <span class="d-inline-flex align-items-center gap-1"
+                          th:attr="data-app-status-row=${repoName},data-app-channel='dev'">
+                      <i data-app-status-icon
+                         th:class="${devRunning} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
+                         th:title="${devRunning} ? 'running' : 'dead'"></i>
+                      <span th:if="${devRunning}">running</span>
+                      <span th:unless="${devRunning}" class="text-body-secondary">down</span>
+                    </span>
+                    <a th:href="${devUrl}" target="_blank" rel="noopener" class="small ms-2"
+                       th:classappend="${!devRunning} ? ' text-body-secondary'"
+                       th:title="${devRunning} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                  </td>
+                  <td class="text-end text-nowrap">
+                    <form method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
+                          class="d-inline" th:classappend="${!devRunning} ? ' d-none'"
+                          th:attr="data-app-action='stop',data-app-name=${repoName},data-app-channel='dev',data-busy='Stopping the dev deployment…'"
+                          onsubmit="return confirm('Stop the dev deployment? The release stays up.')">
+                      <input type="hidden" name="repo" th:value="${repoName}">
+                      <button class="btn btn-sm btn-outline-secondary">stop</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/repos/dev/start(slug=${zoneSlug})}" class="d-inline"
+                          th:classappend="${devRunning} ? ' d-none'"
+                          th:attr="data-app-action='start',data-app-name=${repoName},data-app-channel='dev',data-busy='Starting the dev deployment…'">
+                      <input type="hidden" name="repo" th:value="${repoName}">
+                      <button class="btn btn-sm btn-outline-secondary">start</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/repos/{repo}/redeploy(slug=${zoneSlug},repo=${repoName})}"
+                          class="d-inline" data-busy="Redeploying the dev deployment…"
+                          onsubmit="return confirm('Redeploy dev? It re-reads compose.yaml, .env and secrets at main and restarts the app.')">
+                      <input type="hidden" name="scope" value="dev">
+                      <button class="btn btn-sm btn-outline-secondary">redeploy</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}" class="d-inline"
+                          data-busy="Deleting the dev deployment…"
+                          onsubmit="return confirm('Delete the dev deployment? Its containers and volumes go; the release stays up.')">
+                      <input type="hidden" name="repo" th:value="${repoName}">
+                      <button class="btn btn-sm btn-outline-danger">delete</button>
+                    </form>
+                  </td>
+                </tr>
+                <tr th:unless="${devUrl != null}">
+                  <td class="fw-semibold">Main <span class="text-body-secondary fw-normal">(dev)</span></td>
+                  <td colspan="3" class="text-body-secondary">not deployed — use <b>Deploy from main</b> above</td>
+                </tr>
+                <!-- PR previews -->
+                <tr th:each="p : ${previews}">
+                  <td class="fw-semibold" th:text="${p.number != null} ? 'PR #' + ${p.number} : 'PR preview'">PR #12</td>
+                  <td><code th:text="${p.name}">app-pr-12</code></td>
+                  <td class="text-nowrap">
+                    <span class="d-inline-flex align-items-center gap-1" th:attr="data-app-status-row=${p.name}">
+                      <i data-app-status-icon
+                         th:class="${p.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
+                         th:title="${p.running} ? 'running' : 'dead'"></i>
+                      <span th:if="${p.running}">running</span>
+                      <span th:unless="${p.running}" class="text-body-secondary">down</span>
+                    </span>
+                    <a th:href="${p.url}" target="_blank" rel="noopener" class="small ms-2"
+                       th:classappend="${!p.running} ? ' text-body-secondary'"
+                       title="Open this PR preview in a new tab"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                  </td>
+                  <td class="text-end text-nowrap">
+                    <form method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline"
+                          th:classappend="${!p.running} ? ' d-none'"
+                          th:attr="data-app-action='stop',data-app-name=${p.name},data-busy=|Stopping ${p.name}…|">
+                      <input type="hidden" name="name" th:value="${p.name}">
+                      <input type="hidden" name="from" value="repo">
+                      <input type="hidden" name="repo" th:value="${repoName}">
+                      <button class="btn btn-sm btn-outline-secondary">stop</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}" class="d-inline"
+                          th:classappend="${p.running} ? ' d-none'"
+                          th:attr="data-app-action='start',data-app-name=${p.name},data-busy=|Starting ${p.name}…|">
+                      <input type="hidden" name="name" th:value="${p.name}">
+                      <input type="hidden" name="from" value="repo">
+                      <input type="hidden" name="repo" th:value="${repoName}">
+                      <button class="btn btn-sm btn-outline-secondary">start</button>
+                    </form>
+                    <form method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/delete(slug=${zoneSlug},repo=${repoName})}"
+                          class="d-inline" th:attr="data-busy=|Deleting ${p.name}…|"
+                          onsubmit="return confirm('Delete this PR preview? Its containers and volumes go; the PR is untouched.')">
+                      <input type="hidden" name="name" th:value="${p.name}">
+                      <button class="btn btn-sm btn-outline-danger">delete</button>
+                    </form>
+                  </td>
+                </tr>
+                <tr th:if="${previews == null or previews.isEmpty()}">
+                  <td class="fw-semibold">PR previews</td>
+                  <td colspan="3" class="text-body-secondary">none — add the <code>deploy-preview</code> label to a
+                    pull request to get one; it's torn down when the PR closes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <ul class="list-unstyled mb-0 small">
-          <li th:each="p : ${previews}">
-            <span th:text="${p.name}">app-pr-12</span>
-            <a th:href="${p.url}" target="_blank" rel="noopener" class="ms-2"
-               title="Open this PR preview in a new tab"><i class="bi bi-box-arrow-up-right"></i> launch</a>
-          </li>
-        </ul>
-        <div class="text-body-secondary small mt-1">Add the <code>deploy-preview</code> label to a
-          pull request to get one; it's torn down when the PR closes.</div>
       </div>
 
       <form method="post" th:action="@{/teams/{slug}/repos/{repo}/description(slug=${zoneSlug},repo=${repoName})}"

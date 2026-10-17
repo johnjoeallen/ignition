@@ -451,8 +451,11 @@ public class ZoneConsoleController {
                 .orElse(null));
         model.addAttribute("devRunning", dev.map(d -> apps.devLive(slug, repo, d.running())).orElse(false));
         String baseDomain = zones.get(slug).map(Zone::baseDomain).orElse("");
+        Map<String, Boolean> previewLive = apps.liveStates(slug);
         model.addAttribute("previews", apps.previewsForApp(slug, repo).stream()
-                .map(p -> Map.of("name", p.name(), "url", p.url(baseDomain)))
+                .<Map<String, Object>>map(p -> Map.of("name", p.name(), "url", p.url(baseDomain),
+                        "number", p.name().substring(p.name().lastIndexOf("-pr-") + 4),
+                        "running", previewLive.getOrDefault(p.name(), p.running())))
                 .toList());
         model.addAttribute("currentUserId", currentUserId);
         return "repo";
@@ -610,24 +613,26 @@ public class ZoneConsoleController {
      */
     @PostMapping("/teams/{slug}/apps/stop")
     public String stopApp(@PathVariable String slug, @RequestParam String name,
-                          @RequestParam(value = "from", required = false) String from) {
+                          @RequestParam(value = "from", required = false) String from,
+                          @RequestParam(value = "repo", required = false) String repo) {
         try {
             apps.stop(slug, name);
-            return appBack(slug, name, from, "app " + name + " stopped");
+            return appBack(slug, repo != null ? repo : name, from, "app " + name + " stopped");
         } catch (RuntimeException e) {
-            return appBack(slug, name, from, e.getMessage());
+            return appBack(slug, repo != null ? repo : name, from, e.getMessage());
         }
     }
 
     /** Restart a stopped app ({@code docker compose start}). */
     @PostMapping("/teams/{slug}/apps/start")
     public String startApp(@PathVariable String slug, @RequestParam String name,
-                           @RequestParam(value = "from", required = false) String from) {
+                           @RequestParam(value = "from", required = false) String from,
+                           @RequestParam(value = "repo", required = false) String repo) {
         try {
             apps.start(slug, name);
-            return appBack(slug, name, from, "app " + name + " started");
+            return appBack(slug, repo != null ? repo : name, from, "app " + name + " started");
         } catch (RuntimeException e) {
-            return appBack(slug, name, from, e.getMessage());
+            return appBack(slug, repo != null ? repo : name, from, e.getMessage());
         }
     }
 
@@ -644,6 +649,20 @@ public class ZoneConsoleController {
             return redirectRepo(slug, repo, sc.key() + " redeployed");
         } catch (RuntimeException e) {
             return redirectRepo(slug, repo, "redeploy failed: " + e.getMessage());
+        }
+    }
+
+    /** Tear down one PR preview of {@code repo} (name must be {@code <repo>-pr-<n>}); the PR itself is untouched. */
+    @PostMapping("/teams/{slug}/repos/{repo}/previews/delete")
+    public String deletePreview(@PathVariable String slug, @PathVariable String repo, @RequestParam String name) {
+        if (!name.matches(java.util.regex.Pattern.quote(repo) + "-pr-\\d+")) {
+            return redirectRepo(slug, repo, "not a PR preview of " + repo);
+        }
+        try {
+            apps.undeploy(slug, name);
+            return redirectRepo(slug, repo, "preview " + name + " deleted");
+        } catch (RuntimeException e) {
+            return redirectRepo(slug, repo, e.getMessage());
         }
     }
 
