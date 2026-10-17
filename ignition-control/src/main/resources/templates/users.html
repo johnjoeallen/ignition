@@ -44,7 +44,7 @@
                 <form th:if="${u.status.name() == 'PENDING_VERIFICATION'}" method="post"
                       th:action="@{'/users/' + ${u.id} + '/activation/resend'}" class="d-inline">
                   <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                  <button class="btn btn-sm btn-outline-primary">Resend activation link</button>
+                  <button class="btn btn-sm btn-outline-secondary">Resend activation link</button>
                 </form>
                 <form method="post" th:action="@{'/users/' + ${u.id} + '/admin'}" class="d-inline">
                   <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">

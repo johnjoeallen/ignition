@@ -450,7 +450,8 @@ body { background: var(--ign-bg); }
 .btn-accent:hover { background: var(--ign-accent-2); border-color: var(--ign-accent-2); color: var(--on-accent); }
 
 .page-title { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
-.page-title i { color: var(--ign-accent); }
+/* the heading's icon only — not icons inside buttons that share the title row */
+.page-title > i, .page-title h1 i { color: var(--ign-accent); }
 
 code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem .35rem; border-radius: 4px; }
 

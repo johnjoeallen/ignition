@@ -21,7 +21,7 @@
                      th:text="${row.node.name}">node-1</a></td>
               <td>
                 <span class="badge" th:classappend="${row.node.state.name() == 'ACTIVE'} ? 'text-bg-success' : 'text-bg-secondary'"
-                      th:text="${row.node.state}">ACTIVE</span>
+                      th:text="${#strings.toLowerCase(row.node.state.name())}">active</span>
               </td>
               <td><code th:text="${row.node.dockerHost}">local</code></td>
               <td th:text="|${row.allocCpus} / ${row.node.cpus} cpu · ${row.allocMemGb} / ${row.node.memGb}g|">0/0</td>
