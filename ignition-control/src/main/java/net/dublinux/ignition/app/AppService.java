@@ -235,8 +235,7 @@ public class AppService {
     /**
      * Redeploy one environment of an app with the image and port it already
      * runs, so changed secrets reach its containers without cutting a release.
-     * {@link SecretScope#PREVIEW} can't be applied — previews pick them up at
-     * their next push.
+     * {@link SecretScope#PREVIEW} redeploys every PR preview of the app.
      */
     public void redeploy(String slug, String name, SecretScope scope) {
         switch (scope) {
@@ -250,9 +249,36 @@ public class AppService {
                         .orElseThrow(() -> new IllegalArgumentException(name + " has no dev deployment"));
                 deploy(slug, name, d.image(), d.port(), Channel.DEV, "main", name);
             }
-            case PREVIEW -> throw new IllegalArgumentException(
-                    "PR previews pick up secrets the next time the PR is pushed");
+            case PREVIEW -> {
+                List<DeployedApp> previews = previewsForApp(slug, name);
+                if (previews.isEmpty()) {
+                    throw new IllegalArgumentException(name + " has no PR previews deployed");
+                }
+                for (DeployedApp p : previews) {
+                    redeployPreview(slug, name, p.name());
+                }
+            }
         }
+    }
+
+    /**
+     * Redeploy one PR preview ({@code <repo>-pr-<n>}) with the image it already
+     * runs, reading its {@code compose.yaml}/{@code .env} at the PR's current head
+     * commit — so a changed secret or a changed compose file takes effect without
+     * pushing to the PR.
+     */
+    public void redeployPreview(String slug, String repo, String previewName) {
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^" + java.util.regex.Pattern.quote(repo) + "-pr-(\\d+)$").matcher(previewName);
+        if (!m.matches()) {
+            throw new IllegalArgumentException(previewName + " is not a PR preview of " + repo);
+        }
+        DeployedApp a = apps.findByZoneAndName(slug, previewName)
+                .orElseThrow(() -> new IllegalArgumentException("no such preview: " + previewName));
+        int number = Integer.parseInt(m.group(1));
+        String sha = zoneService.pullHeadSha(slug, repo, number)
+                .orElseThrow(() -> new IllegalArgumentException("couldn't read PR #" + number + " from Forgejo"));
+        deploy(slug, previewName, a.image(), a.port(), Channel.RELEASE, sha, repo);
     }
 
     /** {@code vX.Y.Z} if the image is tagged with one (the ref its compose.yaml was read at), else {@code main}. */

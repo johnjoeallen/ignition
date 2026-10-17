@@ -283,6 +283,12 @@
                       <input type="hidden" name="repo" th:value="${repoName}">
                       <button class="btn btn-sm btn-outline-secondary">start</button>
                     </form>
+                    <form method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/redeploy(slug=${zoneSlug},repo=${repoName})}"
+                          class="d-inline" th:attr="data-busy=|Redeploying ${p.name}…|"
+                          onsubmit="return confirm('Redeploy this PR preview? It re-reads compose.yaml, .env and secrets at the PR head and restarts the app.')">
+                      <input type="hidden" name="name" th:value="${p.name}">
+                      <button class="btn btn-sm btn-outline-secondary">redeploy</button>
+                    </form>
                     <form method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/delete(slug=${zoneSlug},repo=${repoName})}"
                           class="d-inline" th:attr="data-busy=|Deleting ${p.name}…|"
                           onsubmit="return confirm('Delete this PR preview? Its containers and volumes go; the PR is untouched.')">

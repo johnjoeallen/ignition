@@ -75,9 +75,6 @@ public class ZoneConsoleController {
 
     /** Restart-button state for an environment: {@code none}, {@code undeployed}, {@code current} or {@code pending}. */
     private String restartState(String slug, String repo, SecretScope scope, java.time.Instant deployedAt) {
-        if (scope == SecretScope.PREVIEW) {
-            return "none";
-        }
         if (deployedAt == null) {
             return "undeployed";
         }
@@ -417,6 +414,9 @@ public class ZoneConsoleController {
                 .filter(x -> x.name().equals(repo)).findFirst().map(DeployedApp::deployedAt).orElse(null);
         java.time.Instant devAt = apps.devDeployment(slug, repo)
                 .map(net.dublinux.ignition.app.DevDeployment::deployedAt).orElse(null);
+        // previews: judged on the oldest one, since a change must reach every preview
+        java.time.Instant previewAt = apps.previewsForApp(slug, repo).stream()
+                .map(DeployedApp::deployedAt).min(java.util.Comparator.naturalOrder()).orElse(null);
         model.addAttribute("secretSections", List.of(
                 new SecretSection("release", "Release",
                         "Used by tagged releases, at " + repo + ".apps." + slug + "…",
@@ -427,8 +427,9 @@ public class ZoneConsoleController {
                         restartState(slug, repo, SecretScope.DEV, devAt),
                         appSecrets.list(slug, repo, SecretScope.DEV)),
                 new SecretSection("preview", "PR previews",
-                        "Used by every PR preview of this app — applied the next time a PR is pushed",
-                        "none", appSecrets.list(slug, repo, SecretScope.PREVIEW))));
+                        "Used by every PR preview of this app. Restart redeploys all the previews running now.",
+                        restartState(slug, repo, SecretScope.PREVIEW, previewAt),
+                        appSecrets.list(slug, repo, SecretScope.PREVIEW))));
         model.addAttribute("canManageSecrets", currentUser.isZoneAdmin(slug));
         // info.version() is the latest git tag, which exists before CI has built anything — show what is deployed
         boolean tagged = info.version().startsWith("v");
@@ -471,8 +472,7 @@ public class ZoneConsoleController {
             appSecrets.put(slug, repo, sc, name.strip(), value,
                     currentUser.get().map(u -> u.email()).orElse(null));
             return redirectRepo(slug, repo, "secret " + name.strip() + " saved for " + sc.key()
-                    + (sc == SecretScope.PREVIEW ? " — previews pick it up on their next push"
-                            : " — it applies at the next deploy, or press Restart with new secrets"));
+                    + " — it applies at the next deploy, or press Restart with new secrets");
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());
         }
@@ -647,6 +647,17 @@ public class ZoneConsoleController {
             SecretScope sc = SecretScope.parse(scope);
             apps.redeploy(slug, repo, sc);
             return redirectRepo(slug, repo, sc.key() + " redeployed");
+        } catch (RuntimeException e) {
+            return redirectRepo(slug, repo, "redeploy failed: " + e.getMessage());
+        }
+    }
+
+    /** Redeploy one PR preview at its PR's current head (picks up changed secrets, compose.yaml and .env). */
+    @PostMapping("/teams/{slug}/repos/{repo}/previews/redeploy")
+    public String redeployPreview(@PathVariable String slug, @PathVariable String repo, @RequestParam String name) {
+        try {
+            apps.redeployPreview(slug, repo, name);
+            return redirectRepo(slug, repo, "preview " + name + " redeployed");
         } catch (RuntimeException e) {
             return redirectRepo(slug, repo, "redeploy failed: " + e.getMessage());
         }

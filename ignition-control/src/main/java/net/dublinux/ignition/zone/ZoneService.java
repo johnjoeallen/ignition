@@ -738,6 +738,16 @@ public class ZoneService {
         return out;
     }
 
+    /** The head commit of PR {@code number} — what a preview of it was built from. Empty if the PR can't be read. */
+    public java.util.Optional<String> pullHeadSha(String slug, String repo, int number) {
+        var res = forgejo.get(slug, "/repos/%s/%s/pulls/%d".formatted(slug, repo, number));
+        if (!res.ok() || res.body() == null) {
+            return java.util.Optional.empty();
+        }
+        String sha = res.body().path("head").path("sha").asText("");
+        return sha.isBlank() ? java.util.Optional.empty() : java.util.Optional.of(sha);
+    }
+
     /** Best-effort delete of a container package tag (a preview's {@code :pr-<n>}). */
     public void deletePackageTag(String slug, String repo, String tag) {
         var res = forgejo.delete(slug, "/packages/%s/container/%s/%s".formatted(slug, repo, tag));
