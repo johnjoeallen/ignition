@@ -216,4 +216,18 @@ class RepoPageRenderTest {
         html = engine().process("repo", ctx);
         assertThat(html).doesNotContain("Delete app").doesNotContain("dev/delete").doesNotContain("previews/delete");
     }
+
+    @Test
+    void secretsCanBeSetBeforeAnythingIsDeployed() {
+        var ctx = baseContext();
+        ctx.setVariable("secretSections", List.of(
+                new ZoneConsoleController.SecretSection("release", "Release", "hint", "undeployed", List.of()),
+                new ZoneConsoleController.SecretSection("dev", "Dev (main)", "hint", "undeployed", List.of()),
+                new ZoneConsoleController.SecretSection("preview", "PR previews", "hint", "undeployed", List.of())));
+        String html = engine().process("repo", ctx);
+        // the add form is there for every environment, with no restart button to press yet
+        assertThat(html.split("Save secret").length - 1).isEqualTo(3);
+        assertThat(html).doesNotContain("Restart with new secrets</button>");
+        assertThat(html).contains("Nothing deployed yet").contains("No PR previews running");
+    }
 }

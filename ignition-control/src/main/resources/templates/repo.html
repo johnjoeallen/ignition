@@ -424,8 +424,6 @@
                  th:open="${sec.restart == 'pending' or (param.open != null and param.open[0] == sec.scope)}">
           <summary class="px-3 py-2 d-flex align-items-center gap-2 flex-wrap" style="cursor:pointer">
             <span class="fw-semibold" th:text="${sec.title}">Release</span>
-            <span class="badge text-bg-secondary" th:text="${sec.items.size()}"
-                  th:title="|${sec.items.size()} secret(s)|">2</span>
             <span th:if="${sec.restart == 'pending'}" class="badge text-bg-warning">restart needed</span>
             <span class="text-body-secondary small ms-auto" th:text="${sec.hint}">hint</span>
           </summary>
@@ -469,7 +467,10 @@
               <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Save secret</button>
             </div>
           </form>
-          <form th:if="${canManageSecrets and sec.restart != 'none'}" method="post" class="mt-2 d-flex align-items-center gap-2"
+          <p th:if="${sec.restart == 'undeployed'}" class="text-body-secondary small mt-2 mb-0"
+             th:text="${sec.scope == 'preview'} ? 'No PR previews running — these are used by every preview as it is deployed.'
+                      : 'Nothing deployed yet — set them now and the first deployment will use them.'">hint</p>
+          <form th:if="${canManageSecrets and (sec.restart == 'pending' or sec.restart == 'current')}" method="post" class="mt-2 d-flex align-items-center gap-2"
                 th:action="@{/teams/{slug}/repos/{repo}/secrets/apply(slug=${zoneSlug},repo=${repoName})}"
                 data-busy="Restarting with the new secrets…"
                 onsubmit="return confirm('Restart this environment with its current secrets? The app is briefly unavailable.')">
@@ -478,8 +479,7 @@
                     th:disabled="${sec.restart != 'pending'}"><i class="bi bi-arrow-repeat"></i> Restart with new secrets</button>
             <span class="text-body-secondary small"
                   th:text="${sec.restart == 'pending'} ? 'Secrets changed since the last deploy — restart to apply them.'
-                           : (${sec.restart == 'undeployed'} ? 'Not deployed yet — they apply on the first deploy.'
-                           : 'Up to date with the running deployment.')">hint</span>
+                           : 'Up to date with the running deployment.'">hint</span>
           </form>
           </div>
         </details>

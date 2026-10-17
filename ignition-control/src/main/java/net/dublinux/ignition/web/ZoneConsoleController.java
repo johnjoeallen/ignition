@@ -73,8 +73,21 @@ public class ZoneConsoleController {
     /** One environment's secrets on the app page — names and metadata only, never values. */
     public record SecretSection(String scope, String title, String hint, String restart, List<AppSecret> items) {}
 
+    /** When this environment was last deployed, or null if nothing of it is deployed (previews: the oldest running one). */
+    private java.time.Instant deployedAt(String slug, String repo, SecretScope scope) {
+        return switch (scope) {
+            case RELEASE -> apps.listForZone(slug).stream().filter(x -> x.name().equals(repo)).findFirst()
+                    .map(DeployedApp::deployedAt).orElse(null);
+            case DEV -> apps.devDeployment(slug, repo)
+                    .map(net.dublinux.ignition.app.DevDeployment::deployedAt).orElse(null);
+            case PREVIEW -> apps.previewsForApp(slug, repo).stream()
+                    .map(DeployedApp::deployedAt).min(java.util.Comparator.naturalOrder()).orElse(null);
+        };
+    }
+
     /** Restart-button state for an environment: {@code none}, {@code undeployed}, {@code current} or {@code pending}. */
-    private String restartState(String slug, String repo, SecretScope scope, java.time.Instant deployedAt) {
+    private String restartState(String slug, String repo, SecretScope scope) {
+        java.time.Instant deployedAt = deployedAt(slug, repo, scope);
         if (deployedAt == null) {
             return "undeployed";
         }
@@ -415,25 +428,18 @@ public class ZoneConsoleController {
                 .map(x -> apps.liveStates(slug).getOrDefault(x.name(), x.running())).orElse(false));
         model.addAttribute("releaseUrl", releaseApp.map(x -> x.url(releaseBase)).orElse(null));
         model.addAttribute("statusUrl", "/teams/" + slug + "/apps/status");
-        java.time.Instant releaseAt = apps.listForZone(slug).stream()
-                .filter(x -> x.name().equals(repo)).findFirst().map(DeployedApp::deployedAt).orElse(null);
-        java.time.Instant devAt = apps.devDeployment(slug, repo)
-                .map(net.dublinux.ignition.app.DevDeployment::deployedAt).orElse(null);
-        // previews: judged on the oldest one, since a change must reach every preview
-        java.time.Instant previewAt = apps.previewsForApp(slug, repo).stream()
-                .map(DeployedApp::deployedAt).min(java.util.Comparator.naturalOrder()).orElse(null);
         model.addAttribute("secretSections", List.of(
                 new SecretSection("release", "Release",
                         "Used by tagged releases, at " + repo + ".apps." + slug + "…",
-                        restartState(slug, repo, SecretScope.RELEASE, releaseAt),
+                        restartState(slug, repo, SecretScope.RELEASE),
                         appSecrets.list(slug, repo, SecretScope.RELEASE)),
                 new SecretSection("dev", "Dev (main)",
                         "Used by Deploy from main, at " + repo + ".dev." + slug + "…",
-                        restartState(slug, repo, SecretScope.DEV, devAt),
+                        restartState(slug, repo, SecretScope.DEV),
                         appSecrets.list(slug, repo, SecretScope.DEV)),
                 new SecretSection("preview", "PR previews",
                         "Used by every PR preview of this app. Restart redeploys all the previews running now.",
-                        restartState(slug, repo, SecretScope.PREVIEW, previewAt),
+                        restartState(slug, repo, SecretScope.PREVIEW),
                         appSecrets.list(slug, repo, SecretScope.PREVIEW))));
         model.addAttribute("canManageSecrets", currentUser.isZoneAdmin(slug));
         // info.version() is the latest git tag, which exists before CI has built anything — show what is deployed
@@ -476,8 +482,13 @@ public class ZoneConsoleController {
             SecretScope sc = SecretScope.parse(scope);
             appSecrets.put(slug, repo, sc, name.strip(), value,
                     currentUser.get().map(u -> u.email()).orElse(null));
-            return redirectRepo(slug, repo, "secret " + name.strip() + " saved for " + sc.key()
-                    + " — it applies at the next deploy, or press Restart with new secrets") + "&open=" + sc.key();
+            String when = deployedAt(slug, repo, sc) == null
+                    ? (sc == SecretScope.PREVIEW
+                            ? " — every PR preview will get it when it's deployed"
+                            : " — it will be used by the first " + sc.key() + " deployment")
+                    : " — it applies at the next deploy, or press Restart with new secrets";
+            return redirectRepo(slug, repo, "secret " + name.strip() + " saved for " + sc.key() + when)
+                    + "&open=" + sc.key();
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());
         }
