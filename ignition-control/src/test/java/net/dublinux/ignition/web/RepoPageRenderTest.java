@@ -199,4 +199,21 @@ class RepoPageRenderTest {
                 .contains("href=\"https://cards-pr-7.apps.acme.ignition.example/\"");
         assertThat(html.split("launch</a>").length - 1).isEqualTo(3);
     }
+
+    @Test
+    void deleteControlsAreOnlyForTeamAndPlatformAdmins() {
+        var ctx = baseContext();
+        ctx.setVariable("devUrl", "https://cards.dev.acme.ignition.example/");
+        ctx.setVariable("devRunning", true);
+        ctx.setVariable("previews", List.of(Map.of("name", "cards-pr-7",
+                "url", "https://cards-pr-7.apps.acme.ignition.example/", "number", "7", "running", true)));
+
+        ctx.setVariable("canManageApp", true);
+        String html = engine().process("repo", ctx);
+        assertThat(html).contains("Delete app").contains("dev/delete").contains("previews/delete");
+
+        ctx.setVariable("canManageApp", false);
+        html = engine().process("repo", ctx);
+        assertThat(html).doesNotContain("Delete app").doesNotContain("dev/delete").doesNotContain("previews/delete");
+    }
 }

@@ -238,7 +238,7 @@
                       <input type="hidden" name="scope" value="dev">
                       <button class="btn btn-sm btn-outline-secondary">redeploy</button>
                     </form>
-                    <form method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}" class="d-inline"
+                    <form th:if="${canManageApp}" method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}" class="d-inline"
                           data-busy="Deleting the dev deployment…"
                           onsubmit="return confirm('Delete the dev deployment? Its containers and volumes go; the release stays up.')">
                       <input type="hidden" name="repo" th:value="${repoName}">
@@ -289,7 +289,7 @@
                       <input type="hidden" name="name" th:value="${p.name}">
                       <button class="btn btn-sm btn-outline-secondary">redeploy</button>
                     </form>
-                    <form method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/delete(slug=${zoneSlug},repo=${repoName})}"
+                    <form th:if="${canManageApp}" method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/delete(slug=${zoneSlug},repo=${repoName})}"
                           class="d-inline" th:attr="data-busy=|Deleting ${p.name}…|"
                           onsubmit="return confirm('Delete this PR preview? Its containers and volumes go; the PR is untouched.')">
                       <input type="hidden" name="name" th:value="${p.name}">
@@ -466,7 +466,7 @@
             <span class="text-body-secondary small">An app with no requests for this long is stopped, not deleted.
               A visit to its address starts it again. Applies to the release and the dev deployment.</span>
           </div>
-          <div class="border-top pt-3">
+          <div class="border-top pt-3" th:if="${canManageApp}">
             <form method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline"
                   th:attr="data-busy=|Deleting ${repoName}…|"
                   onsubmit="return confirm('Delete this app? This removes its repo — code, issues, PRs, releases — and cannot be undone.')">

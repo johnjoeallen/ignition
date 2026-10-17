@@ -508,6 +508,13 @@ public class ZoneConsoleController {
         }
     }
 
+    /** Destroying things (an app, a dev deployment, a PR preview) is for team admins and platform admins. */
+    private void requireDeleteRights(String slug) {
+        if (!currentUser.isZoneAdmin(slug)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin or platform admin can delete");
+        }
+    }
+
     private void requireSecretsAdmin(String slug) {
         if (!currentUser.isZoneAdmin(slug)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can manage an app's secrets");
@@ -671,6 +678,7 @@ public class ZoneConsoleController {
     /** Tear down one PR preview of {@code repo} (name must be {@code <repo>-pr-<n>}); the PR itself is untouched. */
     @PostMapping("/teams/{slug}/repos/{repo}/previews/delete")
     public String deletePreview(@PathVariable String slug, @PathVariable String repo, @RequestParam String name) {
+        requireDeleteRights(slug);
         if (!name.matches(java.util.regex.Pattern.quote(repo) + "-pr-\\d+")) {
             return redirectRepo(slug, repo, "not a PR preview of " + repo);
         }
@@ -729,6 +737,7 @@ public class ZoneConsoleController {
     @PostMapping("/teams/{slug}/repos/dev/delete")
     public String deleteDev(@PathVariable String slug, @RequestParam("repo") String name,
                             @RequestParam(value = "from", required = false) String from) {
+        requireDeleteRights(slug);
         try {
             apps.undeploy(slug, name, net.dublinux.ignition.app.Channel.DEV);
             return devBack(slug, name, from, "dev deployment deleted");
@@ -744,6 +753,7 @@ public class ZoneConsoleController {
      */
     @PostMapping("/teams/{slug}/apps/delete")
     public String deleteApp(@PathVariable String slug, @RequestParam String name) {
+        requireDeleteRights(slug);
         try {
             apps.undeploy(slug, name);
         } catch (IllegalArgumentException notDeployed) {
