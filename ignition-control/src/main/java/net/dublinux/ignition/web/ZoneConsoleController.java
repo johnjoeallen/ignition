@@ -24,6 +24,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.server.ResponseStatusException;
@@ -235,28 +236,56 @@ public class ZoneConsoleController {
     }
 
     @PostMapping("/teams/{slug}/members/reset-git-password")
-    public String resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId,
-                                   @RequestParam(required = false) String repo) {
+    public Object resetGitPassword(@PathVariable String slug, @RequestParam java.util.UUID userId,
+                                   @RequestParam(required = false) String repo,
+                                   @RequestHeader(value = "Accept", required = false) String accept) {
         requireSelfOrZoneAdmin(slug, userId);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
         String newPassword = zones.resetGitPassword(slug, username, userId);
-        return backToCreds(slug, repo, "git password for " + username + " reset to: " + newPassword
-                + " — copy it now, it won't be shown again");
+        return credsReset(slug, repo, accept, userId, newPassword,
+                "git password for " + username + " regenerated");
     }
 
     /** Anyone can regenerate their own PAT; a team admin can also regenerate someone else's. */
     @PostMapping("/teams/{slug}/members/reset-pat")
-    public String resetPat(@PathVariable String slug, @RequestParam java.util.UUID userId,
-                           @RequestParam(required = false) String repo) {
+    public Object resetPat(@PathVariable String slug, @RequestParam java.util.UUID userId,
+                           @RequestParam(required = false) String repo,
+                           @RequestHeader(value = "Accept", required = false) String accept) {
         requireSelfOrZoneAdmin(slug, userId);
         String email = access.emailOf(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "no such member"));
         String username = zones.gitUsername(slug, email);
         String newPat = zones.resetPat(slug, username, userId);
-        return backToCreds(slug, repo, "personal access token for " + username + " regenerated: " + newPat
-                + " — copy it now, it won't be shown again");
+        return credsReset(slug, repo, accept, userId, newPat,
+                "personal access token for " + username + " regenerated");
+    }
+
+    /**
+     * The page's own script asks for JSON and swaps the new value into the DOM —
+     * no redirect, so the secret is only ever in a response body, never a URL.
+     * Only the owner gets the value back; without JS it falls back to a redirect
+     * whose message points at where the (page-rendered) credential is.
+     */
+    private Object credsReset(String slug, String repo, String accept, java.util.UUID userId,
+                              String secret, String what) {
+        boolean self = currentUser.get().map(u -> u.id().equals(userId)).orElse(false);
+        if (accept != null && accept.contains("application/json")) {
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("ok", true);
+            body.put("message", what);
+            body.put("value", self ? secret : null);
+            return org.springframework.http.ResponseEntity.ok()
+                    .header("Cache-Control", "no-store").body(body);
+        }
+        return backToCreds(slug, repo, what + " — " + whereToFind(userId) + ". The old one no longer works.");
+    }
+
+    /** Credentials are never put in a URL or shown to anyone but their owner. */
+    private String whereToFind(java.util.UUID userId) {
+        boolean self = currentUser.get().map(u -> u.id().equals(userId)).orElse(false);
+        return self ? "the new one is shown above" : "they can see the new one on their own page";
     }
 
     /** The credentials now live on each app's page — return there if a reset came from one. */
