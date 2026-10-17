@@ -9,7 +9,7 @@
    translucent or tinted is computed from them with color-mix() in the rules.
    ===================================================================== */
 
-/* "Current" — stage (cool): the original dark look */
+/* Spotlight (cool): the original dark look */
 [data-ign-lamp="cool"], [data-ign-lamp="warm"] {
   --bg: #05060f;
   --sidebar: #121521;
@@ -44,7 +44,7 @@
   --mark-shadow: #000;
   --mask: #000;
 }
-/* "Current" — warm: the same dark look with an amber flare */
+/* Spotlight · warm: the same dark look with an amber flare */
 [data-ign-lamp="warm"] {
   --border: rgba(247, 228, 186, 0.2);
   --border-strong: rgba(247, 228, 186, 0.38);
@@ -56,7 +56,7 @@
   --link: #f0d89a;
   --code-text: #f0d89a;
 }
-/* "Current" — day: the light, teal look */
+/* Spotlight · day: the light, teal look */
 [data-ign-lamp="day"] {
   --bg: #f4f6f6;
   --sidebar: #0f2d28;
@@ -838,9 +838,6 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 }
 [data-bs-theme="light"] { --warn: #a86a00; }
 body { font-size: 14px; }
-
-/* layout: a readable column, centred, on wide screens */
-.ign-main > main { max-width: 1240px; margin-inline: auto; }
 
 /* radii */
 [data-bs-theme] .card,
