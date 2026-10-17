@@ -472,7 +472,7 @@ public class ZoneConsoleController {
                     currentUser.get().map(u -> u.email()).orElse(null));
             return redirectRepo(slug, repo, "secret " + name.strip() + " saved for " + sc.key()
                     + (sc == SecretScope.PREVIEW ? " — previews pick it up on their next push"
-                            : " — it applies at the next deploy, or press Apply now"));
+                            : " — it applies at the next deploy, or press Restart with new secrets"));
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());
         }
