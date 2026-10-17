@@ -406,6 +406,13 @@ public class ZoneConsoleController {
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("repoInfo", info);
+        var releaseApp = apps.listForZone(slug).stream().filter(x -> x.name().equals(repo)).findFirst();
+        String releaseBase = zones.get(slug).map(Zone::baseDomain).orElse("");
+        model.addAttribute("releaseDeployed", releaseApp.isPresent());
+        model.addAttribute("releaseRunning", releaseApp
+                .map(x -> apps.liveStates(slug).getOrDefault(x.name(), x.running())).orElse(false));
+        model.addAttribute("releaseUrl", releaseApp.map(x -> x.url(releaseBase)).orElse(null));
+        model.addAttribute("statusUrl", "/teams/" + slug + "/apps/status");
         java.time.Instant releaseAt = apps.listForZone(slug).stream()
                 .filter(x -> x.name().equals(repo)).findFirst().map(DeployedApp::deployedAt).orElse(null);
         java.time.Instant devAt = apps.devDeployment(slug, repo)
@@ -602,24 +609,47 @@ public class ZoneConsoleController {
      * release. Idempotent, so clicking Stop on an already-stopped app is a no-op.
      */
     @PostMapping("/teams/{slug}/apps/stop")
-    public String stopApp(@PathVariable String slug, @RequestParam String name) {
+    public String stopApp(@PathVariable String slug, @RequestParam String name,
+                          @RequestParam(value = "from", required = false) String from) {
         try {
             apps.stop(slug, name);
-            return redirect(slug, "app " + name + " stopped");
+            return appBack(slug, name, from, "app " + name + " stopped");
         } catch (RuntimeException e) {
-            return redirect(slug, e.getMessage());
+            return appBack(slug, name, from, e.getMessage());
         }
     }
 
     /** Restart a stopped app ({@code docker compose start}). */
     @PostMapping("/teams/{slug}/apps/start")
-    public String startApp(@PathVariable String slug, @RequestParam String name) {
+    public String startApp(@PathVariable String slug, @RequestParam String name,
+                           @RequestParam(value = "from", required = false) String from) {
         try {
             apps.start(slug, name);
-            return redirect(slug, "app " + name + " started");
+            return appBack(slug, name, from, "app " + name + " started");
         } catch (RuntimeException e) {
-            return redirect(slug, e.getMessage());
+            return appBack(slug, name, from, e.getMessage());
         }
+    }
+
+    /**
+     * Redeploy one deployment of an app with the image it already runs — re-reads
+     * its compose.yaml/.env/secrets and recreates the containers (also starts a
+     * stopped one). Managed from the app's own page.
+     */
+    @PostMapping("/teams/{slug}/repos/{repo}/redeploy")
+    public String redeployApp(@PathVariable String slug, @PathVariable String repo, @RequestParam String scope) {
+        try {
+            SecretScope sc = SecretScope.parse(scope);
+            apps.redeploy(slug, repo, sc);
+            return redirectRepo(slug, repo, sc.key() + " redeployed");
+        } catch (RuntimeException e) {
+            return redirectRepo(slug, repo, "redeploy failed: " + e.getMessage());
+        }
+    }
+
+    /** Release Stop/Start fired from the team page go back there; from the app's page, back to the app. */
+    private static String appBack(String slug, String name, String from, String msg) {
+        return "repo".equals(from) ? redirectRepo(slug, name, msg) : redirect(slug, msg);
     }
 
     /**

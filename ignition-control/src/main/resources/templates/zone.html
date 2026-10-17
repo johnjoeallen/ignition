@@ -105,8 +105,7 @@
                      th:class="${a.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
                      th:title="${a.running} ? 'running' : 'dead'"
                      th:attr="aria-label=${a.running} ? 'running' : 'dead'"></i>
-                  <a th:if="${a.running}" th:href="${a.url}" th:text="${a.version}">v1.2.3</a>
-                  <span th:unless="${a.running}" class="text-body-secondary" th:text="${a.version}">v1.2.3</span>
+                  <span th:class="${a.running} ? '' : 'text-body-secondary'" th:text="${a.version}">v1.2.3</span>
                 </span>
                 <span th:unless="${a.deployed}" class="text-body-secondary" th:text="${a.version}">no releases yet</span>
                 <span th:if="${a.pending != null}" class="badge text-bg-secondary ms-1"
@@ -132,18 +131,9 @@
                       th:text="${a.idleTtl == ''} ? 'default' : (${a.idleTtl == '0'} ? 'never' : ${a.idleTtl} + ' min')">default</span>
               </td>
               <td class="text-end text-nowrap">
-                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}"
-                      class="d-inline" th:classappend="${!a.running} ? ' d-none'"
-                      th:attr="data-app-action='stop',data-app-name=${a.name},data-busy=|Stopping ${a.name}…|">
-                  <input type="hidden" name="name" th:value="${a.name}">
-                  <button class="btn btn-sm btn-outline-secondary">stop</button>
-                </form>
-                <form th:if="${a.deployed}" method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}"
-                      class="d-inline" th:classappend="${a.running} ? ' d-none'"
-                      th:attr="data-app-action='start',data-app-name=${a.name},data-busy=|Starting ${a.name}…|">
-                  <input type="hidden" name="name" th:value="${a.name}">
-                  <button class="btn btn-sm btn-outline-secondary">start</button>
-                </form>
+                <a class="btn btn-sm btn-outline-secondary"
+                   th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${a.name})}"
+                   title="Stop, start, redeploy, secrets, releases">manage</a>
                 <form method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline"
                       th:attr="data-busy=|Deleting ${a.name}…|"
                       onsubmit="return confirm('Delete this app? This removes its repo — code, issues, PRs, releases — and cannot be undone.')">
@@ -177,25 +167,14 @@
                      th:class="${d.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
                      th:title="${d.running} ? 'running' : 'dead'"
                      th:attr="aria-label=${d.running} ? 'running' : 'dead'"></i>
-                  <a th:if="${d.running}" th:href="${d.url}" target="_blank" rel="noopener">open</a>
+                  <span th:if="${d.running}">running</span>
                   <span th:unless="${d.running}" class="text-body-secondary">down</span>
                 </span>
               </td>
               <td class="text-end text-nowrap">
-                <form method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
-                      class="d-inline" th:classappend="${!d.running} ? ' d-none'"
-                      th:attr="data-app-action='stop',data-app-name=${d.name},data-app-channel='dev',data-busy=|Stopping ${d.name} dev…|">
-                  <input type="hidden" name="repo" th:value="${d.name}">
-                  <input type="hidden" name="from" value="team">
-                  <button class="btn btn-sm btn-outline-secondary">stop</button>
-                </form>
-                <form method="post" th:action="@{/teams/{slug}/repos/dev/start(slug=${zoneSlug})}"
-                      class="d-inline" th:classappend="${d.running} ? ' d-none'"
-                      th:attr="data-app-action='start',data-app-name=${d.name},data-app-channel='dev',data-busy=|Starting ${d.name} dev…|">
-                  <input type="hidden" name="repo" th:value="${d.name}">
-                  <input type="hidden" name="from" value="team">
-                  <button class="btn btn-sm btn-outline-secondary">start</button>
-                </form>
+                <a class="btn btn-sm btn-outline-secondary"
+                   th:href="@{/teams/{slug}/repos/{repo}(slug=${zoneSlug},repo=${d.name})}"
+                   title="Stop, start, redeploy, secrets">manage</a>
                 <form method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}" class="d-inline"
                       th:attr="data-busy=|Deleting ${d.name} dev…|,data-confirm=|Delete the dev deployment of ${d.name}? Its containers and volumes go; the release stays up.|"
                       onsubmit="return confirm(this.dataset.confirm)">
