@@ -68,6 +68,8 @@ class RepoPageRenderTest {
         ctx.setVariable("releaseRunning", false);
         ctx.setVariable("releaseUrl", null);
         ctx.setVariable("statusUrl", "/teams/acme/apps/status");
+        ctx.setVariable("idleTtl", "");
+        ctx.setVariable("canManageApp", true);
         ctx.setVariable("secretSections", List.of(
                 new ZoneConsoleController.SecretSection("release", "Release", "hint", "current", List.of()),
                 new ZoneConsoleController.SecretSection("dev", "Dev (main)", "hint", "current", List.of()),

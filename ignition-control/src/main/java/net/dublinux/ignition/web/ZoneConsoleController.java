@@ -186,7 +186,8 @@ public class ZoneConsoleController {
      */
     @PostMapping("/teams/{slug}/apps/idle-ttl")
     public String setIdleTtl(@PathVariable String slug, @RequestParam String name,
-                             @RequestParam(defaultValue = "") String minutes) {
+                             @RequestParam(defaultValue = "") String minutes,
+                             @RequestParam(value = "from", required = false) String from) {
         if (!currentUser.isZoneAdmin(slug)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can change an app's idle time");
         }
@@ -199,9 +200,9 @@ public class ZoneConsoleController {
                     .orElseGet(() -> new AppConfig(slug, name, null));
             c.setIdleTtlMinutes(m);
             appConfigs.save(c);
-            return redirect(slug, "idle time for " + name + " saved");
+            return appBack(slug, name, from, "idle time for " + name + " saved");
         } catch (IllegalArgumentException e) {
-            return redirect(slug, e.getMessage());
+            return appBack(slug, name, from, e.getMessage());
         }
     }
 
@@ -403,6 +404,10 @@ public class ZoneConsoleController {
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("repoInfo", info);
+        model.addAttribute("idleTtl", ttlValue(appConfigs.findById(
+                new net.dublinux.ignition.app.DeployedApp.Key(slug, repo))
+                .map(AppConfig::idleTtlMinutes).orElse(null)));
+        model.addAttribute("canManageApp", currentUser.isZoneAdmin(slug));
         var releaseApp = apps.listForZone(slug).stream().filter(x -> x.name().equals(repo)).findFirst();
         String releaseBase = zones.get(slug).map(Zone::baseDomain).orElse("");
         model.addAttribute("releaseDeployed", releaseApp.isPresent());

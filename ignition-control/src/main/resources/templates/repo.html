@@ -442,6 +442,42 @@
         <p th:unless="${canManageSecrets}" class="text-body-secondary small">Only a team admin can change secrets.</p>
       </div>
 
+      <div class="card mb-4">
+        <div class="card-body">
+          <h2 class="h6 text-uppercase text-body-secondary mb-3"><i class="bi bi-gear"></i> Settings</h2>
+          <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+            <span class="small">Stop when idle</span>
+            <form th:if="${canManageApp}" method="post" th:action="@{/teams/{slug}/apps/idle-ttl(slug=${zoneSlug})}" class="d-inline">
+              <input type="hidden" name="name" th:value="${repoName}">
+              <input type="hidden" name="from" value="repo">
+              <select name="minutes" class="form-select form-select-sm d-inline-block w-auto" onchange="this.form.submit()"
+                      title="Stop after this long with no traffic">
+                <option value="" th:selected="${idleTtl == ''}">default</option>
+                <option value="60" th:selected="${idleTtl == '60'}">1 hour</option>
+                <option value="360" th:selected="${idleTtl == '360'}">6 hours</option>
+                <option value="1440" th:selected="${idleTtl == '1440'}">1 day</option>
+                <option value="4320" th:selected="${idleTtl == '4320'}">3 days</option>
+                <option value="10080" th:selected="${idleTtl == '10080'}">7 days</option>
+                <option value="0" th:selected="${idleTtl == '0'}">never</option>
+              </select>
+            </form>
+            <span th:unless="${canManageApp}" class="text-body-secondary small"
+                  th:text="${idleTtl == ''} ? 'default' : (${idleTtl == '0'} ? 'never' : ${idleTtl} + ' min')">default</span>
+            <span class="text-body-secondary small">An app with no requests for this long is stopped, not deleted.
+              A visit to its address starts it again. Applies to the release and the dev deployment.</span>
+          </div>
+          <div class="border-top pt-3">
+            <form method="post" th:action="@{/teams/{slug}/apps/delete(slug=${zoneSlug})}" class="d-inline"
+                  th:attr="data-busy=|Deleting ${repoName}…|"
+                  onsubmit="return confirm('Delete this app? This removes its repo — code, issues, PRs, releases — and cannot be undone.')">
+              <input type="hidden" name="name" th:value="${repoName}">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete app</button>
+            </form>
+            <span class="text-body-secondary small ms-2">Removes every deployment, its secrets and the repo (code, issues, PRs, releases). Cannot be undone.</span>
+          </div>
+        </div>
+      </div>
+
       <div th:if="${unreleasedIssues != null and !unreleasedIssues.isEmpty()}">
         <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">
           Closed, not released yet
