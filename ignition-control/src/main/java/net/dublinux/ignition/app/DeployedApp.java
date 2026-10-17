@@ -73,6 +73,7 @@ public class DeployedApp {
     public int port() { return port; }
     public String deployId() { return deployId; }
     public boolean running() { return running; }
+    public Instant deployedAt() { return deployedAt; }
 
     public void update(String node, String image, int port, String deployId) {
         this.node = node;

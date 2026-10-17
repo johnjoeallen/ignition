@@ -49,6 +49,7 @@ public class AppService {
     private final RenderService render;
     private final AppComposeBuilder composeBuilder;
     private final AppHealthProbe health;
+    private final AppSecretService secrets;
 
     /** Zones whose registry login has succeeded since this process started. */
     private final Set<String> loggedIn = ConcurrentHashMap.newKeySet();
@@ -63,7 +64,8 @@ public class AppService {
 
     public AppService(AppRepository apps, DevDeploymentRepository devApps, ZoneRepository zones,
                       ZoneService zoneService, NodeRepository nodes, DockerCli docker,
-                      RenderService render, AppComposeBuilder composeBuilder, AppHealthProbe health) {
+                      RenderService render, AppComposeBuilder composeBuilder, AppHealthProbe health,
+                      AppSecretService secrets) {
         this.apps = apps;
         this.devApps = devApps;
         this.zones = zones;
@@ -73,6 +75,7 @@ public class AppService {
         this.render = render;
         this.composeBuilder = composeBuilder;
         this.health = health;
+        this.secrets = secrets;
     }
 
     public List<DeployedApp> list() {
@@ -121,7 +124,8 @@ public class AppService {
         String repoEnv = zoneService.appEnv(slug, repo, ref).orElse(null);
         String rendered;
         try {
-            rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml, repoEnv);
+            rendered = composeBuilder.build(slug, name, channel, image, port, repoYaml, repoEnv,
+                    secrets.forApp(slug, repo, secretScope(channel, name, repo)));
         } catch (ComposeSpecException e) {
             log.warn("deploy {}/{} [{}]: compose.yaml rejected — {}", slug, name, channel, e.getMessage());
             throw e;
@@ -218,6 +222,44 @@ public class AppService {
         lifecycle(slug, name, Channel.RELEASE, "start");
         app.markRunning();
         apps.save(app);
+    }
+
+    /** Which secrets a deployment gets: dev gets dev's; a PR preview ({@code <repo>-pr-<n>}) gets the preview set; else release. */
+    static SecretScope secretScope(Channel channel, String name, String repo) {
+        if (channel == Channel.DEV) {
+            return SecretScope.DEV;
+        }
+        return repo.equals(name) ? SecretScope.RELEASE : SecretScope.PREVIEW;
+    }
+
+    /**
+     * Redeploy one environment of an app with the image and port it already
+     * runs, so changed secrets reach its containers without cutting a release.
+     * {@link SecretScope#PREVIEW} can't be applied — previews pick them up at
+     * their next push.
+     */
+    public void redeploy(String slug, String name, SecretScope scope) {
+        switch (scope) {
+            case RELEASE -> {
+                DeployedApp a = apps.findByZoneAndName(slug, name)
+                        .orElseThrow(() -> new IllegalArgumentException(name + " has no release deployed"));
+                deploy(slug, name, a.image(), a.port(), Channel.RELEASE, tagOrMain(a.image()), name);
+            }
+            case DEV -> {
+                DevDeployment d = devApps.findByZoneAndName(slug, name)
+                        .orElseThrow(() -> new IllegalArgumentException(name + " has no dev deployment"));
+                deploy(slug, name, d.image(), d.port(), Channel.DEV, "main", name);
+            }
+            case PREVIEW -> throw new IllegalArgumentException(
+                    "PR previews pick up secrets the next time the PR is pushed");
+        }
+    }
+
+    /** {@code vX.Y.Z} if the image is tagged with one (the ref its compose.yaml was read at), else {@code main}. */
+    private static String tagOrMain(String image) {
+        int i = image == null ? -1 : image.lastIndexOf(':');
+        String tag = i < 0 ? "" : image.substring(i + 1);
+        return tag.matches("v\\d+\\.\\d+\\.\\d+") ? tag : "main";
     }
 
     /** Like {@link #stop}, but recorded as the idle sweep's doing, so a browser visit may wake it. */

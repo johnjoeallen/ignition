@@ -64,6 +64,11 @@ class RepoPageRenderTest {
         ctx.setVariable("myGitUsername", null);
         ctx.setVariable("myGitPassword", null);
         ctx.setVariable("myGitPat", null);
+        ctx.setVariable("secretSections", List.of(
+                new ZoneConsoleController.SecretSection("release", "Release", "hint", "current", List.of()),
+                new ZoneConsoleController.SecretSection("dev", "Dev (main)", "hint", "current", List.of()),
+                new ZoneConsoleController.SecretSection("preview", "PR previews", "hint", "none", List.of())));
+        ctx.setVariable("canManageSecrets", true);
         return ctx;
     }
 
@@ -122,6 +127,35 @@ class RepoPageRenderTest {
         assertThat(html).contains("https://cards.dev.acme.ignition.example/");
         assertThat(html).contains("6 Sep 09:30 UTC");
         assertThat(html).contains(">stop<");
+    }
+
+    @Test
+    void secretsAreListedByNameAndNeverShowTheirValue() {
+        var ctx = baseContext();
+        var secret = new net.dublinux.ignition.app.AppSecret("acme", "cards",
+                net.dublinux.ignition.app.SecretScope.DEV, "STRIPE_KEY",
+                "CIPHERTEXT-SHOULD-NEVER-RENDER", "alice@example.com");
+        ctx.setVariable("secretSections", List.of(
+                new ZoneConsoleController.SecretSection("release", "Release", "hint", "current", List.of()),
+                new ZoneConsoleController.SecretSection("dev", "Dev (main)", "hint", "pending", List.of(secret)),
+                new ZoneConsoleController.SecretSection("preview", "PR previews", "hint", "none", List.of())));
+        String html = engine().process("repo", ctx);
+        assertThat(html).contains("STRIPE_KEY").contains("Save secret")
+                .contains("Release").contains("Dev (main)").contains("PR previews");
+        assertThat(html).doesNotContain("CIPHERTEXT-SHOULD-NEVER-RENDER");
+        // dev has an unapplied change -> its restart button is live; release is current -> disabled
+        assertThat(html).contains("Secrets changed since the last deploy")
+                .contains("Up to date with the running deployment");
+        assertThat(html.split("Restart with new secrets</button>").length - 1).isEqualTo(2);
+        String release = html.substring(html.indexOf("data-secrets=\"release\""), html.indexOf("data-secrets=\"dev\""));
+        String dev = html.substring(html.indexOf("data-secrets=\"dev\""), html.indexOf("data-secrets=\"preview\""));
+        assertThat(release).contains("disabled");
+        assertThat(dev).doesNotContain("disabled");
+
+        ctx.setVariable("canManageSecrets", false);
+        html = engine().process("repo", ctx);
+        assertThat(html).contains("STRIPE_KEY").doesNotContain("Save secret")
+                .contains("Only a team admin can change secrets");
     }
 
     @Test

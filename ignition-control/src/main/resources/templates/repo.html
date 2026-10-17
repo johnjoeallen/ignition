@@ -251,6 +251,70 @@
         </table>
       </div>
 
+      <div class="mb-4">
+        <h2 class="h6 text-uppercase text-body-secondary mb-2"><i class="bi bi-key"></i> Secrets</h2>
+        <p class="text-body-secondary small">Runtime environment variables that stay out of the repo — API keys,
+          tokens. Each environment has its own set, merged into that deployment's web container at deploy time
+          and winning over <code>.env</code>. <b>Write-only:</b> once saved a value can't be read back here, only
+          replaced or deleted.</p>
+        <div th:each="sec : ${secretSections}" class="mb-4" th:attr="data-secrets=${sec.scope}">
+          <div class="fw-semibold" th:text="${sec.title}">Release</div>
+          <div class="text-body-secondary small mb-2" th:text="${sec.hint}">hint</div>
+          <div class="table-card mb-2" th:if="${!sec.items.isEmpty()}">
+            <table class="table table-hover mb-0">
+              <thead><tr><th>name</th><th>value</th><th>last set</th><th></th></tr></thead>
+              <tbody>
+                <tr th:each="s : ${sec.items}">
+                  <td><code th:text="${s.name}">API_KEY</code></td>
+                  <td class="text-body-secondary">••••••••</td>
+                  <td class="text-body-secondary small"
+                      th:text="|${#temporals.format(s.updatedAt, 'd MMM HH:mm')} UTC${s.updatedBy != null ? ' · ' + s.updatedBy : ''}|">1 Jan</td>
+                  <td class="text-end">
+                    <form th:if="${canManageSecrets}" method="post"
+                          th:action="@{/teams/{slug}/repos/{repo}/secrets/delete(slug=${zoneSlug},repo=${repoName})}" class="d-inline"
+                          onsubmit="return confirm('Delete this secret?')">
+                      <input type="hidden" name="scope" th:value="${sec.scope}">
+                      <input type="hidden" name="name" th:value="${s.name}">
+                      <button class="btn btn-sm btn-outline-danger">delete</button>
+                    </form>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p th:if="${sec.items.isEmpty()}" class="text-body-secondary small mb-2">No secrets set.</p>
+          <form th:if="${canManageSecrets}" method="post" autocomplete="off"
+                th:action="@{/teams/{slug}/repos/{repo}/secrets(slug=${zoneSlug},repo=${repoName})}"
+                class="row g-2 align-items-end">
+            <input type="hidden" name="scope" th:value="${sec.scope}">
+            <div class="col-auto">
+              <input class="form-control form-control-sm" name="name" required placeholder="API_KEY"
+                     pattern="[A-Za-z_][A-Za-z0-9_]{0,63}" spellcheck="false" aria-label="secret name">
+            </div>
+            <div class="col-auto">
+              <input class="form-control form-control-sm" name="value" type="password" required
+                     placeholder="value" autocomplete="new-password" style="min-width:18rem" aria-label="secret value">
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-accent btn-sm"><i class="bi bi-plus-lg"></i> Save secret</button>
+            </div>
+          </form>
+          <form th:if="${canManageSecrets and sec.restart != 'none'}" method="post" class="mt-2 d-flex align-items-center gap-2"
+                th:action="@{/teams/{slug}/repos/{repo}/secrets/apply(slug=${zoneSlug},repo=${repoName})}"
+                data-busy="Restarting with the new secrets…"
+                onsubmit="return confirm('Restart this environment with its current secrets? The app is briefly unavailable.')">
+            <input type="hidden" name="scope" th:value="${sec.scope}">
+            <button class="btn btn-sm" th:classappend="${sec.restart == 'pending'} ? 'btn-accent' : 'btn-outline-secondary'"
+                    th:disabled="${sec.restart != 'pending'}"><i class="bi bi-arrow-repeat"></i> Restart with new secrets</button>
+            <span class="text-body-secondary small"
+                  th:text="${sec.restart == 'pending'} ? 'Secrets changed since the last deploy — restart to apply them.'
+                           : (${sec.restart == 'undeployed'} ? 'Not deployed yet — they apply on the first deploy.'
+                           : 'Up to date with the running deployment.')">hint</span>
+          </form>
+        </div>
+        <p th:unless="${canManageSecrets}" class="text-body-secondary small">Only a team admin can change secrets.</p>
+      </div>
+
       <div th:if="${unreleasedIssues != null and !unreleasedIssues.isEmpty()}">
         <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">
           Closed, not released yet

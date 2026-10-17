@@ -67,7 +67,19 @@ public class AppComposeBuilder {
      */
     public String build(String slug, String name, Channel channel,
                         String image, int port, String composeYaml, String envFile) {
+        return build(slug, name, channel, image, port, composeYaml, envFile, Map.of());
+    }
+
+    /**
+     * As above, plus the app's console-managed {@code secrets}: merged into the
+     * web service's environment after {@code .env}, so they win ({@code PORT}
+     * still stays platform-controlled).
+     */
+    public String build(String slug, String name, Channel channel,
+                        String image, int port, String composeYaml, String envFile,
+                        Map<String, String> secrets) {
         Map<String, String> env = parseEnv(envFile);
+        env.putAll(secrets);
         Map<String, Object> root = (composeYaml == null || composeYaml.isBlank())
                 ? synthesised()
                 : parse(composeYaml);

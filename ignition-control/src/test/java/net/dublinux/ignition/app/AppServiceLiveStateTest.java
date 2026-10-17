@@ -37,7 +37,8 @@ class AppServiceLiveStateTest {
                 .thenReturn(new DockerCli.Result(0, psOut, ""));
         AppService svc = new AppService(apps, mock(DevDeploymentRepository.class),
                 mock(ZoneRepository.class), mock(ZoneService.class), mock(NodeRepository.class),
-                docker, mock(RenderService.class), mock(AppComposeBuilder.class), mock(AppHealthProbe.class));
+                docker, mock(RenderService.class), mock(AppComposeBuilder.class), mock(AppHealthProbe.class),
+                mock(AppSecretService.class));
         return svc.liveStates("t");
     }
 
@@ -64,7 +65,8 @@ class AppServiceLiveStateTest {
         when(docker.docker(anyString(), anyList())).thenReturn(new DockerCli.Result(1, "", "cannot connect"));
         AppService svc = new AppService(apps, mock(DevDeploymentRepository.class),
                 mock(ZoneRepository.class), mock(ZoneService.class), mock(NodeRepository.class),
-                docker, mock(RenderService.class), mock(AppComposeBuilder.class), mock(AppHealthProbe.class));
+                docker, mock(RenderService.class), mock(AppComposeBuilder.class), mock(AppHealthProbe.class),
+                mock(AppSecretService.class));
         assertEquals(true, svc.liveStates("t").get("up"));
     }
 }
@@ -89,7 +91,7 @@ class AppServiceHealthProbeTest {
         when(probe.up(eq("https://wedged.apps.t.d.test/"), eq(""))).thenReturn(false);
         AppService svc = new AppService(apps, mock(DevDeploymentRepository.class), zones,
                 mock(ZoneService.class), mock(NodeRepository.class), docker,
-                mock(RenderService.class), mock(AppComposeBuilder.class), probe);
+                mock(RenderService.class), mock(AppComposeBuilder.class), probe, mock(AppSecretService.class));
 
         Map<String, Boolean> s = svc.liveStates("t");
         assertEquals(true, s.get("ok"), "the label's path is what gets probed");

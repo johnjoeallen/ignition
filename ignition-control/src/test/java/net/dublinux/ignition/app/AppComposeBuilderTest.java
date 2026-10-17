@@ -341,4 +341,17 @@ class AppComposeBuilderTest {
         assertThat(m).doesNotContainKey("123KEY");
         assertThat(m).hasSize(5);
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void secretsWinOverDotEnvButNeverOverridePort() {
+        String out = builder.build("acme", "web", Channel.RELEASE,
+                "git.acme.ignition.example/acme/web:v1.2.3", 8080, null,
+                "API_KEY=from-env-file\nLOG=debug", Map.of("API_KEY", "from-secret", "PORT", "1"));
+        Map<String, Object> env = (Map<String, Object>) svc(
+                (Map<String, Object>) new Yaml().load(out), "web").get("environment");
+        org.junit.jupiter.api.Assertions.assertEquals("from-secret", String.valueOf(env.get("API_KEY")));
+        org.junit.jupiter.api.Assertions.assertEquals("debug", String.valueOf(env.get("LOG")));
+        org.junit.jupiter.api.Assertions.assertEquals("8080", String.valueOf(env.get("PORT")));
+    }
 }

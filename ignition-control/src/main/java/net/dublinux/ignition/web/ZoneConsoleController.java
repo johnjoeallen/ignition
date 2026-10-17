@@ -8,6 +8,9 @@ import java.util.Map;
 
 import net.dublinux.ignition.app.AppConfig;
 import net.dublinux.ignition.app.AppConfigRepository;
+import net.dublinux.ignition.app.AppSecret;
+import net.dublinux.ignition.app.AppSecretService;
+import net.dublinux.ignition.app.SecretScope;
 import net.dublinux.ignition.app.AppService;
 import net.dublinux.ignition.app.DeployedApp;
 import net.dublinux.ignition.auth.CurrentUser;
@@ -45,16 +48,18 @@ public class ZoneConsoleController {
     private final ZoneService zones;
     private final AppService apps;
     private final AppConfigRepository appConfigs;
+    private final AppSecretService appSecrets;
     private final ZoneAccessService access;
     private final CurrentUser currentUser;
     private final MailService mail;
 
     public ZoneConsoleController(ZoneService zones, AppService apps, AppConfigRepository appConfigs,
-                                 ZoneAccessService access,
+                                 AppSecretService appSecrets, ZoneAccessService access,
                                  CurrentUser currentUser, MailService mail) {
         this.zones = zones;
         this.apps = apps;
         this.appConfigs = appConfigs;
+        this.appSecrets = appSecrets;
         this.access = access;
         this.currentUser = currentUser;
         this.mail = mail;
@@ -64,6 +69,20 @@ public class ZoneConsoleController {
     public record AppRow(String name, String description, String version, boolean deployed,
                          boolean running, String image, String url, String deployId, String idleTtl,
                          String pending) {}
+
+    /** One environment's secrets on the app page — names and metadata only, never values. */
+    public record SecretSection(String scope, String title, String hint, String restart, List<AppSecret> items) {}
+
+    /** Restart-button state for an environment: {@code none}, {@code undeployed}, {@code current} or {@code pending}. */
+    private String restartState(String slug, String repo, SecretScope scope, java.time.Instant deployedAt) {
+        if (scope == SecretScope.PREVIEW) {
+            return "none";
+        }
+        if (deployedAt == null) {
+            return "undeployed";
+        }
+        return appSecrets.changedAt(slug, repo, scope).filter(deployedAt::isBefore).isPresent() ? "pending" : "current";
+    }
 
     /** One row in the Dev table — an app's deploy-from-main deployment. */
     public record DevRow(String name, String url, String image, String deployedAt, boolean running) {}
@@ -387,6 +406,23 @@ public class ZoneConsoleController {
         model.addAttribute("zoneSlug", slug);
         model.addAttribute("repoName", repo);
         model.addAttribute("repoInfo", info);
+        java.time.Instant releaseAt = apps.listForZone(slug).stream()
+                .filter(x -> x.name().equals(repo)).findFirst().map(DeployedApp::deployedAt).orElse(null);
+        java.time.Instant devAt = apps.devDeployment(slug, repo)
+                .map(net.dublinux.ignition.app.DevDeployment::deployedAt).orElse(null);
+        model.addAttribute("secretSections", List.of(
+                new SecretSection("release", "Release",
+                        "Used by tagged releases, at " + repo + ".apps." + slug + "…",
+                        restartState(slug, repo, SecretScope.RELEASE, releaseAt),
+                        appSecrets.list(slug, repo, SecretScope.RELEASE)),
+                new SecretSection("dev", "Dev (main)",
+                        "Used by Deploy from main, at " + repo + ".dev." + slug + "…",
+                        restartState(slug, repo, SecretScope.DEV, devAt),
+                        appSecrets.list(slug, repo, SecretScope.DEV)),
+                new SecretSection("preview", "PR previews",
+                        "Used by every PR preview of this app — applied the next time a PR is pushed",
+                        "none", appSecrets.list(slug, repo, SecretScope.PREVIEW))));
+        model.addAttribute("canManageSecrets", currentUser.isZoneAdmin(slug));
         // info.version() is the latest git tag, which exists before CI has built anything — show what is deployed
         boolean tagged = info.version().startsWith("v");
         String deployedVersion = apps.listForZone(slug).stream()
@@ -413,6 +449,54 @@ public class ZoneConsoleController {
                 .toList());
         model.addAttribute("currentUserId", currentUserId);
         return "repo";
+    }
+
+    /** Set (or replace) a write-only runtime secret for one environment. Team admins only; the value is never echoed back. */
+    @PostMapping("/teams/{slug}/repos/{repo}/secrets")
+    public String setSecret(@PathVariable String slug, @PathVariable String repo,
+                            @RequestParam String scope, @RequestParam String name, @RequestParam String value) {
+        requireSecretsAdmin(slug);
+        try {
+            SecretScope sc = SecretScope.parse(scope);
+            appSecrets.put(slug, repo, sc, name.strip(), value,
+                    currentUser.get().map(u -> u.email()).orElse(null));
+            return redirectRepo(slug, repo, "secret " + name.strip() + " saved for " + sc.key()
+                    + (sc == SecretScope.PREVIEW ? " — previews pick it up on their next push"
+                            : " — it applies at the next deploy, or press Apply now"));
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, repo, e.getMessage());
+        }
+    }
+
+    @PostMapping("/teams/{slug}/repos/{repo}/secrets/delete")
+    public String deleteSecret(@PathVariable String slug, @PathVariable String repo,
+                               @RequestParam String scope, @RequestParam String name) {
+        requireSecretsAdmin(slug);
+        try {
+            appSecrets.delete(slug, repo, SecretScope.parse(scope), name);
+            return redirectRepo(slug, repo, "secret " + name + " deleted — running containers keep it until the next deploy");
+        } catch (IllegalArgumentException e) {
+            return redirectRepo(slug, repo, e.getMessage());
+        }
+    }
+
+    /** Redeploy one environment with the same image so its changed secrets take effect now. */
+    @PostMapping("/teams/{slug}/repos/{repo}/secrets/apply")
+    public String applySecrets(@PathVariable String slug, @PathVariable String repo, @RequestParam String scope) {
+        requireSecretsAdmin(slug);
+        try {
+            SecretScope sc = SecretScope.parse(scope);
+            apps.redeploy(slug, repo, sc);
+            return redirectRepo(slug, repo, sc.key() + " restarted with its current secrets");
+        } catch (RuntimeException e) {
+            return redirectRepo(slug, repo, "apply failed: " + e.getMessage());
+        }
+    }
+
+    private void requireSecretsAdmin(String slug) {
+        if (!currentUser.isZoneAdmin(slug)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "only a team admin can manage an app's secrets");
+        }
     }
 
     @PostMapping("/teams/{slug}/repos/{repo}/description")
@@ -606,6 +690,7 @@ public class ZoneConsoleController {
             // no dev deployment — fine
         }
         appConfigs.deleteByZoneAndName(slug, name);
+        appSecrets.deleteAll(slug, name);
         var res = zones.deleteApp(slug, name);
         return redirect(slug, res.ok() || res.status() == 404
                 ? "app " + name + " deleted"

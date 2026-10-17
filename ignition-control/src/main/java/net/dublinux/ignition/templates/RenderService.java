@@ -54,7 +54,14 @@ public class RenderService {
      */
     public Path writeAppCompose(String slug, String name,
                                 net.dublinux.ignition.app.Channel channel, String composeYaml) {
-        return write(appComposePath(slug, name, channel), composeYaml);
+        Path written = write(appComposePath(slug, name, channel), composeYaml);
+        // the rendered file can carry the app's secrets — owner-only, best effort
+        try {
+            Files.setPosixFilePermissions(written, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // non-POSIX filesystem
+        }
+        return written;
     }
 
     /** The path {@link #writeAppCompose} wrote — last deploy's rendered compose. May not exist. */
