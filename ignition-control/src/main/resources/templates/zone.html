@@ -71,7 +71,7 @@
         </div>
       </div>
 
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">
+      <h2 class="ign-section-title mt-4 mb-2">
         Apps <span class="fw-normal text-lowercase" th:text="|· &lt;name&gt;.${zone.appsBase}|">·</span>
       </h2>
       <p class="text-body-secondary small">An app <b>is</b> its repo — creating one creates the repo (in this
@@ -103,13 +103,10 @@
               </td>
               <td class="text-body-secondary" th:text="${#strings.isEmpty(a.description)} ? '—' : ${a.description}">a nice app</td>
               <td>
-                <span th:if="${a.deployed}" class="d-inline-flex align-items-center gap-1"
-                      th:attr="data-app-status-row=${a.name}">
-                  <i data-app-status-icon
-                     th:class="${a.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                     th:title="${a.running} ? 'running' : 'dead'"
-                     th:attr="aria-label=${a.running} ? 'running' : 'dead'"></i>
-                  <span th:class="${a.running} ? '' : 'text-body-secondary'" th:text="${a.version}">v1.2.3</span>
+                <span th:if="${a.deployed}" class="d-inline-flex align-items-center gap-2">
+                  <span class="ign-pill" th:classappend="${a.running} ? ' ign-pill-ok' : ' ign-pill-off'"
+                        th:attr="data-app-status-row=${a.name}"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${a.running} ? 'Running' : 'Stopped'">Running</span></span>
+                  <span th:text="${a.version}">v1.2.3</span>
                 </span>
                 <span th:unless="${a.deployed}" class="text-body-secondary" th:text="${a.version}">no releases yet</span>
                 <span th:if="${a.pending != null}" class="badge text-bg-secondary ms-1"
@@ -122,7 +119,7 @@
         </table>
       </div>
 
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2" th:if="${!devs.isEmpty()}">
+      <h2 class="ign-section-title mt-4 mb-2" th:if="${!devs.isEmpty()}">
         Dev <span class="fw-normal text-lowercase" th:text="|· &lt;name&gt;.dev.${zoneSlug}.${zone.baseDomain}|">·</span>
       </h2>
       <p class="text-body-secondary small" th:if="${!devs.isEmpty()}">Latest <code>main</code>, deployed by an
@@ -136,22 +133,15 @@
               <td><code class="small" th:text="${d.image}">image</code></td>
               <td class="text-body-secondary" th:text="${d.deployedAt}">1 Jan 10:00 UTC</td>
               <td>
-                <span class="d-inline-flex align-items-center gap-1"
-                      th:attr="data-app-status-row=${d.name},data-app-channel='dev'">
-                  <i data-app-status-icon
-                     th:class="${d.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                     th:title="${d.running} ? 'running' : 'dead'"
-                     th:attr="aria-label=${d.running} ? 'running' : 'dead'"></i>
-                  <span th:if="${d.running}">running</span>
-                  <span th:unless="${d.running}" class="text-body-secondary">down</span>
-                </span>
+                <span class="ign-pill" th:classappend="${d.running} ? ' ign-pill-ok' : ' ign-pill-off'"
+                  th:attr="data-app-status-row=${d.name},data-app-channel='dev'"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${d.running} ? 'Running' : 'Stopped'">Running</span></span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Members</h2>
+      <h2 class="ign-section-title mt-4 mb-2">Members</h2>
       <p class="text-body-secondary small">These are the people who can open this team's console. An
         <b>admin</b> can also manage the members listed below. A <b>member</b> can do everything else here,
         including creating apps and cutting releases.</p>
@@ -203,7 +193,7 @@
                 </form>
                 <form method="post" th:action="@{/teams/{slug}/members/delete(slug=${zoneSlug})}" class="d-inline">
                   <input type="hidden" name="userId" th:value="${m.userId}">
-                  <button class="btn btn-sm btn-outline-danger">remove</button>
+                  <button class="btn btn-sm btn-outline-danger">Remove</button>
                 </form>
               </td>
             </tr>

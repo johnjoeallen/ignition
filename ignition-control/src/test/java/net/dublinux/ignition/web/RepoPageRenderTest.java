@@ -95,7 +95,7 @@ class RepoPageRenderTest {
         assertThat(html).contains("Closed, not released yet");
         assertThat(html).contains("suggested from the commit messages");
         // the suggested bump (minor) button carries the highlight class
-        assertThat(html).containsPattern("value=\"minor\"[^>]*btn-accent");
+        assertThat(html).containsPattern("value=\"minor\"[^>]*ign-suggested");
         assertThat(html).doesNotContain("nothing to release");
     }
 
@@ -109,7 +109,7 @@ class RepoPageRenderTest {
 
         assertThat(html).contains("nothing to release");
         assertThat(html).contains("confirm(");                     // empty-state guard on the release form
-        assertThat(html).doesNotContainPattern("value=\"[a-z]+\"[^>]*btn-accent");  // no bump highlighted
+        assertThat(html).doesNotContainPattern("value=\"[a-z]+\"[^>]*ign-suggested");  // no bump highlighted
         assertThat(html).doesNotContain("Closed, not released yet");
     }
 
@@ -123,7 +123,7 @@ class RepoPageRenderTest {
         String html = engine().process("repo", ctx);
         assertThat(html).contains("Deploy from main");
         assertThat(html).contains("cards.dev.acme.ignition.example");
-        assertThat(html).doesNotContain(">stop<");
+        assertThat(html).doesNotContain(">Stop<");
 
         // with a live dev deployment
         ctx.setVariable("devUrl", "https://cards.dev.acme.ignition.example/");
@@ -132,7 +132,7 @@ class RepoPageRenderTest {
         html = engine().process("repo", ctx);
         assertThat(html).contains("https://cards.dev.acme.ignition.example/");
         assertThat(html).contains("6 Sep 09:30 UTC");
-        assertThat(html).contains(">stop<");
+        assertThat(html).contains(">Stop<");
     }
 
     @Test
@@ -197,7 +197,7 @@ class RepoPageRenderTest {
         assertThat(html).contains("href=\"https://cards.apps.acme.ignition.example/\"")
                 .contains("href=\"https://cards.dev.acme.ignition.example/\"")
                 .contains("href=\"https://cards-pr-7.apps.acme.ignition.example/\"");
-        assertThat(html.split("launch</a>").length - 1).isEqualTo(3);
+        assertThat(html.split("Launch</a>").length - 1).isEqualTo(3);
     }
 
     @Test

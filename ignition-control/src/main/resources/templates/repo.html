@@ -85,14 +85,14 @@
                   th:attr="onsubmit=${pendingWork} ? null : 'return confirm(\'Nothing new since this app was last released — this just redeploys the current commit as the next version. Continue?\')'">
               <input type="hidden" name="repo" th:value="${repoName}">
               <button name="bump" value="major" class="btn"
-                      th:classappend="${pendingWork and pending.suggestedBump == 'major'} ? ' btn-accent' : ' btn-outline-secondary'"
-                      title="X.0.0 — breaking change">major</button>
+                      th:classappend="${pendingWork and pending.suggestedBump == 'major'} ? ' btn-outline-secondary ign-suggested' : ' btn-outline-secondary'"
+                      title="X.0.0 — breaking change">Major</button>
               <button name="bump" value="minor" class="btn"
-                      th:classappend="${pendingWork and pending.suggestedBump == 'minor'} ? ' btn-accent' : ' btn-outline-secondary'"
-                      title="x.Y.0 — new feature">minor</button>
+                      th:classappend="${pendingWork and pending.suggestedBump == 'minor'} ? ' btn-outline-secondary ign-suggested' : ' btn-outline-secondary'"
+                      title="x.Y.0 — new feature">Minor</button>
               <button name="bump" value="patch" class="btn"
-                      th:classappend="${pendingWork and pending.suggestedBump == 'patch'} ? ' btn-accent' : ' btn-outline-secondary'"
-                      title="x.y.Z — fix">fix</button>
+                      th:classappend="${pendingWork and pending.suggestedBump == 'patch'} ? ' btn-outline-secondary ign-suggested' : ' btn-outline-secondary'"
+                      title="x.y.Z — fix">Fix</button>
             </form>
 
             <div class="text-body-secondary small mt-3 mb-1">Dev
@@ -101,7 +101,7 @@
             <div class="d-flex align-items-center gap-2">
               <form method="post" th:action="@{/teams/{slug}/repos/dev(slug=${zoneSlug})}" class="d-inline">
                 <input type="hidden" name="repo" th:value="${repoName}">
-                <button class="btn btn-sm btn-outline-secondary" title="Build and deploy the latest main HEAD">
+                <button class="btn btn-sm btn-accent" title="Build and deploy the latest main HEAD">
                   Deploy from main</button>
               </form>
             </div>
@@ -145,7 +145,7 @@
 
       <div class="card mb-4">
         <div class="card-body">
-          <h2 class="h6 text-uppercase text-body-secondary mb-3"><i class="bi bi-gear"></i> Settings</h2>
+          <h2 class="ign-section-title mb-3">Settings</h2>
           <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
             <span class="small">Stop when idle</span>
             <form th:if="${canManageApp}" method="post" th:action="@{/teams/{slug}/apps/idle-ttl(slug=${zoneSlug})}" class="d-inline">
@@ -181,7 +181,7 @@
 
       <div class="card mb-4">
         <div class="card-body">
-          <h2 class="h6 text-uppercase text-body-secondary mb-3"><i class="bi bi-rocket-takeoff"></i> Deployments</h2>
+          <h2 class="ign-section-title mb-3">Deployments</h2>
           <div hidden th:attr="data-app-status-url=${statusUrl}"></div>
           <div class="table-card">
             <table class="table mb-0 align-middle">
@@ -197,16 +197,11 @@
                           th:text="|${versionPending} building…|">v1.2.4 building…</span>
                   </td>
                   <td class="text-nowrap">
-                    <span class="d-inline-flex align-items-center gap-1" th:attr="data-app-status-row=${repoName}">
-                      <i data-app-status-icon
-                         th:class="${releaseRunning} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                         th:title="${releaseRunning} ? 'running' : 'dead'"></i>
-                      <span th:if="${releaseRunning}">running</span>
-                      <span th:unless="${releaseRunning}" class="text-body-secondary">down</span>
-                    </span>
+                    <span class="ign-pill" th:classappend="${releaseRunning} ? ' ign-pill-ok' : ' ign-pill-off'"
+                  th:attr="data-app-status-row=${repoName}"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${releaseRunning} ? 'Running' : 'Stopped'">Running</span></span>
                     <a th:href="${releaseUrl}" target="_blank" rel="noopener" class="small ms-2"
                        th:classappend="${!releaseRunning} ? ' text-body-secondary'"
-                       th:title="${releaseRunning} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                       th:title="${releaseRunning} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                   </td>
                   <td class="text-end text-nowrap">
                     <form method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline"
@@ -215,20 +210,20 @@
                           onsubmit="return confirm('Stop the release? It stays stopped until you start it.')">
                       <input type="hidden" name="name" th:value="${repoName}">
                       <input type="hidden" name="from" value="repo">
-                      <button class="btn btn-sm btn-outline-secondary">stop</button>
+                      <button class="btn btn-sm btn-outline-secondary">Stop</button>
                     </form>
                     <form method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}" class="d-inline"
                           th:classappend="${releaseRunning} ? ' d-none'"
                           th:attr="data-app-action='start',data-app-name=${repoName},data-busy=|Starting ${repoName}…|">
                       <input type="hidden" name="name" th:value="${repoName}">
                       <input type="hidden" name="from" value="repo">
-                      <button class="btn btn-sm btn-outline-secondary">start</button>
+                      <button class="btn btn-sm btn-outline-secondary">Start</button>
                     </form>
                     <form method="post" th:action="@{/teams/{slug}/repos/{repo}/redeploy(slug=${zoneSlug},repo=${repoName})}"
                           class="d-inline" data-busy="Redeploying the release…"
                           onsubmit="return confirm('Redeploy the release? It re-reads compose.yaml, .env and secrets and restarts the app.')">
                       <input type="hidden" name="scope" value="release">
-                      <button class="btn btn-sm btn-outline-secondary" title="Re-read compose.yaml, .env and secrets and recreate the containers">redeploy</button>
+                      <button class="btn btn-sm btn-outline-secondary" title="Re-read compose.yaml, .env and secrets and recreate the containers">Redeploy</button>
                     </form>
                   </td>
                 </tr>
@@ -246,17 +241,11 @@
                   <td class="fw-semibold">Main <span class="text-body-secondary fw-normal">(dev)</span></td>
                   <td><code>main</code> <span class="text-body-secondary small" th:if="${devDeployedAt != null}" th:text="|· ${devDeployedAt}|">· 6 Sep 09:30 UTC</span></td>
                   <td class="text-nowrap">
-                    <span class="d-inline-flex align-items-center gap-1"
-                          th:attr="data-app-status-row=${repoName},data-app-channel='dev'">
-                      <i data-app-status-icon
-                         th:class="${devRunning} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                         th:title="${devRunning} ? 'running' : 'dead'"></i>
-                      <span th:if="${devRunning}">running</span>
-                      <span th:unless="${devRunning}" class="text-body-secondary">down</span>
-                    </span>
+                    <span class="ign-pill" th:classappend="${devRunning} ? ' ign-pill-ok' : ' ign-pill-off'"
+                  th:attr="data-app-status-row=${repoName},data-app-channel='dev'"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${devRunning} ? 'Running' : 'Stopped'">Running</span></span>
                     <a th:href="${devUrl}" target="_blank" rel="noopener" class="small ms-2"
                        th:classappend="${!devRunning} ? ' text-body-secondary'"
-                       th:title="${devRunning} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                       th:title="${devRunning} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                   </td>
                   <td class="text-end text-nowrap">
                     <form method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
@@ -264,25 +253,25 @@
                           th:attr="data-app-action='stop',data-app-name=${repoName},data-app-channel='dev',data-busy='Stopping the dev deployment…'"
                           onsubmit="return confirm('Stop the dev deployment? The release stays up.')">
                       <input type="hidden" name="repo" th:value="${repoName}">
-                      <button class="btn btn-sm btn-outline-secondary">stop</button>
+                      <button class="btn btn-sm btn-outline-secondary">Stop</button>
                     </form>
                     <form method="post" th:action="@{/teams/{slug}/repos/dev/start(slug=${zoneSlug})}" class="d-inline"
                           th:classappend="${devRunning} ? ' d-none'"
                           th:attr="data-app-action='start',data-app-name=${repoName},data-app-channel='dev',data-busy='Starting the dev deployment…'">
                       <input type="hidden" name="repo" th:value="${repoName}">
-                      <button class="btn btn-sm btn-outline-secondary">start</button>
+                      <button class="btn btn-sm btn-outline-secondary">Start</button>
                     </form>
                     <form method="post" th:action="@{/teams/{slug}/repos/{repo}/redeploy(slug=${zoneSlug},repo=${repoName})}"
                           class="d-inline" data-busy="Redeploying the dev deployment…"
                           onsubmit="return confirm('Redeploy dev? It re-reads compose.yaml, .env and secrets at main and restarts the app.')">
                       <input type="hidden" name="scope" value="dev">
-                      <button class="btn btn-sm btn-outline-secondary">redeploy</button>
+                      <button class="btn btn-sm btn-outline-secondary">Redeploy</button>
                     </form>
                     <form th:if="${canManageApp}" method="post" th:action="@{/teams/{slug}/repos/dev/delete(slug=${zoneSlug})}" class="d-inline"
                           data-busy="Deleting the dev deployment…"
                           onsubmit="return confirm('Delete the dev deployment? Its containers and volumes go; the release stays up.')">
                       <input type="hidden" name="repo" th:value="${repoName}">
-                      <button class="btn btn-sm btn-outline-danger">delete</button>
+                      <button class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>
                   </td>
                 </tr>
@@ -295,16 +284,11 @@
                   <td class="fw-semibold" th:text="${p.number != null} ? 'PR #' + ${p.number} : 'PR preview'">PR #12</td>
                   <td><code th:text="${p.name}">app-pr-12</code></td>
                   <td class="text-nowrap">
-                    <span class="d-inline-flex align-items-center gap-1" th:attr="data-app-status-row=${p.name}">
-                      <i data-app-status-icon
-                         th:class="${p.running} ? 'bi bi-check-circle-fill text-success' : 'bi bi-x-circle-fill text-danger'"
-                         th:title="${p.running} ? 'running' : 'dead'"></i>
-                      <span th:if="${p.running}">running</span>
-                      <span th:unless="${p.running}" class="text-body-secondary">down</span>
-                    </span>
+                    <span class="ign-pill" th:classappend="${p.running} ? ' ign-pill-ok' : ' ign-pill-off'"
+                  th:attr="data-app-status-row=${p.name}"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${p.running} ? 'Running' : 'Stopped'">Running</span></span>
                     <a th:href="${p.url}" target="_blank" rel="noopener" class="small ms-2"
                        th:classappend="${!p.running} ? ' text-body-secondary'"
-                       title="Open this PR preview in a new tab"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                       title="Open this PR preview in a new tab"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                   </td>
                   <td class="text-end text-nowrap">
                     <form method="post" th:action="@{/teams/{slug}/apps/stop(slug=${zoneSlug})}" class="d-inline"
@@ -313,7 +297,7 @@
                       <input type="hidden" name="name" th:value="${p.name}">
                       <input type="hidden" name="from" value="repo">
                       <input type="hidden" name="repo" th:value="${repoName}">
-                      <button class="btn btn-sm btn-outline-secondary">stop</button>
+                      <button class="btn btn-sm btn-outline-secondary">Stop</button>
                     </form>
                     <form method="post" th:action="@{/teams/{slug}/apps/start(slug=${zoneSlug})}" class="d-inline"
                           th:classappend="${p.running} ? ' d-none'"
@@ -321,19 +305,19 @@
                       <input type="hidden" name="name" th:value="${p.name}">
                       <input type="hidden" name="from" value="repo">
                       <input type="hidden" name="repo" th:value="${repoName}">
-                      <button class="btn btn-sm btn-outline-secondary">start</button>
+                      <button class="btn btn-sm btn-outline-secondary">Start</button>
                     </form>
                     <form method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/redeploy(slug=${zoneSlug},repo=${repoName})}"
                           class="d-inline" th:attr="data-busy=|Redeploying ${p.name}…|"
                           onsubmit="return confirm('Redeploy this PR preview? It re-reads compose.yaml, .env and secrets at the PR head and restarts the app.')">
                       <input type="hidden" name="name" th:value="${p.name}">
-                      <button class="btn btn-sm btn-outline-secondary">redeploy</button>
+                      <button class="btn btn-sm btn-outline-secondary">Redeploy</button>
                     </form>
                     <form th:if="${canManageApp}" method="post" th:action="@{/teams/{slug}/repos/{repo}/previews/delete(slug=${zoneSlug},repo=${repoName})}"
                           class="d-inline" th:attr="data-busy=|Deleting ${p.name}…|"
                           onsubmit="return confirm('Delete this PR preview? Its containers and volumes go; the PR is untouched.')">
                       <input type="hidden" name="name" th:value="${p.name}">
-                      <button class="btn btn-sm btn-outline-danger">delete</button>
+                      <button class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>
                   </td>
                 </tr>
@@ -365,7 +349,7 @@
         for that branch back into <code>main</code>; <b>merge</b> merges it and closes the issue. Every action is
         done as <b>you</b> — your own git login, not the team's shared bot.</p>
 
-      <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Issues</h2>
+      <h2 class="ign-section-title mt-4 mb-2">Issues</h2>
       <form method="post" th:action="@{/teams/{slug}/repos/{repo}/issues(slug=${zoneSlug},repo=${repoName})}"
             class="row g-2 align-items-end mb-3">
         <div class="col-auto">
@@ -402,14 +386,14 @@
                       class="d-inline"
                       onsubmit="return confirm('Merge the PR for issue #' + this.action.split('/issues/')[1].split('/')[0] + '? This closes the issue too.')">
                   <input type="hidden" name="title" th:value="${i.title}">
-                  <button class="btn btn-sm btn-outline-secondary" th:disabled="${!i.prMergeable}">merge</button>
+                  <button class="btn btn-sm btn-outline-secondary" th:disabled="${!i.prMergeable}">Merge</button>
                 </form>
                 <form th:if="${i.prNumber != null}" method="post"
                       th:action="@{/teams/{slug}/repos/{repo}/issues/{n}/close(slug=${zoneSlug},repo=${repoName},n=${i.number})}"
                       class="d-inline"
                       onsubmit="return confirm('Close issue #' + this.action.split('/issues/')[1].split('/')[0] + ' without merging? This closes the issue too and deletes its branch — there is no way back in for this issue.')">
                   <input type="hidden" name="title" th:value="${i.title}">
-                  <button class="btn btn-sm btn-outline-danger">close</button>
+                  <button class="btn btn-sm btn-outline-danger">Close</button>
                 </form>
               </td>
             </tr>
@@ -419,7 +403,7 @@
       </div>
 
       <div class="mb-4">
-        <h2 class="h6 text-uppercase text-body-secondary mb-2"><i class="bi bi-key"></i> Secrets</h2>
+        <h2 class="ign-section-title mb-2">Secrets</h2>
         <p class="text-body-secondary small">Runtime environment variables that stay out of the repo — API keys,
           tokens. Each environment has its own set, merged into that deployment's web container at deploy time
           and winning over <code>.env</code>. <b>Write-only:</b> once saved a value can't be read back here, only
@@ -447,7 +431,7 @@
                           onsubmit="return confirm('Delete this secret?')">
                       <input type="hidden" name="scope" th:value="${sec.scope}">
                       <input type="hidden" name="name" th:value="${s.name}">
-                      <button class="btn btn-sm btn-outline-danger">delete</button>
+                      <button class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>
                   </td>
                 </tr>
@@ -479,7 +463,7 @@
                 data-busy="Restarting with the new secrets…"
                 onsubmit="return confirm('Restart this environment with its current secrets? The app is briefly unavailable.')">
             <input type="hidden" name="scope" th:value="${sec.scope}">
-            <button class="btn btn-sm" th:classappend="${sec.restart == 'pending'} ? 'btn-accent' : 'btn-outline-secondary'"
+            <button class="btn btn-sm" th:classappend="${sec.restart == 'pending'} ? 'btn-outline-secondary ign-suggested' : 'btn-outline-secondary'"
                     th:disabled="${sec.restart != 'pending'}"><i class="bi bi-arrow-repeat"></i> Restart with new secrets</button>
             <span class="text-body-secondary small"
                   th:text="${sec.restart == 'pending'} ? 'Secrets changed since the last deploy — restart to apply them.'
@@ -491,7 +475,7 @@
       </div>
 
       <div th:if="${unreleasedIssues != null and !unreleasedIssues.isEmpty()}">
-        <h2 class="h6 text-uppercase text-body-secondary mt-4 mb-2">
+        <h2 class="ign-section-title mt-4 mb-2">
           Closed, not released yet
           <span class="badge text-bg-warning" th:text="${unreleasedIssues.size()}">2</span>
         </h2>

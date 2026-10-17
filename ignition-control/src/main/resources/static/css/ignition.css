@@ -1,27 +1,371 @@
-:root {
-  --ign-accent: #0a7d6b;
-  --ign-accent-2: #12b39a;
-  --ign-sidebar-bg: #0f2d28;
-  --ign-sidebar-bg-2: #123a33;
-  --ign-bg: #f4f6f6;
-  --ign-card-bg: #fff;
-  --ign-table-head-bg: #fafbfb;
-  --ign-table-head-fg: #6b7676;
-  --ign-code-bg: #eef2f2;
-  --ign-code-fg: inherit;
-  --ign-shadow: 0 1px 2px rgba(16,24,24,.06), 0 2px 8px rgba(16,24,24,.06);
-  --bs-link-color: var(--ign-accent);
-  --bs-link-hover-color: var(--ign-accent-2);
+/* =====================================================================
+   THEME TOKENS
+   Every colour in this file comes from the tokens below. A theme is one
+   [data-ign-lamp="<id>"] block that defines them all (the id is set on <html>
+   by head.html / theme.js; theme.js's registry lists the ids). Required set:
+     --bg --sidebar --panel --border --text --muted --accent --on-accent
+     --ok --danger --link
+   Supporting tokens carry what the current look needs beyond those; anything
+   translucent or tinted is computed from them with color-mix() in the rules.
+   ===================================================================== */
+
+/* "Current" — stage (cool): the original dark look */
+[data-ign-lamp="cool"], [data-ign-lamp="warm"] {
+  --bg: #05060f;
+  --sidebar: #121521;
+  --sidebar-2: #0b0d18;
+  --panel: #181b28;
+  --border: rgba(186, 215, 247, 0.18);
+  --border-strong: rgba(186, 215, 247, 0.36);
+  --text: #d8ecf8;
+  --text-strong: #fff;
+  --muted: rgba(216, 236, 248, 0.6);
+  --accent: #bad6f7;
+  --accent-2: #98c0ef;
+  --on-accent: #05060f;
+  --edge: #c2ccff;
+  --edge-fade: #11141e;
+  --tint: #bad6f7;
+  --ok: #bad6f7;
+  --danger: #ff9b9b;
+  --danger-edge: #ff7878;
+  --link: #9dc3f7;
+  --link-hover: #fff;
+  --code-text: #9dc3f7;
+  --bg-deep: #0a0d18;
+  --sidebar-text: #fff;
+  --mark-bg: #05060f;
+  --lamp-bg: #000;
+  --chip-ink: #f8fafc;
+  --chip-text: #e9f0fc;
+  --head-bg: transparent;
+  --head-text: var(--muted);
+  --shadow-ink: #000;
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* "Current" — warm: the same dark look with an amber flare */
+[data-ign-lamp="warm"] {
+  --border: rgba(247, 228, 186, 0.2);
+  --border-strong: rgba(247, 228, 186, 0.38);
+  --accent: #f5d87a;
+  --accent-2: #d8a910;
+  --edge: #f3dda0;
+  --tint: #f7e4ba;
+  --ok: #f5d87a;
+  --link: #f0d89a;
+  --code-text: #f0d89a;
+}
+/* "Current" — day: the light, teal look */
+[data-ign-lamp="day"] {
+  --bg: #f4f6f6;
+  --sidebar: #0f2d28;
+  --sidebar-2: #123a33;
+  --panel: #fff;
+  --border: #dee2e6;
+  --border-strong: rgba(10, 125, 107, 0.4);
+  --hair: rgba(16, 24, 24, 0.12);
+  --text: #212529;
+  --text-strong: #fff;
+  --muted: rgba(33, 37, 41, 0.75);
+  --accent: #0a7d6b;
+  --accent-2: #12b39a;
+  --accent-mid: #0d9a85;
+  --on-accent: #fff;
+  --edge: #12b39a;
+  --edge-fade: #bfe3dc;
+  --tint: #0a7d6b;
+  --ok: #0a5c4f;
+  --danger: #b02a37;
+  --link: #0a7d6b;
+  --link-hover: #12b39a;
+  --code-text: inherit;
+  --sidebar-text: #fff;
+  --mark-bg: #fff;
+  --lamp-bg: #fff;
+  --ink: #10201d;
+  --chip-ink: #101818;
+  --chip-text: #4a5856;
+  --head-bg: #fafbfb;
+  --head-text: #6b7676;
+  --code-bg: #eef2f2;
+  --shadow-ink: #101818;
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* Graphite ember — dark */
+[data-ign-lamp="graphite"] {
+  --bg: #16181c;
+  --panel: #1f2227;
+  --border: #2e323a;
+  --text: #e8eaed;
+  --muted: #9aa0ab;
+  --accent: #f26a2e;
+  --on-accent: #16181c;
+  --ok: #3ecf8e;
+  --danger: #f0616d;
+  --link: var(--accent);
+  --sidebar: color-mix(in srgb, var(--bg) 82%, #000);
+  --sidebar-2: color-mix(in srgb, var(--bg) 68%, #000);
+  --sidebar-text: var(--text);
+  --text-strong: #fff;
+  --hair: var(--border);
+  --border-strong: color-mix(in srgb, var(--accent) 38%, var(--border));
+  --accent-2: color-mix(in srgb, var(--accent) 78%, #fff);
+  --edge: color-mix(in srgb, var(--accent) 65%, #fff);
+  --edge-fade: color-mix(in srgb, var(--bg) 80%, #000);
+  --tint: var(--accent);
+  --danger-edge: var(--danger);
+  --link-hover: #fff;
+  --code-text: var(--link);
+  --code-bg: color-mix(in srgb, var(--tint) 10%, transparent);
+  --bg-deep: color-mix(in srgb, var(--bg) 80%, #000);
+  --mark-bg: var(--bg);
+  --lamp-bg: #000;
+  --chip-ink: #f8fafc;
+  --chip-text: var(--text);
+  --head-bg: transparent;
+  --head-text: color-mix(in srgb, var(--text) 50%, transparent);
+  --shadow-ink: #000;
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* Slate enterprise — light */
+[data-ign-lamp="slate"] {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --border: #dde2ea;
+  --text: #1b2430;
+  --muted: #5f6b7a;
+  --accent: #2f6fed;
+  --on-accent: #ffffff;
+  --ok: #1f9d63;
+  --danger: #d1344a;
+  --link: var(--accent);
+  --sidebar: var(--bg);
+  --sidebar-2: var(--bg);
+  --sidebar-text: var(--text);
+  --text-strong: #fff;
+  --hair: color-mix(in srgb, var(--text) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-2: color-mix(in srgb, var(--accent) 80%, #fff);
+  --accent-mid: color-mix(in srgb, var(--accent) 88%, #fff);
+  --edge: var(--accent-2);
+  --edge-fade: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  --tint: var(--accent);
+  --danger-edge: var(--danger);
+  --link-hover: color-mix(in srgb, var(--accent) 75%, #000);
+  --code-text: inherit;
+  --code-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  --ink: var(--text);
+  --mark-bg: var(--panel);
+  --lamp-bg: var(--panel);
+  --chip-ink: var(--text);
+  --chip-text: var(--muted);
+  --head-bg: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  --head-text: var(--muted);
+  --shadow-ink: var(--text);
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* Midnight indigo — dark */
+[data-ign-lamp="midnight"] {
+  --bg: #0f1424;
+  --panel: #171d33;
+  --border: #262e4a;
+  --text: #e6e9f5;
+  --muted: #98a1c4;
+  --accent: #7c8cff;
+  --on-accent: #0f1424;
+  --ok: #3ecf8e;
+  --danger: #f0616d;
+  --link: var(--accent);
+  --sidebar: color-mix(in srgb, var(--bg) 82%, #000);
+  --sidebar-2: color-mix(in srgb, var(--bg) 68%, #000);
+  --sidebar-text: var(--text);
+  --text-strong: #fff;
+  --hair: var(--border);
+  --border-strong: color-mix(in srgb, var(--accent) 38%, var(--border));
+  --accent-2: color-mix(in srgb, var(--accent) 78%, #fff);
+  --edge: color-mix(in srgb, var(--accent) 65%, #fff);
+  --edge-fade: color-mix(in srgb, var(--bg) 80%, #000);
+  --tint: var(--accent);
+  --danger-edge: var(--danger);
+  --link-hover: #fff;
+  --code-text: var(--link);
+  --code-bg: color-mix(in srgb, var(--tint) 10%, transparent);
+  --bg-deep: color-mix(in srgb, var(--bg) 80%, #000);
+  --mark-bg: var(--bg);
+  --lamp-bg: #000;
+  --chip-ink: #f8fafc;
+  --chip-text: var(--text);
+  --head-bg: transparent;
+  --head-text: color-mix(in srgb, var(--text) 50%, transparent);
+  --shadow-ink: #000;
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* Forest ops — dark */
+[data-ign-lamp="forest"] {
+  --bg: #0e1a17;
+  --panel: #14241f;
+  --border: #223a32;
+  --text: #e3f1ec;
+  --muted: #86ab9d;
+  --accent: #2fbf8f;
+  --on-accent: #0e1a17;
+  --ok: #5fd68f;
+  --danger: #f0616d;
+  --link: var(--accent);
+  --sidebar: color-mix(in srgb, var(--bg) 82%, #000);
+  --sidebar-2: color-mix(in srgb, var(--bg) 68%, #000);
+  --sidebar-text: var(--text);
+  --text-strong: #fff;
+  --hair: var(--border);
+  --border-strong: color-mix(in srgb, var(--accent) 38%, var(--border));
+  --accent-2: color-mix(in srgb, var(--accent) 78%, #fff);
+  --edge: color-mix(in srgb, var(--accent) 65%, #fff);
+  --edge-fade: color-mix(in srgb, var(--bg) 80%, #000);
+  --tint: var(--accent);
+  --danger-edge: var(--danger);
+  --link-hover: #fff;
+  --code-text: var(--link);
+  --code-bg: color-mix(in srgb, var(--tint) 10%, transparent);
+  --bg-deep: color-mix(in srgb, var(--bg) 80%, #000);
+  --mark-bg: var(--bg);
+  --lamp-bg: #000;
+  --chip-ink: #f8fafc;
+  --chip-text: var(--text);
+  --head-bg: transparent;
+  --head-text: color-mix(in srgb, var(--text) 50%, transparent);
+  --shadow-ink: #000;
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* Paper mono — light */
+[data-ign-lamp="paper"] {
+  --bg: #f6f4ef;
+  --panel: #fffdf9;
+  --border: #e3dfd5;
+  --text: #1c1b19;
+  --muted: #6c685f;
+  --accent: #1c1b19;
+  --on-accent: #fffdf9;
+  --ok: #1f8f55;
+  --danger: #c4303f;
+  --link: var(--accent);
+  --sidebar: var(--bg);
+  --sidebar-2: var(--bg);
+  --sidebar-text: var(--text);
+  --text-strong: #fff;
+  --hair: color-mix(in srgb, var(--text) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-2: color-mix(in srgb, var(--accent) 80%, #fff);
+  --accent-mid: color-mix(in srgb, var(--accent) 88%, #fff);
+  --edge: var(--accent-2);
+  --edge-fade: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  --tint: var(--accent);
+  --danger-edge: var(--danger);
+  --link-hover: color-mix(in srgb, var(--accent) 75%, #000);
+  --code-text: inherit;
+  --code-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  --ink: var(--text);
+  --mark-bg: var(--panel);
+  --lamp-bg: var(--panel);
+  --chip-ink: var(--text);
+  --chip-text: var(--muted);
+  --head-bg: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  --head-text: var(--muted);
+  --shadow-ink: var(--text);
+  --mark-shadow: #000;
+  --mask: #000;
+}
+/* Teal glass — light */
+[data-ign-lamp="teal"] {
+  --bg: #f2f8f8;
+  --panel: #ffffff;
+  --border: #d6e5e6;
+  --text: #13292b;
+  --muted: #557376;
+  --accent: #0e8a8f;
+  --on-accent: #ffffff;
+  --ok: #1f9d63;
+  --danger: #d1344a;
+  --link: var(--accent);
+  --sidebar: var(--bg);
+  --sidebar-2: var(--bg);
+  --sidebar-text: var(--text);
+  --text-strong: #fff;
+  --hair: color-mix(in srgb, var(--text) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--accent) 40%, transparent);
+  --accent-2: color-mix(in srgb, var(--accent) 80%, #fff);
+  --accent-mid: color-mix(in srgb, var(--accent) 88%, #fff);
+  --edge: var(--accent-2);
+  --edge-fade: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  --tint: var(--accent);
+  --danger-edge: var(--danger);
+  --link-hover: color-mix(in srgb, var(--accent) 75%, #000);
+  --code-text: inherit;
+  --code-bg: color-mix(in srgb, var(--text) 6%, transparent);
+  --ink: var(--text);
+  --mark-bg: var(--panel);
+  --lamp-bg: var(--panel);
+  --chip-ink: var(--text);
+  --chip-text: var(--muted);
+  --head-bg: color-mix(in srgb, var(--panel) 55%, var(--bg));
+  --head-text: var(--muted);
+  --shadow-ink: var(--text);
+  --mark-shadow: #000;
+  --mask: #000;
 }
 
+/* dark themes' hairline equals their border */
+[data-ign-lamp="cool"], [data-ign-lamp="warm"] {
+  --hair: var(--border);
+  --code-bg: color-mix(in srgb, var(--tint) 10%, transparent);
+}
+
+/* ---- legacy names + Bootstrap variables, all derived from the tokens ---- */
+:root {
+  --ign-accent: var(--accent);
+  --ign-accent-2: var(--accent-2);
+  --ign-flare: var(--accent);
+  --ign-flare-2: var(--accent-2);
+  --ign-edge: var(--edge);
+  --ign-hair: var(--hair);
+  --ign-hair-2: var(--border-strong);
+  --ign-steel: var(--link);
+  --ign-ice: var(--text);
+  --ign-void: var(--bg);
+  --ign-panel: var(--sidebar);
+  --ign-plate: var(--panel);
+  --ign-ink: var(--ink);
+  --ign-sidebar-bg: var(--sidebar);
+  --ign-sidebar-bg-2: var(--sidebar-2);
+  --ign-bg: var(--bg);
+  --ign-card-bg: var(--panel);
+  --ign-table-head-bg: var(--head-bg);
+  --ign-table-head-fg: var(--head-text);
+  --ign-code-bg: var(--code-bg);
+  --ign-code-fg: var(--code-text);
+  --ign-shadow: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 6%, transparent), 0 2px 8px color-mix(in srgb, var(--shadow-ink) 6%, transparent);
+  --bs-link-color: var(--link);
+  --bs-link-hover-color: var(--link-hover);
+}
+[data-bs-theme="light"] {
+  --bs-body-bg: var(--panel);
+  --bs-body-color: var(--text);
+  --bs-secondary-color: var(--muted);
+  --bs-border-color: var(--border);
+}
 [data-bs-theme="dark"] {
-  --ign-bg: #12181a;
-  --ign-card-bg: var(--bs-body-bg);
-  --ign-table-head-bg: rgba(255,255,255,.03);
-  --ign-table-head-fg: var(--bs-secondary-color);
-  --ign-code-bg: rgba(255,255,255,.08);
-  --ign-code-fg: #e6e6e6;
-  --ign-shadow: 0 1px 2px rgba(0,0,0,.4), 0 2px 8px rgba(0,0,0,.3);
+  --ign-shadow: 0 1px 2px color-mix(in srgb, var(--shadow-ink) 40%, transparent), 0 2px 8px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
+  --bs-body-bg: var(--bg);
+  --bs-body-color: var(--text);
+  --bs-emphasis-color: var(--text-strong);
+  --bs-secondary-color: var(--muted);
+  --bs-border-color: var(--border);
+  --bs-tertiary-bg: var(--sidebar);
 }
 
 body { background: var(--ign-bg); }
@@ -33,7 +377,7 @@ body { background: var(--ign-bg); }
   width: 240px;
   min-height: 100vh;
   background: linear-gradient(180deg, var(--ign-sidebar-bg), var(--ign-sidebar-bg-2));
-  color: #fff;
+  color: var(--sidebar-text);
   border: none;
 }
 /* Without an explicit height here, .offcanvas-body's flex column only
@@ -42,32 +386,32 @@ body { background: var(--ign-bg); }
    of at the bottom of the screen. Pins it there regardless of how few nav
    items there are or how tall the page content is. */
 .ign-sidebar .offcanvas-body { height: 100%; }
-.ign-sidebar-brand { border-bottom: 1px solid rgba(255,255,255,.08); padding: 1.1rem 1rem; }
+.ign-sidebar-brand { border-bottom: 1px solid color-mix(in srgb, var(--sidebar-text) 8%, transparent); padding: 1.1rem 1rem; }
 .ign-sidebar .brand {
   display: flex; align-items: center; gap: .7rem;
-  color: #fff; text-decoration: none; font-weight: 700; font-size: 1.2rem;
+  color: var(--sidebar-text); text-decoration: none; font-weight: 700; font-size: 1.2rem;
 }
 /* the mark's own fill is teal-on-teal against this sidebar — a light backdrop
    is what actually makes it read as a logo instead of disappearing */
 .ign-brand-mark {
   display: flex; align-items: center; justify-content: center;
   width: 2.25rem; height: 2.25rem; border-radius: .6rem;
-  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  background: var(--mark-bg); box-shadow: 0 1px 3px color-mix(in srgb, var(--mark-shadow) 30%, transparent);
 }
 .ign-sidebar .nav-link {
-  color: rgba(255,255,255,.75);
+  color: color-mix(in srgb, var(--sidebar-text) 75%, transparent);
   display: flex; align-items: center; gap: .7rem;
   padding: .65rem 1rem; margin: .15rem .7rem; border-radius: .5rem;
   font-size: .95rem;
 }
 .ign-sidebar .nav-link i { font-size: 1.1rem; }
-.ign-sidebar .nav-link:hover { background: rgba(255,255,255,.08); color: #fff; }
-.ign-sidebar .nav-link.active { background: rgba(255,255,255,.16); color: #fff; font-weight: 600; }
+.ign-sidebar .nav-link:hover { background: color-mix(in srgb, var(--sidebar-text) 8%, transparent); color: var(--sidebar-text); }
+.ign-sidebar .nav-link.active { background: color-mix(in srgb, var(--sidebar-text) 16%, transparent); color: var(--sidebar-text); font-weight: 600; }
 /* the sidebar bg is the dark gradient in both themes, so Bootstrap's
    theme-aware .text-body-secondary goes near-black (and invisible) in light
    mode — pin a light tint like the nav links use. */
 .ign-sidebar-version {
-  color: rgba(255,255,255,.55);
+  color: color-mix(in srgb, var(--sidebar-text) 55%, transparent);
   font-size: .7rem; letter-spacing: .02em;
 }
 
@@ -102,8 +446,8 @@ body { background: var(--ign-bg); }
 }
 .table td, .table th { vertical-align: middle; }
 
-.btn-accent { background: var(--ign-accent); border-color: var(--ign-accent); color: #fff; }
-.btn-accent:hover { background: var(--ign-accent-2); border-color: var(--ign-accent-2); color: #fff; }
+.btn-accent { background: var(--ign-accent); border-color: var(--ign-accent); color: var(--on-accent); }
+.btn-accent:hover { background: var(--ign-accent-2); border-color: var(--ign-accent-2); color: var(--on-accent); }
 
 .page-title { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; }
 .page-title i { color: var(--ign-accent); }
@@ -129,22 +473,16 @@ code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem
   display: flex; align-items: center; gap: .6rem;
   font-weight: 700; font-size: 1.3rem; color: var(--ign-sidebar-bg);
 }
-[data-bs-theme="dark"] .ign-auth-brand { color: #fff; }
+[data-bs-theme="dark"] .ign-auth-brand { color: var(--text-strong); }
 
 /* =====================================================================
    STAGE LIGHT — UI spike. Borrowed from a "stage light" landing page:
    void palette, conic spotlight beams, plated cards with a cut corner,
-   an orbiting-glow pill button, mono uppercase labels, and a lamp that
+   mono uppercase labels, and a lamp that
    cycles cool -> warm -> daylight. The dark theme is the stage; the light
    theme ("daylight") keeps the original teal look. Warm is dark + a
    re-tinted flare, set via data-ign-lamp="warm" (see theme.js).
    ===================================================================== */
-@property --ign-a {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
 :root {
   --ign-display: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --ign-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -153,47 +491,6 @@ code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem
 
 body { font-family: var(--ign-display); }
 code, kbd, pre, samp { font-family: var(--ign-mono); }
-
-[data-bs-theme="dark"] {
-  --ign-void: #05060f;
-  --ign-panel: #121521;
-  --ign-plate: #181b28;
-  --ign-ice: #d8ecf8;
-  --ign-flare: #bad6f7;
-  --ign-flare-2: #98c0ef;
-  --ign-steel: #9dc3f7;
-  --ign-edge: #c2ccff;
-  --ign-hair: rgba(186, 215, 247, 0.18);
-  --ign-hair-2: rgba(186, 215, 247, 0.36);
-
-  --ign-accent: var(--ign-flare);
-  --ign-accent-2: var(--ign-flare-2);
-  --ign-sidebar-bg: var(--ign-panel);
-  --ign-sidebar-bg-2: #0b0d18;
-  --ign-bg: var(--ign-void);
-  --ign-card-bg: var(--ign-plate);
-  --ign-table-head-bg: transparent;
-  --ign-table-head-fg: rgba(216, 236, 248, 0.5);
-  --ign-code-bg: rgba(186, 215, 247, 0.1);
-  --ign-code-fg: var(--ign-steel);
-
-  --bs-body-bg: var(--ign-void);
-  --bs-body-color: var(--ign-ice);
-  --bs-emphasis-color: #fff;
-  --bs-secondary-color: rgba(216, 236, 248, 0.6);
-  --bs-border-color: var(--ign-hair);
-  --bs-tertiary-bg: var(--ign-panel);
-  --bs-link-color: var(--ign-steel);
-  --bs-link-hover-color: #fff;
-}
-[data-bs-theme="dark"][data-ign-lamp="warm"] {
-  --ign-flare: #f5d87a;
-  --ign-flare-2: #d8a910;
-  --ign-steel: #f0d89a;
-  --ign-edge: #f3dda0;
-  --ign-hair: rgba(247, 228, 186, 0.2);
-  --ign-hair-2: rgba(247, 228, 186, 0.38);
-}
 
 /* ---- spotlight beams: two slow conic cones behind everything ---- */
 [data-bs-theme="dark"] body::before,
@@ -236,16 +533,16 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 }
 [data-bs-theme="dark"] .ign-sidebar .nav-link {
   font-family: var(--ign-mono); font-size: .78rem; letter-spacing: .12em; text-transform: uppercase;
-  color: rgba(216, 236, 248, 0.6);
+  color: var(--muted);
   transition: color .2s ease, background .2s ease, box-shadow .2s ease;
 }
-[data-bs-theme="dark"] .ign-sidebar .nav-link:hover { background: rgba(186, 215, 247, .07); color: var(--ign-ice); }
+[data-bs-theme="dark"] .ign-sidebar .nav-link:hover { background: color-mix(in srgb, var(--tint) 7%, transparent); color: var(--ign-ice); }
 [data-bs-theme="dark"] .ign-sidebar .nav-link.active {
   color: var(--ign-flare); font-weight: 500;
   background: radial-gradient(farthest-side at 50% 100%, color-mix(in srgb, var(--ign-edge) 22%, transparent), transparent), var(--ign-void);
   box-shadow: inset 0 0 0 1px var(--ign-hair-2), 0 0 24px -12px var(--ign-flare-2);
 }
-[data-bs-theme="dark"] .ign-sidebar-version { font-family: var(--ign-mono); color: rgba(216, 236, 248, 0.4); }
+[data-bs-theme="dark"] .ign-sidebar-version { font-family: var(--ign-mono); color: color-mix(in srgb, var(--text) 40%, transparent); }
 [data-bs-theme="dark"] .ign-topbar {
   background: color-mix(in srgb, var(--ign-void) 72%, transparent);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
@@ -267,26 +564,26 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 [data-bs-theme="dark"] .card,
 [data-bs-theme="dark"] .table-card {
   border: 1px solid transparent;
-  border-radius: .9rem 2.6rem .9rem .9rem;
+  border-radius: var(--r-panel);
   background:
     linear-gradient(var(--ign-plate), var(--ign-plate)) padding-box,
-    linear-gradient(150deg, var(--ign-flare), color-mix(in srgb, var(--ign-flare-2) 58%, #11141e) 72%) border-box;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
+    linear-gradient(150deg, var(--ign-flare), color-mix(in srgb, var(--ign-flare-2) 58%, var(--edge-fade)) 72%) border-box;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-strong) 4%, transparent);
   transition: box-shadow .4s var(--ign-ease), transform .4s var(--ign-ease);
 }
 [data-bs-theme="dark"] .card:hover,
 [data-bs-theme="dark"] .table-card:hover { box-shadow: 0 0 44px -18px var(--ign-flare-2); }
-[data-bs-theme="dark"] .ign-auth-card { border-radius: .9rem 3.2rem .9rem .9rem; box-shadow: 0 0 80px -30px var(--ign-flare-2); }
+[data-bs-theme="dark"] .ign-auth-card { border-radius: var(--r-panel); box-shadow: 0 0 80px -30px var(--ign-flare-2); }
 [data-bs-theme="dark"] .card-header,
-[data-bs-theme="dark"] .card-footer { background: rgba(10, 13, 24, 0.32); border-color: var(--ign-hair); }
+[data-bs-theme="dark"] .card-footer { background: color-mix(in srgb, var(--bg-deep) 32%, transparent); border-color: var(--ign-hair); }
 
 /* ---- tables: mono labels, hairline rows ---- */
 .table thead th { font-family: var(--ign-mono); font-weight: 500; letter-spacing: .14em; font-size: .68rem; }
 [data-bs-theme="dark"] .table {
   --bs-table-bg: transparent; --bs-table-color: var(--ign-ice);
   --bs-table-border-color: var(--ign-hair);
-  --bs-table-hover-bg: rgba(186, 215, 247, 0.06); --bs-table-hover-color: var(--ign-ice);
-  --bs-table-striped-bg: rgba(186, 215, 247, 0.03);
+  --bs-table-hover-bg: color-mix(in srgb, var(--tint) 6%, transparent); --bs-table-hover-color: var(--ign-ice);
+  --bs-table-striped-bg: color-mix(in srgb, var(--tint) 3%, transparent);
 }
 
 /* ---- badges -> chips ---- */
@@ -294,17 +591,17 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
   font-family: var(--ign-mono); font-weight: 500; font-size: .66rem;
   letter-spacing: .12em; text-transform: uppercase;
   padding: .5em .9em; border-radius: 10em;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(248, 250, 252, 0.1) !important; color: rgba(233, 240, 252, 0.75) !important;
+  border: 1px solid color-mix(in srgb, var(--text-strong) 10%, transparent);
+  background: color-mix(in srgb, var(--chip-ink) 10%, transparent) !important; color: color-mix(in srgb, var(--chip-text) 75%, transparent) !important;
 }
 [data-bs-theme="dark"] .badge.text-bg-success { color: var(--ign-flare) !important; border-color: var(--ign-hair-2); box-shadow: 0 0 12px -4px var(--ign-flare); }
-[data-bs-theme="dark"] .badge.text-bg-danger { color: #ff9b9b !important; border-color: rgba(255, 120, 120, .4); }
+[data-bs-theme="dark"] .badge.text-bg-danger { color: var(--danger) !important; border-color: color-mix(in srgb, var(--danger-edge) 40%, transparent); }
 
 /* ---- forms: pill-edged glass inputs ---- */
 [data-bs-theme="dark"] .form-control,
 [data-bs-theme="dark"] .form-select {
-  background-color: rgba(10, 13, 24, 0.55);
-  border-color: rgba(194, 204, 255, 0.25); border-radius: .7rem; color: var(--ign-ice);
+  background-color: color-mix(in srgb, var(--bg-deep) 55%, transparent);
+  border-color: color-mix(in srgb, var(--edge) 25%, transparent); border-radius: .7rem; color: var(--ign-ice);
 }
 [data-bs-theme="dark"] .form-control::placeholder { color: color-mix(in srgb, var(--ign-ice) 40%, transparent); }
 [data-bs-theme="dark"] .form-control:focus,
@@ -315,44 +612,16 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 .form-label { font-family: var(--ign-mono); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--bs-secondary-color); }
 
 /* ---- buttons ---- */
-[data-bs-theme="dark"] .btn { border-radius: 20em; }
 [data-bs-theme="dark"] .btn-outline-secondary,
 [data-bs-theme="dark"] .btn-outline-danger { --bs-btn-bg: transparent; }
 [data-bs-theme="dark"] .btn-outline-secondary {
   --bs-btn-color: var(--ign-steel); --bs-btn-border-color: var(--ign-hair-2);
-  --bs-btn-hover-color: #fff; --bs-btn-hover-bg: rgba(186, 215, 247, .12); --bs-btn-hover-border-color: var(--ign-flare);
-  --bs-btn-active-bg: rgba(186, 215, 247, .2); --bs-btn-active-color: #fff;
+  --bs-btn-hover-color: var(--text-strong); --bs-btn-hover-bg: color-mix(in srgb, var(--tint) 12%, transparent); --bs-btn-hover-border-color: var(--ign-flare);
+  --bs-btn-active-bg: color-mix(in srgb, var(--tint) 20%, transparent); --bs-btn-active-color: var(--text-strong);
 }
-
-/* the accent button: dark pill, gradient label, a radial lift on hover and
-   a conic ring of light that orbits the edge (faster on hover) */
-[data-bs-theme="dark"] .btn-accent {
-  position: relative; isolation: isolate; overflow: hidden;
-  background: var(--ign-panel); border: 1px solid rgba(194, 204, 255, 0.2);
-  color: var(--ign-steel); font-weight: 600;
-  --ign-loop: 8s;
-}
-[data-bs-theme="dark"] .btn-accent::before {
-  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
-  background: radial-gradient(farthest-side at 50% 100%, var(--ign-edge), transparent);
-  opacity: .12; transition: opacity .4s var(--ign-ease);
-}
-[data-bs-theme="dark"] .btn-accent::after {
-  content: ""; position: absolute; inset: -1px; z-index: 1; border-radius: inherit; padding: 1px;
-  pointer-events: none; opacity: .75;
-  background: conic-gradient(from var(--ign-a), transparent 0 62%, var(--ign-edge) 80%, #fff 86%, transparent 92%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask-composite: exclude;
-  animation: ign-orbit var(--ign-loop) linear infinite;
-}
-[data-bs-theme="dark"] .btn-accent:hover,
-[data-bs-theme="dark"] .btn-accent:focus-visible { background: var(--ign-panel); color: #fff; border-color: rgba(194, 204, 255, 0.2); --ign-loop: 2s; }
-[data-bs-theme="dark"] .btn-accent:hover::before { opacity: .32; }
-[data-bs-theme="dark"] .btn-accent:focus-visible { outline: 2px solid var(--ign-flare); outline-offset: 3px; }
-@keyframes ign-orbit { to { --ign-a: 360deg; } }
 
 /* ---- alerts, dropdowns, modals, code ---- */
-[data-bs-theme="dark"] .alert { border-radius: .8rem; background: rgba(10, 13, 24, .5); border-color: var(--ign-hair-2); }
+[data-bs-theme="dark"] .alert { border-radius: .8rem; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); border-color: var(--ign-hair-2); }
 [data-bs-theme="dark"] .modal-content,
 [data-bs-theme="dark"] .dropdown-menu { background: var(--ign-plate); border: 1px solid var(--ign-hair-2); border-radius: .9rem; }
 [data-bs-theme="dark"] .ign-busy-overlay { background: var(--ign-plate); }
@@ -364,52 +633,43 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
   display: inline-grid; place-items: center;
 }
 [data-bs-theme="dark"] #ignThemeToggle {
-  background: #000; border: 0; color: var(--ign-flare);
+  background: var(--lamp-bg); border: 0; color: var(--ign-flare);
   box-shadow: 0 0 .9rem 0 var(--ign-flare-2); transition: box-shadow .8s ease-in-out;
 }
 [data-bs-theme="dark"] #ignThemeToggle:hover { box-shadow: -.25rem .1rem .3rem 0 var(--ign-flare-2), 0 0 1.4rem 0 var(--ign-flare-2); }
 [data-bs-theme="dark"] #ignThemeToggle:focus-visible { outline: 2px solid var(--ign-flare); outline-offset: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
-  body::before, body::after, .btn-accent::after { animation: none !important; }
+  body::before, body::after { animation: none !important; }
 }
 
 /* =====================================================================
    DAYLIGHT — the light theme gets the same shapes as the stage (plated
-   cards with the cut corner, chips, pill buttons with the orbiting ring,
+   chips, gradient headings,
    gradient headings, round lamp), in the original teal.
    ===================================================================== */
-[data-bs-theme="light"] {
-  --ign-ink: #10201d;
-  --ign-flare: #0a7d6b;
-  --ign-flare-2: #12b39a;
-  --ign-hair: rgba(16, 24, 24, 0.12);
-  --ign-hair-2: rgba(10, 125, 107, 0.4);
-  --ign-edge: #12b39a;
-}
-
 [data-bs-theme="light"] .ign-topbar {
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
 }
 [data-bs-theme="light"] .ign-sidebar .nav-link {
   font-family: var(--ign-mono); font-size: .78rem; letter-spacing: .12em; text-transform: uppercase;
 }
-[data-bs-theme="light"] .ign-sidebar .nav-link.active { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .25), 0 0 24px -12px var(--ign-flare-2); }
+[data-bs-theme="light"] .ign-sidebar .nav-link.active { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sidebar-text) 25%, transparent), 0 0 24px -12px var(--ign-flare-2); }
 
 /* cards: plated, gradient edge, one big cut corner */
 [data-bs-theme="light"] .card,
 [data-bs-theme="light"] .table-card {
   border: 1px solid transparent;
-  border-radius: .9rem 2.6rem .9rem .9rem;
+  border-radius: var(--r-panel);
   background:
-    linear-gradient(#fff, #fff) padding-box,
-    linear-gradient(150deg, var(--ign-flare-2), #bfe3dc 72%) border-box;
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(150deg, var(--ign-flare-2), var(--edge-fade) 72%) border-box;
   transition: box-shadow .4s var(--ign-ease);
 }
 [data-bs-theme="light"] .card:hover,
 [data-bs-theme="light"] .table-card:hover { box-shadow: var(--ign-shadow), 0 0 40px -18px var(--ign-flare-2); }
-[data-bs-theme="light"] .ign-auth-card { border-radius: .9rem 3.2rem .9rem .9rem; }
+[data-bs-theme="light"] .ign-auth-card { border-radius: var(--r-panel); }
 [data-bs-theme="light"] .card-header,
 [data-bs-theme="light"] .card-footer { background: var(--ign-table-head-bg); border-color: var(--ign-hair); }
 
@@ -424,7 +684,7 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 [data-bs-theme="light"] .ign-auth-brand { letter-spacing: 0.16em; text-transform: uppercase; }
 
 [data-bs-theme="light"] .table {
-  --bs-table-hover-bg: rgba(10, 125, 107, 0.06);
+  --bs-table-hover-bg: color-mix(in srgb, var(--tint) 6%, transparent);
   --bs-table-border-color: var(--ign-hair);
 }
 
@@ -434,10 +694,10 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
   letter-spacing: .12em; text-transform: uppercase;
   padding: .5em .9em; border-radius: 10em;
   border: 1px solid var(--ign-hair);
-  background: rgba(16, 24, 24, 0.05) !important; color: #4a5856 !important;
+  background: color-mix(in srgb, var(--chip-ink) 5%, transparent) !important; color: var(--chip-text) !important;
 }
-[data-bs-theme="light"] .badge.text-bg-success { color: #0a5c4f !important; background: rgba(10, 125, 107, .1) !important; border-color: var(--ign-hair-2); }
-[data-bs-theme="light"] .badge.text-bg-danger { color: #b02a37 !important; background: rgba(176, 42, 55, .08) !important; border-color: rgba(176, 42, 55, .35); }
+[data-bs-theme="light"] .badge.text-bg-success { color: var(--ok) !important; background: color-mix(in srgb, var(--accent) 10%, transparent) !important; border-color: var(--ign-hair-2); }
+[data-bs-theme="light"] .badge.text-bg-danger { color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 8%, transparent) !important; border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 
 /* forms */
 [data-bs-theme="light"] .form-control,
@@ -445,26 +705,8 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 [data-bs-theme="light"] .form-control:focus,
 [data-bs-theme="light"] .form-select:focus {
   border-color: var(--ign-flare);
-  box-shadow: 0 0 0 .2rem rgba(10, 125, 107, .18);
+  box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--accent) 18%, transparent);
 }
-
-/* buttons: pills; the accent one carries the orbiting ring */
-[data-bs-theme="light"] .btn { border-radius: 20em; }
-[data-bs-theme="light"] .btn-accent {
-  position: relative; isolation: isolate; overflow: hidden; font-weight: 600;
-  background: linear-gradient(0deg, var(--ign-flare), #0d9a85);
-  --ign-loop: 8s;
-}
-[data-bs-theme="light"] .btn-accent::after {
-  content: ""; position: absolute; inset: -1px; z-index: 1; border-radius: inherit; padding: 1px;
-  pointer-events: none; opacity: .8;
-  background: conic-gradient(from var(--ign-a), transparent 0 62%, rgba(255,255,255,.6) 80%, #fff 86%, transparent 92%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask-composite: exclude;
-  animation: ign-orbit var(--ign-loop) linear infinite;
-}
-[data-bs-theme="light"] .btn-accent:hover { --ign-loop: 2s; background: linear-gradient(0deg, #0d9a85, var(--ign-flare-2)); }
-[data-bs-theme="light"] .btn-accent:focus-visible { outline: 2px solid var(--ign-flare); outline-offset: 3px; }
 
 [data-bs-theme="light"] .alert { border-radius: .8rem; }
 [data-bs-theme="light"] .modal-content,
@@ -473,8 +715,247 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 
 /* the lamp, switched off */
 [data-bs-theme="light"] #ignThemeToggle {
-  background: #fff; color: var(--ign-flare); border: 1px solid var(--ign-hair-2);
+  background: var(--lamp-bg); color: var(--ign-flare); border: 1px solid var(--ign-hair-2);
   transition: box-shadow .4s ease;
 }
 [data-bs-theme="light"] #ignThemeToggle:hover { box-shadow: 0 0 .9rem -.1rem var(--ign-flare-2); }
 [data-bs-theme="light"] #ignThemeToggle:focus-visible { outline: 2px solid var(--ign-flare); outline-offset: 4px; }
+
+
+/* =====================================================================
+   MODERN IDENTITY — the shared look of every non-"Current" theme
+   ([data-ign-style="modern"], set from the theme registry). Everything is
+   driven by the tokens, so each theme keeps its own colours:
+     soft accent glow over the main area, glass panels, a glowing logo mark,
+     wide-tracked uppercase sidebar labels with a bordered active chip, small
+     uppercase table headers, and monospace chips.
+   The "Current" themes keep their original stage / daylight styling.
+   ===================================================================== */
+
+/* the spotlight beams belong to the classic stage look */
+[data-ign-style="modern"] body::before,
+[data-ign-style="modern"] body::after { display: none; }
+
+/* soft radial glow at the top of the main area, over --bg */
+[data-ign-style="modern"] body { background: var(--bg); }
+[data-ign-style="modern"] .ign-main,
+[data-ign-style="modern"] .ign-auth-page {
+  background:
+    radial-gradient(ellipse 70% 45% at 55% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* glass panels */
+[data-ign-style="modern"] .card,
+[data-ign-style="modern"] .table-card,
+[data-ign-style="modern"] .ign-auth-card,
+[data-ign-style="modern"] .dropdown-menu,
+[data-ign-style="modern"] .modal-content {
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-strong) 4%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: none;
+}
+[data-ign-style="modern"] .card:hover,
+[data-ign-style="modern"] .table-card:hover { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-strong) 4%, transparent); }
+[data-ign-style="modern"] .card-header,
+[data-ign-style="modern"] .card-footer { background: transparent; border-color: var(--border); }
+
+/* sidebar: its own edge, brand mark with an accent border and glow */
+[data-ign-style="modern"] .ign-sidebar { border-right: 1px solid var(--border); }
+[data-ign-style="modern"] .ign-sidebar-brand { border-bottom-color: var(--border); }
+[data-ign-style="modern"] .ign-brand-mark {
+  background: var(--mark-bg);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+[data-ign-style="modern"] .ign-sidebar .brand span:last-child {
+  background: none; -webkit-text-fill-color: currentColor; color: var(--text);
+}
+
+/* sidebar labels: 11px, wide-tracked, uppercase; the active item is a bordered chip */
+[data-ign-style="modern"] .ign-sidebar .nav-link {
+  font-family: var(--ign-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+[data-ign-style="modern"] .ign-sidebar .nav-link:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text);
+}
+[data-ign-style="modern"] .ign-sidebar .nav-link.active {
+  color: var(--accent); font-weight: 500;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: none;
+}
+[data-ign-style="modern"] .ign-sidebar-version { color: var(--muted); }
+
+[data-ign-style="modern"] .ign-topbar {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+/* table column headers: 11px uppercase, ~.08em tracking, muted */
+[data-ign-style="modern"] .table thead th {
+  font-family: var(--ign-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+[data-ign-style="modern"] .table { --bs-table-border-color: var(--border); }
+
+/* monospace chips: branch names, URLs, secret names */
+[data-ign-style="modern"] code {
+  font-family: var(--ign-mono); font-size: .85em;
+  color: var(--text); background: var(--code-bg);
+  border: 1px solid var(--border); border-radius: 5px; padding: .1rem .4rem;
+}
+
+/* the page title: plain text in the theme colour (classic themes use a swept gradient) */
+[data-ign-style="modern"] .page-title h1,
+[data-ign-style="modern"] .ign-auth-card h1 {
+  background: none; -webkit-text-fill-color: currentColor; color: var(--text); text-shadow: none;
+}
+[data-ign-style="modern"] .page-title h1 i { -webkit-text-fill-color: var(--accent); color: var(--accent); }
+[data-ign-style="modern"] .ign-auth-card { box-shadow: 0 0 60px -30px var(--accent); }
+
+
+/* =====================================================================
+   REFINEMENTS — apply to every theme, classic and modern
+   radii · one solid primary button · links · section headings · status
+   pills · row dividers · typography · layout width
+   ===================================================================== */
+:root {
+  --r-panel: 12px;
+  --r-btn: 7px;
+  --r-input: 6px;
+  --r-chip: 5px;
+  --warn: #e5a93b;                 /* "starting" amber */
+  --bs-body-font-size: .875rem;    /* 14px */
+}
+[data-bs-theme="light"] { --warn: #a86a00; }
+body { font-size: 14px; }
+
+/* layout: a readable column, centred, on wide screens */
+.ign-main > main { max-width: 1240px; margin-inline: auto; }
+
+/* radii */
+[data-bs-theme] .card,
+[data-bs-theme] .table-card,
+[data-bs-theme] .ign-auth-card,
+[data-bs-theme] .modal-content,
+[data-bs-theme] .dropdown-menu { border-radius: var(--r-panel); }
+[data-bs-theme] .alert { border-radius: var(--r-btn); }
+[data-bs-theme] .btn { border-radius: var(--r-btn); --bs-btn-border-radius: var(--r-btn); font-weight: 500; }
+[data-bs-theme] .btn-group > .btn:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+[data-bs-theme] .btn-group > .btn:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+[data-bs-theme] #ignThemeToggle { border-radius: 50%; }
+[data-bs-theme] .form-control,
+[data-bs-theme] .form-select { border-radius: var(--r-input); }
+[data-bs-theme] code { border-radius: var(--r-chip); }
+[data-bs-theme] .badge {
+  border-radius: var(--r-chip); text-transform: none; letter-spacing: 0;
+  font-family: inherit; font-size: 12px; font-weight: 500; padding: .25em .6em;
+}
+
+/* buttons: one solid primary per section; everything else outlined and neutral;
+   destructive actions are a danger-coloured outline */
+[data-bs-theme] .btn-accent {
+  background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent);
+}
+[data-bs-theme] .btn-accent::before,
+[data-bs-theme] .btn-accent::after { content: none; }
+[data-bs-theme] .btn-accent:hover,
+[data-bs-theme] .btn-accent:focus-visible,
+[data-bs-theme] .btn-accent:active {
+  background: var(--accent-2); border-color: var(--accent-2); color: var(--on-accent);
+}
+[data-bs-theme] .btn-outline-secondary {
+  --bs-btn-color: var(--text); --bs-btn-bg: transparent; --bs-btn-border-color: var(--border-neutral);
+  --bs-btn-hover-color: var(--text); --bs-btn-hover-bg: color-mix(in srgb, var(--text) 8%, transparent);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--text) 35%, transparent);
+  --bs-btn-active-color: var(--text); --bs-btn-active-bg: color-mix(in srgb, var(--text) 14%, transparent);
+  --bs-btn-active-border-color: color-mix(in srgb, var(--text) 35%, transparent);
+  --bs-btn-disabled-color: var(--muted); --bs-btn-disabled-bg: transparent; --bs-btn-disabled-border-color: var(--border-neutral);
+}
+[data-bs-theme] .btn-outline-danger {
+  --bs-btn-color: var(--danger); --bs-btn-bg: transparent;
+  --bs-btn-border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  --bs-btn-hover-color: var(--danger); --bs-btn-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  --bs-btn-hover-border-color: var(--danger);
+  --bs-btn-active-color: var(--danger); --bs-btn-active-bg: color-mix(in srgb, var(--danger) 20%, transparent);
+  --bs-btn-active-border-color: var(--danger);
+  --bs-btn-disabled-color: var(--danger); --bs-btn-disabled-bg: transparent;
+}
+:root { --border-neutral: color-mix(in srgb, var(--text) 22%, transparent); }
+
+/* focus rings visible in every theme */
+a:focus-visible, button:focus-visible, summary:focus-visible, .btn:focus-visible,
+.form-select:focus-visible, .form-control:focus-visible, .nav-link:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none;
+}
+
+/* links: the theme's link colour, underlined only on hover */
+a:not(.btn):not(.nav-link):not(.brand) { color: var(--link); text-decoration: none; }
+a:not(.btn):not(.nav-link):not(.brand):hover { color: var(--link-hover); text-decoration: underline; }
+
+/* section headings: sentence case, no icons, no uppercase */
+.ign-section-title {
+  font-size: 15px; font-weight: 500; letter-spacing: 0; text-transform: none;
+  color: var(--text); margin-bottom: .75rem;
+}
+.form-label {
+  font-family: inherit; font-size: 12.5px; letter-spacing: 0; text-transform: none; color: var(--muted);
+}
+
+/* status pill: outlined, a small dot, a label */
+.ign-pill {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .1rem .55rem; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.5;
+  color: var(--muted); border: 1px solid color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.ign-pill-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.ign-pill-ok   { color: var(--ok);   border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.ign-pill-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.ign-pill-off  { color: var(--muted); }
+/* the label reads at full contrast; the dot and outline carry the state colour */
+.ign-pill-ok [data-app-status-label]   { color: color-mix(in srgb, var(--ok) 55%, var(--text)); }
+.ign-pill-warn [data-app-status-label] { color: color-mix(in srgb, var(--warn) 55%, var(--text)); }
+
+/* tables inside a panel: no second outline, faint dividers between rows */
+[data-bs-theme] .card .table-card,
+[data-bs-theme] .card .table-card:hover {
+  border: 0; background: transparent; box-shadow: none; border-radius: 0;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.table { --bs-table-border-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.card .table tbody tr:last-child > * { border-bottom-width: 0; }
+
+/* the "unreleased work" strip and alerts follow the theme, not Bootstrap's fixed palette */
+[data-bs-theme] .bg-warning-subtle {
+  background: color-mix(in srgb, var(--warn) 14%, transparent) !important; color: var(--text);
+  border-top: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+[data-bs-theme] .alert-success {
+  --bs-alert-color: var(--text); --bs-alert-bg: color-mix(in srgb, var(--ok) 12%, transparent);
+  --bs-alert-border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+[data-bs-theme] .alert-danger {
+  --bs-alert-color: var(--text); --bs-alert-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  --bs-alert-border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+[data-bs-theme] .text-bg-warning {
+  background: color-mix(in srgb, var(--warn) 18%, transparent) !important; color: var(--text) !important;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+/* an outlined button that is the suggested next step (not a second solid primary) */
+[data-bs-theme] .btn.ign-suggested {
+  --bs-btn-color: var(--accent); --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-color: var(--accent); --bs-btn-hover-border-color: var(--accent);
+  --bs-btn-hover-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  --bs-btn-bg: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-weight: 600;
+}

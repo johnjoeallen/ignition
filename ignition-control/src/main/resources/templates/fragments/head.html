@@ -14,17 +14,35 @@
   <link rel="stylesheet" href="/vendor/icons/bootstrap-icons.css">
   <link rel="stylesheet" href="/css/ignition.css">
   <script>
-    // Set before first paint so there's no flash of the wrong theme.
-    // Lamp states: cool (dark), warm (dark, amber flare), day (light).
+    // Theme registry + first-paint theme, set before the body renders so there's
+    // no flash of the wrong theme. The switcher (js/theme.js) cycles this list in
+    // order; to add a theme, add an entry here and a [data-ign-lamp="<id>"] token
+    // block in css/ignition.css. scheme is Bootstrap's light/dark base; style is
+    // 'classic' (the original stage look) or 'modern' (glow, glass panels, tracked labels).
+    window.ignThemes = [
+      { id: 'cool', label: 'Current · stage', scheme: 'dark', style: 'classic',  icon: 'bi bi-lightbulb' },
+      { id: 'warm', label: 'Current · warm',  scheme: 'dark', style: 'classic',  icon: 'bi bi-lightbulb-fill' },
+      { id: 'day',  label: 'Current · day',   scheme: 'light', style: 'classic', icon: 'bi bi-sun' },
+      { id: 'graphite', label: 'Graphite ember',   scheme: 'dark', style: 'modern',   icon: 'bi bi-fire' },
+      { id: 'slate',    label: 'Slate enterprise', scheme: 'light', style: 'modern',  icon: 'bi bi-building' },
+      { id: 'midnight', label: 'Midnight indigo',  scheme: 'dark', style: 'modern',   icon: 'bi bi-moon-stars' },
+      { id: 'forest',   label: 'Forest ops',       scheme: 'dark', style: 'modern',   icon: 'bi bi-tree' },
+      { id: 'paper',    label: 'Paper mono',       scheme: 'light', style: 'modern',  icon: 'bi bi-file-text' },
+      { id: 'teal',     label: 'Teal glass',       scheme: 'light', style: 'modern',  icon: 'bi bi-droplet' }
+    ];
     (function () {
+      var T = window.ignThemes, byId = {};
+      T.forEach(function (t) { byId[t.id] = t; });
+      var id = null;
       try {
-        var t = localStorage.getItem('ign-theme');
-        if (t === 'dark') t = 'cool'; else if (t === 'light') t = 'day';
-        if (t !== 'cool' && t !== 'warm' && t !== 'day')
-          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'cool' : 'day';
-        document.documentElement.setAttribute('data-bs-theme', t === 'day' ? 'light' : 'dark');
-        document.documentElement.setAttribute('data-ign-lamp', t);
-      } catch (e) {}
+        id = localStorage.getItem('ign-theme');
+        if (id === 'dark') id = 'cool'; else if (id === 'light') id = 'day';   // legacy values
+        if (!byId[id])
+          id = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'cool' : 'day';
+      } catch (e) { id = 'cool'; }
+      document.documentElement.setAttribute('data-bs-theme', byId[id].scheme);
+      document.documentElement.setAttribute('data-ign-lamp', id);
+      document.documentElement.setAttribute('data-ign-style', byId[id].style);
     })();
   </script>
 </head>

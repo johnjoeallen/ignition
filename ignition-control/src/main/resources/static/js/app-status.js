@@ -1,5 +1,5 @@
-// Refresh release-app state so the action button reflects the latest
-// successful Start/Stop operation, even when another tab changed it.
+// Refresh app state so the status pill and the Start/Stop buttons reflect the
+// latest operation, even when another tab changed it.
 (function () {
   var rows = document.querySelectorAll('[data-app-status-row]');
   if (!rows.length) return;
@@ -15,14 +15,12 @@
         function (el) { return (el.getAttribute('data-app-channel') || 'release') === channel; });
     if (!row) return;
 
-    var icon = row.querySelector('[data-app-status-icon]');
-    if (icon) {
-      icon.className = app.running
-          ? 'bi bi-check-circle-fill text-success'
-          : 'bi bi-x-circle-fill text-danger';
-      icon.title = app.running ? 'running' : 'dead';
-      icon.setAttribute('aria-label', app.running ? 'running' : 'dead');
-    }
+    // the status pill: dot + label, coloured by state (classes, so every theme styles it)
+    row.classList.toggle('ign-pill-ok', !!app.running);
+    row.classList.toggle('ign-pill-off', !app.running);
+    var label = row.querySelector('[data-app-status-label]');
+    if (label) label.textContent = app.running ? 'Running' : 'Stopped';
+    row.title = app.running ? 'running' : 'stopped';
 
     document.querySelectorAll('[data-app-action][data-app-name="' + CSS.escape(app.name) + '"]')
       .forEach(function (form) {

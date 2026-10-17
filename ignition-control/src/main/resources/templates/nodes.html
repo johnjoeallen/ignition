@@ -29,14 +29,14 @@
               <td class="text-end text-nowrap">
                 <form th:if="${row.node.state.name() == 'ACTIVE'}" method="post"
                       th:action="@{'/nodes/' + ${row.node.name} + '/drain'}" class="d-inline">
-                  <button class="btn btn-sm btn-outline-secondary">drain</button>
+                  <button class="btn btn-sm btn-outline-secondary">Drain</button>
                 </form>
                 <form th:if="${row.node.state.name() == 'DRAINING'}" method="post"
                       th:action="@{'/nodes/' + ${row.node.name} + '/undrain'}" class="d-inline">
-                  <button class="btn btn-sm btn-outline-secondary">undrain</button>
+                  <button class="btn btn-sm btn-outline-secondary">Undrain</button>
                 </form>
                 <form method="post" th:action="@{'/nodes/' + ${row.node.name} + '/delete'}" class="d-inline">
-                  <button class="btn btn-sm btn-outline-danger">remove</button>
+                  <button class="btn btn-sm btn-outline-danger">Remove</button>
                 </form>
               </td>
             </tr>

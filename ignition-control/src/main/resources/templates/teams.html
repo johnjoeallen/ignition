@@ -45,11 +45,11 @@
                     <option th:each="n : ${nodeNames}" th:value="${n}" th:text="${n}"
                             th:disabled="${n == z.node}">node</option>
                   </select>
-                  <button class="btn btn-sm btn-outline-secondary">move</button>
+                  <button class="btn btn-sm btn-outline-secondary">Move</button>
                 </form>
                 <form method="post" th:action="@{'/teams/' + ${z.slug} + '/destroy'}" class="d-inline"
                       onsubmit="return confirm('Destroy team ' + this.action.split('/teams/')[1].split('/')[0] + ' and every app it deployed?')">
-                  <button class="btn btn-sm btn-outline-danger">destroy</button>
+                  <button class="btn btn-sm btn-outline-danger">Destroy</button>
                 </form>
               </td>
             </tr>

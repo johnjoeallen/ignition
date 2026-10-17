@@ -1,32 +1,34 @@
-// Lamp: cycles cool (dark) -> warm (dark, amber) -> day (light). The initial
-// state is set earlier, inline in <head> (fragments/head.html), so there's no
-// flash of the wrong theme before this loads.
+// Theme switcher: one button (#ignThemeToggle) that cycles window.ignThemes, the
+// registry defined inline in <head> (fragments/head.html), which also applies the
+// saved theme before first paint so there's no flash of the wrong one. The choice
+// is kept in localStorage under 'ign-theme', as before.
 (function () {
   var btn = document.getElementById('ignThemeToggle');
-  if (!btn) return;
+  var themes = window.ignThemes || [];
+  if (!btn || !themes.length) return;
   var icon = btn.querySelector('i');
   var root = document.documentElement;
-  var STATES = ['cool', 'warm', 'day'];
-  var ICONS = { cool: 'bi bi-lightbulb', warm: 'bi bi-lightbulb-fill', day: 'bi bi-sun' };
-  var NEXT = { cool: 'warm it up', warm: 'switch to daylight', day: 'back to the stage' };
 
-  function current() {
-    var s = root.getAttribute('data-ign-lamp');
-    return STATES.indexOf(s) >= 0 ? s : 'cool';
+  function indexOf(id) {
+    for (var i = 0; i < themes.length; i++) if (themes[i].id === id) return i;
+    return 0;
   }
 
-  function apply(s) {
-    root.setAttribute('data-ign-lamp', s);
-    root.setAttribute('data-bs-theme', s === 'day' ? 'light' : 'dark');
-    icon.className = ICONS[s];
-    btn.title = 'Lamp: ' + s + ' — click to ' + NEXT[s];
+  function apply(i) {
+    var t = themes[i], next = themes[(i + 1) % themes.length];
+    root.setAttribute('data-ign-lamp', t.id);
+    root.setAttribute('data-bs-theme', t.scheme);
+    root.setAttribute('data-ign-style', t.style);
+    icon.className = t.icon;
+    btn.title = 'Theme: ' + t.label + ' — click for ' + next.label;
+    btn.setAttribute('aria-label', btn.title);
   }
 
   btn.addEventListener('click', function () {
-    var next = STATES[(STATES.indexOf(current()) + 1) % STATES.length];
-    apply(next);
-    try { localStorage.setItem('ign-theme', next); } catch (e) {}
+    var i = (indexOf(root.getAttribute('data-ign-lamp')) + 1) % themes.length;
+    apply(i);
+    try { localStorage.setItem('ign-theme', themes[i].id); } catch (e) {}
   });
 
-  apply(current());
+  apply(indexOf(root.getAttribute('data-ign-lamp')));
 })();

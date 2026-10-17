@@ -29,7 +29,7 @@
       </form>
 
       <div th:if="${report != null}">
-        <h2 class="h6 text-uppercase text-body-secondary">Result</h2>
+        <h2 class="ign-section-title">Result</h2>
         <ul>
           <li th:each="line : ${report}" th:text="${line}">slug — queued</li>
         </ul>
