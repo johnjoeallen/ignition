@@ -75,8 +75,9 @@
             <div class="text-body-secondary small">Version</div>
             <div class="mb-3">
               <span th:text="${versionShown}">v1.2.3</span>
-              <a th:if="${releaseRunning}" th:href="${releaseUrl}" target="_blank" rel="noopener"
-                 class="small ms-2" title="Open the release in a new tab"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+              <a th:if="${releaseDeployed}" th:href="${releaseUrl}" target="_blank" rel="noopener"
+                 class="small ms-2" th:classappend="${!releaseRunning} ? ' text-body-secondary'"
+                 th:title="${releaseRunning} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
               <span th:if="${versionPending != null}" class="badge text-bg-secondary ms-1"
                     th:title="|${versionPending} is tagged but not deployed yet — CI is building it, or it failed|"
                     th:text="|${versionPending} building…|">v1.2.4 building…</span>
@@ -149,8 +150,9 @@
                       th:text="${devDeployedAt != null} ? 'live · ' + ${devDeployedAt} : 'live'">live</span>
                 <span th:unless="${devRunning}" class="text-body-secondary"
                       th:text="${devDeployedAt != null} ? 'stopped · ' + ${devDeployedAt} : 'stopped'">stopped</span>
-                <a th:if="${devRunning}" th:href="${devUrl}" target="_blank" rel="noopener"
-                   class="ms-1" title="Open the dev deployment in a new tab"><i class="bi bi-box-arrow-up-right"></i> launch</a>
+                <a th:if="${devUrl != null}" th:href="${devUrl}" target="_blank" rel="noopener"
+                   class="ms-1" th:classappend="${!devRunning} ? ' text-body-secondary'"
+                   th:title="${devRunning} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> launch</a>
               </span>
               <form th:if="${devUrl != null}" method="post" th:action="@{/teams/{slug}/repos/dev/stop(slug=${zoneSlug})}"
                     class="d-inline" th:classappend="${!devRunning} ? ' d-none'"
@@ -224,7 +226,9 @@
         </div>
         <ul class="list-unstyled mb-0 small">
           <li th:each="p : ${previews}">
-            <a th:href="${p.url}" target="_blank" th:text="${p.name}">app-pr-12</a>
+            <span th:text="${p.name}">app-pr-12</span>
+            <a th:href="${p.url}" target="_blank" rel="noopener" class="ms-2"
+               title="Open this PR preview in a new tab"><i class="bi bi-box-arrow-up-right"></i> launch</a>
           </li>
         </ul>
         <div class="text-body-secondary small mt-1">Add the <code>deploy-preview</code> label to a

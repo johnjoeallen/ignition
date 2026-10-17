@@ -176,4 +176,21 @@ class RepoPageRenderTest {
         assertThat(html).contains("https://cards-pr-7.apps.acme.ignition.example/");
         assertThat(html).contains("deploy-preview");
     }
+
+    @Test
+    void everyDeploymentGetsALaunchLinkEvenWhenItIsNotAnswering() {
+        var ctx = baseContext();
+        ctx.setVariable("releaseDeployed", true);
+        ctx.setVariable("releaseRunning", false);
+        ctx.setVariable("releaseUrl", "https://cards.apps.acme.ignition.example/");
+        ctx.setVariable("devUrl", "https://cards.dev.acme.ignition.example/");
+        ctx.setVariable("devRunning", false);
+        ctx.setVariable("previews", List.of(Map.of("name", "cards-pr-7",
+                "url", "https://cards-pr-7.apps.acme.ignition.example/")));
+        String html = engine().process("repo", ctx);
+        assertThat(html).contains("href=\"https://cards.apps.acme.ignition.example/\"")
+                .contains("href=\"https://cards.dev.acme.ignition.example/\"")
+                .contains("href=\"https://cards-pr-7.apps.acme.ignition.example/\"");
+        assertThat(html.split("launch</a>").length - 1).isEqualTo(3);
+    }
 }
