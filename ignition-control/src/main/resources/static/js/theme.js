@@ -7,6 +7,7 @@
   var themes = window.ignThemes || [];
   if (!btn || !themes.length) return;
   var icon = btn.querySelector('i');
+  var nameEl = document.getElementById('ignThemeName');   // theme name, under the version in the sidebar
   var root = document.documentElement;
 
   function indexOf(id) {
@@ -22,6 +23,7 @@
     icon.className = t.icon;
     btn.title = 'Theme: ' + t.label + ' — click for ' + next.label;
     btn.setAttribute('aria-label', btn.title);
+    if (nameEl) nameEl.textContent = t.label;
   }
 
   btn.addEventListener('click', function () {

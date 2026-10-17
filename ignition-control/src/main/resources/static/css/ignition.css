@@ -960,3 +960,6 @@ a:not(.btn):not(.nav-link):not(.brand):hover { color: var(--link-hover); text-de
   --bs-btn-bg: color-mix(in srgb, var(--accent) 8%, transparent);
   font-weight: 600;
 }
+
+/* theme name under the build version in the sidebar footer */
+.ign-sidebar-theme { padding-top: 0 !important; margin-top: -.35rem; }

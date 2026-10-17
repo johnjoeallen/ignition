@@ -245,4 +245,10 @@ class RepoPageRenderTest {
         assertThat(html).contains("ign-masked").contains("data-reveal=\"git-password-value\"")
                 .contains("data-reveal=\"git-pat-value\"").contains("data-value=\"S3cretPassw0rd\"");
     }
+
+    @Test
+    void sidebarFooterHasAPlaceForTheThemeName() {
+        String html = engine().process("repo", baseContext());
+        assertThat(html).contains("id=\"ignThemeName\"");
+    }
 }
