@@ -113,14 +113,21 @@ public class WakeFilter extends OncePerRequestFilter {
                   var tries = 0;
                   (function poll() {
                     setTimeout(function () {
-                      if (++tries > 45) {
+                      if (++tries > 90) {
                         document.getElementById('msg').textContent =
                           'This is taking longer than expected. Try reloading in a minute.';
                         return;
                       }
                       fetch('/__ign/wake-status', {cache: 'no-store'}).then(function (r) {
                         var s = r.headers.get('X-Ignition-Wake');
-                        if (s === 'waking') { poll(); } else { location.reload(); }
+                        if (s === 'waking') { poll(); return; }
+                        if (!s && r.status >= 500) {
+                          // the app's own route is up but it isn't answering yet
+                          document.getElementById('msg').textContent = 'Almost there — waiting for the app to answer…';
+                          poll();
+                          return;
+                        }
+                        location.reload(); // answering (or asleep again, which retries the wake)
                       }).catch(poll);
                     }, 2000);
                   })();
@@ -133,11 +140,11 @@ public class WakeFilter extends OncePerRequestFilter {
                 <meta name="viewport" content="width=device-width, initial-scale=1">
                 <title>%1$s</title>
                 <style>
-                  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid;
+                  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; width: 100vw; min-height: 100vh; display: grid;
                          place-items: center; background: #f6f7f9; color: #1c2430; }
                   main { max-width: 32rem; padding: 2rem; text-align: center; }
                   @media (prefers-color-scheme: dark) { body { background: #14181f; color: #e6e9ee; } }
-                  .spin { width: 28px; height: 28px; margin: 0 auto 1rem; border: 3px solid #8883;
+                  .spin { width: 56px; height: 56px; margin: 0 auto 1.5rem; border: 5px solid #8883;
                           border-top-color: #e8590c; border-radius: 50%%; animation: s 1s linear infinite; }
                   @keyframes s { to { transform: rotate(360deg); } }
                 </style></head>

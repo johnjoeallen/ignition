@@ -114,16 +114,12 @@ code { background: var(--ign-code-bg); color: var(--ign-code-fg); padding: .1rem
 .ign-busy-overlay {
   position: fixed; inset: 0; z-index: 2000;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, .5);
+  background: var(--bs-body-bg); /* a full-screen wait, not a dimmed popup */
 }
-.ign-busy-card {
-  background: var(--bs-body-bg); color: var(--bs-body-color);
-  border: 1px solid var(--bs-border-color); border-radius: .75rem;
-  padding: 1.75rem 2.25rem; text-align: center; min-width: 16rem;
-  box-shadow: var(--ign-shadow);
-}
-.ign-busy-card .spinner-border { width: 2rem; height: 2rem; margin-bottom: .9rem; color: var(--ign-accent); }
-.ign-busy-msg { font-weight: 600; }
+.ign-busy-card { color: var(--bs-body-color); text-align: center; padding: 2rem; max-width: 32rem; }
+.ign-busy-card .spinner-border { width: 3.5rem; height: 3.5rem; margin-bottom: 1.25rem; color: var(--ign-accent); }
+.ign-busy-msg { font-weight: 600; font-size: 1.4rem; }
+.ign-busy-skip { margin-top: 1.5rem; }
 .ign-busy-sub { font-size: .85rem; color: var(--bs-secondary-color); margin-top: .25rem; }
 
 /* ---- auth pages (login/setup/signup/...) ---- */
@@ -359,7 +355,7 @@ code, kbd, pre, samp { font-family: var(--ign-mono); }
 [data-bs-theme="dark"] .alert { border-radius: .8rem; background: rgba(10, 13, 24, .5); border-color: var(--ign-hair-2); }
 [data-bs-theme="dark"] .modal-content,
 [data-bs-theme="dark"] .dropdown-menu { background: var(--ign-plate); border: 1px solid var(--ign-hair-2); border-radius: .9rem; }
-[data-bs-theme="dark"] .ign-busy-card { background: var(--ign-plate); border-color: var(--ign-hair-2); box-shadow: 0 0 60px -20px var(--ign-flare-2); }
+[data-bs-theme="dark"] .ign-busy-overlay { background: var(--ign-plate); }
 [data-bs-theme="dark"] code { font-size: .85em; border: 1px solid var(--ign-hair); }
 
 /* ---- the lamp (theme toggle): a bulb that glows in the lamp's colour ---- */
