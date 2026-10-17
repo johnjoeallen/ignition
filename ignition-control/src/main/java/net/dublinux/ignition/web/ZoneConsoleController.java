@@ -477,7 +477,7 @@ public class ZoneConsoleController {
             appSecrets.put(slug, repo, sc, name.strip(), value,
                     currentUser.get().map(u -> u.email()).orElse(null));
             return redirectRepo(slug, repo, "secret " + name.strip() + " saved for " + sc.key()
-                    + " — it applies at the next deploy, or press Restart with new secrets");
+                    + " — it applies at the next deploy, or press Restart with new secrets") + "&open=" + sc.key();
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());
         }
@@ -489,7 +489,8 @@ public class ZoneConsoleController {
         requireSecretsAdmin(slug);
         try {
             appSecrets.delete(slug, repo, SecretScope.parse(scope), name);
-            return redirectRepo(slug, repo, "secret " + name + " deleted — running containers keep it until the next deploy");
+            return redirectRepo(slug, repo, "secret " + name + " deleted — running containers keep it until the next deploy")
+                    + "&open=" + SecretScope.parse(scope).key();
         } catch (IllegalArgumentException e) {
             return redirectRepo(slug, repo, e.getMessage());
         }
@@ -502,7 +503,7 @@ public class ZoneConsoleController {
         try {
             SecretScope sc = SecretScope.parse(scope);
             apps.redeploy(slug, repo, sc);
-            return redirectRepo(slug, repo, sc.key() + " restarted with its current secrets");
+            return redirectRepo(slug, repo, sc.key() + " restarted with its current secrets") + "&open=" + sc.key();
         } catch (RuntimeException e) {
             return redirectRepo(slug, repo, "apply failed: " + e.getMessage());
         }

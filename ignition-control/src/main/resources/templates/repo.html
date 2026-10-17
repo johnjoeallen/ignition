@@ -420,9 +420,16 @@
           tokens. Each environment has its own set, merged into that deployment's web container at deploy time
           and winning over <code>.env</code>. <b>Write-only:</b> once saved a value can't be read back here, only
           replaced or deleted.</p>
-        <div th:each="sec : ${secretSections}" class="mb-4" th:attr="data-secrets=${sec.scope}">
-          <div class="fw-semibold" th:text="${sec.title}">Release</div>
-          <div class="text-body-secondary small mb-2" th:text="${sec.hint}">hint</div>
+        <details th:each="sec : ${secretSections}" class="border rounded mb-2" th:attr="data-secrets=${sec.scope}"
+                 th:open="${sec.restart == 'pending' or (param.open != null and param.open[0] == sec.scope)}">
+          <summary class="px-3 py-2 d-flex align-items-center gap-2 flex-wrap" style="cursor:pointer">
+            <span class="fw-semibold" th:text="${sec.title}">Release</span>
+            <span class="badge text-bg-secondary" th:text="${sec.items.size()}"
+                  th:title="|${sec.items.size()} secret(s)|">2</span>
+            <span th:if="${sec.restart == 'pending'}" class="badge text-bg-warning">restart needed</span>
+            <span class="text-body-secondary small ms-auto" th:text="${sec.hint}">hint</span>
+          </summary>
+          <div class="px-3 pb-3 pt-2">
           <div class="table-card mb-2" th:if="${!sec.items.isEmpty()}">
             <table class="table table-hover mb-0">
               <thead><tr><th>name</th><th>value</th><th>last set</th><th></th></tr></thead>
@@ -474,7 +481,8 @@
                            : (${sec.restart == 'undeployed'} ? 'Not deployed yet — they apply on the first deploy.'
                            : 'Up to date with the running deployment.')">hint</span>
           </form>
-        </div>
+          </div>
+        </details>
         <p th:unless="${canManageSecrets}" class="text-body-secondary small">Only a team admin can change secrets.</p>
       </div>
 
