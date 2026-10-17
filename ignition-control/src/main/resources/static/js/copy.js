@@ -38,3 +38,35 @@ document.addEventListener('click', function (e) {
   }
   document.body.removeChild(ta);
 });
+
+// Masked credentials (code.ign-masked, real value in data-value): hidden by
+// default so a screenshot, screen share or over-the-shoulder glance doesn't
+// show them. The eye button shows one for 30 seconds, then hides it again.
+// Copy buttons are unaffected — they copy the real value either way.
+(function () {
+  var MASK = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+  var timers = {};
+
+  function hide(code, btn) {
+    code.textContent = MASK;
+    code.removeAttribute('data-shown');
+    var icon = btn && btn.querySelector('i');
+    if (icon) icon.className = 'bi bi-eye';
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.ign-reveal-btn');
+    if (!btn) return;
+    var code = document.getElementById(btn.getAttribute('data-reveal'));
+    if (!code) return;
+    clearTimeout(timers[code.id]);
+    if (code.getAttribute('data-shown') === '1') {
+      hide(code, btn);
+      return;
+    }
+    code.textContent = code.getAttribute('data-value') || MASK;
+    code.setAttribute('data-shown', '1');
+    btn.querySelector('i').className = 'bi bi-eye-slash';
+    timers[code.id] = setTimeout(function () { hide(code, btn); }, 30000);
+  });
+})();

@@ -36,8 +36,11 @@
       return r.json();
     }).then(function (j) {
       if (j.value && old) {
-        document.querySelectorAll('code').forEach(function (c) {
-          if (c.textContent === old) c.textContent = j.value;
+        document.querySelectorAll('code.ign-masked').forEach(function (c) {
+          if (c.getAttribute('data-value') === old) {
+            c.setAttribute('data-value', j.value);
+            if (c.getAttribute('data-shown') === '1') c.textContent = j.value;
+          }
         });
         document.querySelectorAll('[data-copy]').forEach(function (b) {
           if (b.getAttribute('data-copy') === old) b.setAttribute('data-copy', j.value);

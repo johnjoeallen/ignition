@@ -230,4 +230,19 @@ class RepoPageRenderTest {
         assertThat(html).doesNotContain("Restart with new secrets</button>");
         assertThat(html).contains("Nothing deployed yet").contains("No PR previews running");
     }
+
+    @Test
+    void gitPasswordAndPatAreMaskedUntilRevealed() {
+        var ctx = baseContext();
+        ctx.setVariable("myGitUsername", "alice");
+        ctx.setVariable("myGitPassword", "S3cretPassw0rd");
+        ctx.setVariable("myGitPat", "pat_0123456789abcdef");
+        ctx.setVariable("currentUserId", java.util.UUID.randomUUID());
+        String html = engine().process("repo", ctx);
+        // never as visible text...
+        assertThat(html).doesNotContain(">S3cretPassw0rd<").doesNotContain(">pat_0123456789abcdef<");
+        // ...but available to the reveal and copy buttons
+        assertThat(html).contains("ign-masked").contains("data-reveal=\"git-password-value\"")
+                .contains("data-reveal=\"git-pat-value\"").contains("data-value=\"S3cretPassw0rd\"");
+    }
 }

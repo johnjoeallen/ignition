@@ -26,7 +26,9 @@
 
           <span th:if="${myGitPassword != null}" class="text-body-secondary small">Your password</span>
           <span th:if="${myGitPassword != null}" class="d-inline-flex align-items-center gap-1">
-            <code th:text="${myGitPassword}">••••••••</code>
+            <code id="git-password-value" class="ign-masked" th:attr="data-value=${myGitPassword}">••••••••</code>
+            <button type="button" class="btn btn-sm btn-link p-0 ign-reveal-btn" data-reveal="git-password-value"
+                    title="Show / hide" aria-label="Show or hide"><i class="bi bi-eye"></i></button>
             <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
                     th:attr="data-copy=${myGitPassword}" title="Copy password">
               <i class="bi bi-clipboard"></i>
@@ -41,7 +43,9 @@
 
           <span th:if="${myGitPat != null}" class="text-body-secondary small">Your PAT</span>
           <span th:if="${myGitPat != null}" class="d-inline-flex align-items-center gap-1">
-            <code th:text="${myGitPat}" style="word-break:break-all">••••••••</code>
+            <code id="git-pat-value" class="ign-masked" th:attr="data-value=${myGitPat}" style="word-break:break-all">••••••••</code>
+            <button type="button" class="btn btn-sm btn-link p-0 ign-reveal-btn" data-reveal="git-pat-value"
+                    title="Show / hide" aria-label="Show or hide"><i class="bi bi-eye"></i></button>
             <button type="button" class="btn btn-sm btn-link p-0 ign-copy-btn"
                     th:attr="data-copy=${myGitPat}" title="Copy PAT">
               <i class="bi bi-clipboard"></i>
