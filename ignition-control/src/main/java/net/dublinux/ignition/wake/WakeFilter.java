@@ -77,7 +77,7 @@ public class WakeFilter extends OncePerRequestFilter {
             case WAKING -> {
                 res.setHeader("Retry-After", "5");
                 page(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Starting " + t.name(),
-                        "<b>%s</b> was asleep after a quiet spell. It's starting now — this page reloads when it's ready."
+                        "<b>%s</b> was stopped after a period of inactivity. It's starting up now, and this page will open it as soon as it's ready."
                                 .formatted(t.name()), true);
             }
             case SLEEPING -> { // not a browser page load: don't start it, just say so
