@@ -374,6 +374,16 @@ public class AppComposeBuilder {
         labels.put("traefik.http.routers." + project + ".entrypoints", "websecure");
         labels.put("traefik.http.routers." + project + ".tls", "true");
         labels.put("traefik.http.services." + project + ".loadbalancer.server.port", "");
+        // A response with a Last-Modified/ETag but no Cache-Control gets cached by browsers on a
+        // heuristic — for a fraction of its age, with no request to the server. A bookmark or a typed
+        // URL then opens a stale copy of the page while the app is stopped, never reaching the platform
+        // (so nothing wakes the app), and the page's own scripts call an app that isn't there. An
+        // already-past Expires makes exactly those responses revalidate on every visit (a cheap 304
+        // when nothing changed); responses with an explicit Cache-Control keep theirs, which wins over Expires.
+        String fresh = project + "-fresh";
+        labels.put("traefik.http.middlewares." + fresh + ".headers.customresponseheaders.Expires",
+                "Thu, 01 Jan 1970 00:00:00 GMT");
+        labels.put("traefik.http.routers." + project + ".middlewares", fresh);
         // ign-control stamps this on every deployed web container — the per-node
         // Watchtower then rolls it forward on a new image digest (app-compose.tmpl
         // used to carry it).

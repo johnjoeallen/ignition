@@ -354,4 +354,16 @@ class AppComposeBuilderTest {
         org.junit.jupiter.api.Assertions.assertEquals("debug", String.valueOf(env.get("LOG")));
         org.junit.jupiter.api.Assertions.assertEquals("8080", String.valueOf(env.get("PORT")));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void webRouterRevalidatesInsteadOfHeuristicallyCachingPages() {
+        Map<String, Object> web = svc(render(Channel.RELEASE, null), "web");
+        Map<String, Object> labels = (Map<String, Object>) web.get("labels");
+        String project = "app-acme-web";
+        org.junit.jupiter.api.Assertions.assertEquals(project + "-fresh",
+                labels.get("traefik.http.routers." + project + ".middlewares"));
+        org.junit.jupiter.api.Assertions.assertEquals("Thu, 01 Jan 1970 00:00:00 GMT",
+                labels.get("traefik.http.middlewares." + project + "-fresh.headers.customresponseheaders.Expires"));
+    }
 }
