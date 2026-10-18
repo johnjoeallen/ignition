@@ -113,6 +113,9 @@
                     <button class="btn btn-sm btn-outline-secondary">Start</button>
                   </form>
                   <span th:text="${a.version}">v1.2.3</span>
+                  <a th:href="${a.url}" target="_blank" rel="noopener" class="small"
+                     th:classappend="${!a.running} ? ' text-body-secondary'"
+                     th:title="${a.running} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                 </span>
                 <span th:unless="${a.deployed}" class="text-body-secondary" th:text="${a.version}">no releases yet</span>
                 <span th:if="${a.pending != null}" class="badge text-bg-secondary ms-1"
@@ -148,6 +151,9 @@
                   <input type="hidden" name="from" value="team">
                   <button class="btn btn-sm btn-outline-secondary">Start</button>
                 </form>
+                <a th:href="${d.url}" target="_blank" rel="noopener" class="small ms-2"
+                   th:classappend="${!d.running} ? ' text-body-secondary'"
+                   th:title="${d.running} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
               </td>
             </tr>
           </tbody>
