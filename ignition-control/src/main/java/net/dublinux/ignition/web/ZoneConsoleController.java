@@ -374,9 +374,9 @@ public class ZoneConsoleController {
             String msg = r.ok()
                     ? "released %s %s (%s) — CI is building".formatted(name, r.tag(), r.kind())
                     : "Forgejo said (%d): %s".formatted(r.status(), r.message());
-            return redirect(slug, msg);
+            return redirectRepo(slug, name, msg); // back to the app's page, where the buttons are
         } catch (IllegalArgumentException e) {
-            return redirect(slug, e.getMessage());
+            return redirectRepo(slug, name, e.getMessage());
         }
     }
 
