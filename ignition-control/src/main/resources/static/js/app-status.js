@@ -21,6 +21,8 @@
     var label = row.querySelector('[data-app-status-label]');
     if (label) label.textContent = app.running ? 'Running' : 'Stopped';
     row.title = app.running ? 'running' : 'stopped';
+    // on the team page a stopped app shows a Start button instead of a "Stopped" pill
+    if (row.hasAttribute('data-hide-stopped')) row.classList.toggle('d-none', !app.running);
 
     document.querySelectorAll('[data-app-action][data-app-name="' + CSS.escape(app.name) + '"]')
       .forEach(function (form) {
