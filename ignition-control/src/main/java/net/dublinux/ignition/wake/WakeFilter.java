@@ -61,46 +61,85 @@ public class WakeFilter extends OncePerRequestFilter {
             res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return;
         }
-        if (state == WakeService.State.SLEEPING && isBrowserPageLoad(req, path)) {
+        if (state == WakeService.State.SLEEPING && isBrowserRequest(req, path)) {
             wake.wake(t);
             state = WakeService.State.WAKING;
         }
 
         res.setHeader(HEADER, state.name().toLowerCase(Locale.ROOT));
         res.setHeader("Cache-Control", "no-store");
+        boolean wantsHtml = req.getHeader("Accept") != null && req.getHeader("Accept").contains("text/html");
         switch (state) {
-            case UNKNOWN -> page(res, HttpServletResponse.SC_NOT_FOUND, "Nothing here",
-                    "There is no app at <b>%s</b>.".formatted(host), false);
-            case TEAM_STOPPED -> page(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, t.name() + " is stopped",
-                    "<b>%s</b> was stopped by its team. A team admin can start it again from the team console."
-                            .formatted(t.name()), false);
+            case UNKNOWN -> {
+                if (wantsHtml) {
+                    page(res, HttpServletResponse.SC_NOT_FOUND, "Nothing here",
+                            "There is no app at <b>%s</b>.".formatted(host), false);
+                } else {
+                    json(res, HttpServletResponse.SC_NOT_FOUND, "unknown", "There is no app at " + host + ".");
+                }
+            }
+            case TEAM_STOPPED -> {
+                if (wantsHtml) {
+                    page(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, t.name() + " is stopped",
+                            "<b>%s</b> was stopped by its team. A team admin can start it again from the team console."
+                                    .formatted(t.name()), false);
+                } else {
+                    json(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "stopped",
+                            t.name() + " was stopped by its team.");
+                }
+            }
             case WAKING -> {
                 res.setHeader("Retry-After", "5");
-                page(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Starting " + t.name(),
-                        "<b>%s</b> was stopped after a period of inactivity. It's starting up now, and this page will open it as soon as it's ready."
-                                .formatted(t.name()), true);
+                if (wantsHtml) {
+                    page(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "Starting " + t.name(),
+                            "<b>%s</b> was stopped after a period of inactivity. It's starting up now, and this page will open it as soon as it's ready."
+                                    .formatted(t.name()), true);
+                } else {
+                    json(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "starting",
+                            t.name() + " is starting — retry in a few seconds.");
+                }
             }
-            case SLEEPING -> { // not a browser page load: don't start it, just say so
+            case SLEEPING -> { // not a browser request: don't start it, just say so
                 res.setHeader("Retry-After", "30");
-                res.setContentType("text/plain;charset=UTF-8");
-                res.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                res.getWriter().write(t.name() + " is asleep. Open it in a browser to start it.\n");
+                json(res, HttpServletResponse.SC_SERVICE_UNAVAILABLE, "asleep",
+                        t.name() + " is asleep. Open it in a browser to start it.");
             }
         }
     }
 
-    private static boolean isBrowserPageLoad(HttpServletRequest req, String path) {
-        if (!"GET".equals(req.getMethod()) || "/robots.txt".equals(path) || "/favicon.ico".equals(path)) {
+    /** A machine-readable 503/404 for requests that aren't asking for a page (fetch/XHR, API clients). */
+    private static void json(HttpServletResponse res, int status, String state, String message) throws IOException {
+        res.setStatus(status);
+        res.setContentType("application/json;charset=UTF-8");
+        res.getWriter().write("{\"status\":\"%s\",\"message\":\"%s\"}"
+                .formatted(state, message.replace("\\", "\\\\").replace("\"", "\\\"")));
+    }
+
+    /**
+     * Would a real browser, with a person behind it, have sent this? Then a stopped
+     * app is worth starting. A navigation asks for {@code text/html}; and every
+     * fetch/XHR a browser makes (including from a page it served out of its own
+     * cache while the app was stopped) carries {@code Sec-Fetch-*} headers, which
+     * curl, monitors and webhooks don't send. Probes, crawlers and the
+     * robots/favicon fetches never wake anything.
+     */
+    static boolean isBrowserRequest(HttpServletRequest req, String path) {
+        String method = req.getMethod();
+        if ("OPTIONS".equals(method) || "/robots.txt".equals(path) || "/favicon.ico".equals(path)) {
             return false;
         }
-        String accept = req.getHeader("Accept");
         String ua = req.getHeader("User-Agent");
-        if (accept == null || !accept.contains("text/html") || ua == null) {
+        if (ua == null) {
             return false;
         }
         String u = ua.toLowerCase(Locale.ROOT);
-        return !u.equals(AppHealthProbe.USER_AGENT)
-                && !u.contains("bot") && !u.contains("crawl") && !u.contains("spider") && !u.contains("slurp");
+        if (u.equals(AppHealthProbe.USER_AGENT)
+                || u.contains("bot") || u.contains("crawl") || u.contains("spider") || u.contains("slurp")) {
+            return false;
+        }
+        String accept = req.getHeader("Accept");
+        boolean navigation = "GET".equals(method) && accept != null && accept.contains("text/html");
+        return navigation || req.getHeader("Sec-Fetch-Site") != null;
     }
 
     private static void page(HttpServletResponse res, int status, String title, String message, boolean poll)

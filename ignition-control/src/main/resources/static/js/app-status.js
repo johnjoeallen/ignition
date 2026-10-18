@@ -61,3 +61,16 @@
   document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
   window.addEventListener('focus', poll);
 })();
+
+// Launch on an app that isn't answering: open it with a throwaway query parameter so
+// the request can't be answered from the browser's cache. Without it a cached copy of
+// the app's page can load while the app is stopped, never reach the platform, and so
+// never wake the app (its API calls then fail until you reload).
+document.addEventListener('click', function (e) {
+  var a = e.target.closest('[data-app-launch]');
+  if (!a || !a.classList.contains('text-body-secondary')) return;   // running: open normally
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;     // leave modified clicks alone
+  e.preventDefault();
+  var url = a.getAttribute('href');
+  window.open(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'ign_launch=' + Date.now(), '_blank', 'noopener');
+});
