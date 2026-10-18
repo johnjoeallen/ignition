@@ -62,13 +62,13 @@
   window.addEventListener('focus', poll);
 })();
 
-// Launch on an app that isn't answering: open it with a throwaway query parameter so
-// the request can't be answered from the browser's cache. Without it a cached copy of
-// the app's page can load while the app is stopped, never reach the platform, and so
-// never wake the app (its API calls then fail until you reload).
+// Launch: open the app with a throwaway query parameter so the request can't be answered
+// from the browser's cache. The page's status can be a few seconds stale, and a cached copy
+// of the app's page can load while the app is stopped, never reach the platform, and so
+// never wake it (the page's own API calls then fail until you reload).
 document.addEventListener('click', function (e) {
   var a = e.target.closest('[data-app-launch]');
-  if (!a || !a.classList.contains('text-body-secondary')) return;   // running: open normally
+  if (!a) return;
   if (e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;     // leave modified clicks alone
   e.preventDefault();
   var url = a.getAttribute('href');

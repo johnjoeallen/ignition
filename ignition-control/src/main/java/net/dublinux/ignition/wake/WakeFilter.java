@@ -69,6 +69,12 @@ public class WakeFilter extends OncePerRequestFilter {
         res.setHeader(HEADER, state.name().toLowerCase(Locale.ROOT));
         res.setHeader("Cache-Control", "no-store");
         boolean wantsHtml = req.getHeader("Accept") != null && req.getHeader("Accept").contains("text/html");
+        if (state == WakeService.State.WAKING || state == WakeService.State.SLEEPING) {
+            // Whatever the browser has cached for this app's host is a copy from when it was up. Drop it,
+            // so the next visit reaches the platform (and the wake page) instead of reusing a stale page
+            // whose scripts then call an app that isn't there. Best effort — HTTPS, Chromium-family.
+            res.setHeader("Clear-Site-Data", "\"cache\"");
+        }
         switch (state) {
             case UNKNOWN -> {
                 if (wantsHtml) {
