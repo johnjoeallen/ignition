@@ -92,13 +92,29 @@ public class IdleSweeper {
                 }
             }
             for (DeployedApp a : releases) {
-                sweepOne(z.slug(), a.name(), false, ttls.get(a.name()), a.activeSince(), dflt, actions);
+                sweepOne(z.slug(), a.name(), false, ttlFor(ttls, a.name()), a.activeSince(), dflt, actions);
             }
             for (DevDeployment d : devs) {
-                sweepOne(z.slug(), d.name(), true, ttls.get(d.name()), d.activeSince(), dflt, actions);
+                sweepOne(z.slug(), d.name(), true, ttlFor(ttls, d.name()), d.activeSince(), dflt, actions);
             }
         }
         return actions;
+    }
+
+    private static final java.util.regex.Pattern PREVIEW = java.util.regex.Pattern.compile("^(.+)-pr-\\d+$");
+
+    /**
+     * The idle-time setting that governs {@code appName}: its own, or — for a PR
+     * preview ({@code <repo>-pr-<n>}), which has no setting of its own — its
+     * repo's. {@code null} means the platform default.
+     */
+    static Integer ttlFor(Map<String, Integer> ttlsByApp, String appName) {
+        Integer own = ttlsByApp.get(appName);
+        if (own != null) {
+            return own;
+        }
+        java.util.regex.Matcher m = PREVIEW.matcher(appName);
+        return m.matches() ? ttlsByApp.get(m.group(1)) : null;
     }
 
     private void sweepOne(String slug, String name, boolean dev, Integer ttlMinutes,
