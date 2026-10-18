@@ -199,7 +199,8 @@
                   <td class="text-nowrap">
                     <span class="ign-pill" th:classappend="${releaseRunning} ? ' ign-pill-ok' : ' ign-pill-off'"
                   th:attr="data-app-status-row=${repoName}"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${releaseRunning} ? 'Running' : 'Stopped'">Running</span></span>
-                    <a th:href="${releaseUrl}" target="_blank" rel="noopener" class="small ms-2"
+                    <a th:href="${releaseUrl}" target="_blank" rel="noopener"
+                   th:attr="data-app-launch='',data-app-name=${repoName}" class="small ms-2"
                        th:classappend="${!releaseRunning} ? ' text-body-secondary'"
                        th:title="${releaseRunning} ? 'Open the release in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                   </td>
@@ -243,7 +244,8 @@
                   <td class="text-nowrap">
                     <span class="ign-pill" th:classappend="${devRunning} ? ' ign-pill-ok' : ' ign-pill-off'"
                   th:attr="data-app-status-row=${repoName},data-app-channel='dev'"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${devRunning} ? 'Running' : 'Stopped'">Running</span></span>
-                    <a th:href="${devUrl}" target="_blank" rel="noopener" class="small ms-2"
+                    <a th:href="${devUrl}" target="_blank" rel="noopener"
+                   th:attr="data-app-launch='',data-app-name=${repoName},data-app-channel='dev'" class="small ms-2"
                        th:classappend="${!devRunning} ? ' text-body-secondary'"
                        th:title="${devRunning} ? 'Open the dev deployment in a new tab' : 'Not answering right now — opening it will try to wake it if it was idle-stopped'"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                   </td>
@@ -286,7 +288,8 @@
                   <td class="text-nowrap">
                     <span class="ign-pill" th:classappend="${p.running} ? ' ign-pill-ok' : ' ign-pill-off'"
                   th:attr="data-app-status-row=${p.name}"><span class="ign-pill-dot"></span><span data-app-status-label th:text="${p.running} ? 'Running' : 'Stopped'">Running</span></span>
-                    <a th:href="${p.url}" target="_blank" rel="noopener" class="small ms-2"
+                    <a th:href="${p.url}" target="_blank" rel="noopener"
+                   th:attr="data-app-launch='',data-app-name=${p.name}" class="small ms-2"
                        th:classappend="${!p.running} ? ' text-body-secondary'"
                        title="Open this PR preview in a new tab"><i class="bi bi-box-arrow-up-right"></i> Launch</a>
                   </td>

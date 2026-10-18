@@ -24,6 +24,15 @@
     // on the team page a stopped app shows a Start button instead of a "Stopped" pill
     if (row.hasAttribute('data-hide-stopped')) row.classList.toggle('d-none', !app.running);
 
+    // the Launch link: greyed while the app isn't answering
+    document.querySelectorAll('[data-app-launch][data-app-name="' + CSS.escape(app.name) + '"]')
+      .forEach(function (a) {
+        if ((a.getAttribute('data-app-channel') || 'release') !== channel) return;
+        a.classList.toggle('text-body-secondary', !app.running);
+        a.title = app.running ? 'Open in a new tab'
+            : 'Not answering right now — opening it will try to wake it if it was idle-stopped';
+      });
+
     document.querySelectorAll('[data-app-action][data-app-name="' + CSS.escape(app.name) + '"]')
       .forEach(function (form) {
         if ((form.getAttribute('data-app-channel') || 'release') !== channel) return;
@@ -46,4 +55,9 @@
 
   poll();
   window.setInterval(poll, 5000);
+  // A background tab's timers are throttled by the browser (to about once a minute), so
+  // after Launch opens a new tab this page would show stale state when you come back:
+  // refresh the moment it becomes visible / focused again.
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+  window.addEventListener('focus', poll);
 })();
